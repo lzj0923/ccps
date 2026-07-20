@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.jar
+.idea/
+*.iml
+target/
+logs/
+uploads/
+.env.local
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: ccps-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/ccps_property_management?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  mybatis-plus:
+    configuration:
+      map-underscore-to-camel-case: true
+      log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 42MB
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_STARTTLS:true}
+
+ccps:
+  reminders:
+    cron: ${REMINDER_CRON:0 0 * * * *}
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
+    sender-name: ${MAIL_SENDER_NAME:CCPS 家慶佳業}
+  storage:
+    payment-proofs: ${PAYMENT_PROOF_STORAGE:uploads/payment-proofs}
+    maintenance-attachments: ${MAINTENANCE_ATTACHMENT_STORAGE:uploads/maintenance-attachments}
+    reserve-topups: ${RESERVE_TOPUP_STORAGE:uploads/reserve-topups}
+    document-root: ${DOCUMENT_STORAGE_ROOT:uploads}
+    lease-contracts: ${LEASE_CONTRACT_STORAGE:uploads/lease-contracts}
+    accounting-exports: ${ACCOUNTING_EXPORT_STORAGE:uploads/accounting-exports}
+    reports: ${REPORT_STORAGE_ROOT:uploads/reports}
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.ccps.backend: INFO

@@ -1,0 +1,82 @@
+<template>
+  <div class="rent-collection-shell">
+    <section class="content-grid admin-finance-workspace rent-collection-workspace">
+      <div class="panel table-panel">
+        <div class="panel-head"><div><h2>待收租金帳單</h2><span>{{ totalRows }} 筆 · 未支付及部分支付租約</span></div><button class="primary-btn" :disabled="!selectedRow" @click="openConfirm">確認租金</button></div>
+        <div v-if="errorMessage" class="admin-owner-state error"><strong>待收租金載入失敗</strong><span>{{ errorMessage }}</span><button @click="loadData">重新載入</button></div>
+        <div v-else class="table-wrap finance-review-table-wrap">
+          <table>
+            <thead><tr><th>租約／租客</th><th>建案／單位</th><th>帳單月份</th><th>本期應收</th><th>已收金額</th><th>尚欠金額</th><th>到期日</th><th>收款狀態</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="row in rows" :key="row.invoiceId" :class="{ selected: row.invoiceId === selectedId }" @click="selectedId = row.invoiceId">
+                <td><strong>{{ row.leaseNo }}</strong><small>{{ row.tenantName }}</small></td>
+                <td>{{ row.projectName }}<small>{{ row.unitNo }}</small></td>
+                <td>{{ monthLabel(row.billingMonth) }}</td><td>RM {{ money(row.amountDue) }}</td>
+                <td class="money-green">RM {{ money(row.amountPaid) }}</td><td><b class="money-red">RM {{ money(row.outstandingAmount) }}</b></td>
+                <td>{{ row.dueDate }}<small v-if="row.overdueDays">逾期 {{ row.overdueDays }} 天</small></td>
+                <td><span class="tag" :class="statusClass(row.collectionStatus)">{{ statusLabel(row.collectionStatus) }}</span></td>
+                <td><button class="confirm-rent-button" @click.stop="selectAndConfirm(row)">確認收款</button></td>
+              </tr>
+              <tr v-if="!loading && !rows.length"><td colspan="9" class="admin-owner-empty">目前沒有符合條件的待收租金帳單</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager"><span>共 {{ totalRows }} 筆</span><div class="admin-building-pager"><button :disabled="pageNumber<=1" @click="goPage(pageNumber-1)">&lt;</button><button v-for="n in visiblePages" :key="n" :class="{active:n===pageNumber}" @click="goPage(n)">{{ n }}</button><button :disabled="pageNumber>=totalPages" @click="goPage(pageNumber+1)">&gt;</button><select v-model.number="pageSize"><option :value="10">10 條/頁</option><option :value="20">20 條/頁</option><option :value="50">50 條/頁</option></select></div></div>
+      </div>
+
+      <aside class="panel detail-panel finance-review-detail">
+        <template v-if="selectedRow">
+          <div class="profile finance-review-profile"><div class="big-avatar">租</div><div class="finance-review-profile-copy"><h3>{{ selectedRow.tenantName }}</h3><p>{{ selectedRow.projectName }} · {{ selectedRow.unitNo }}</p></div><span class="tag" :class="statusClass(selectedRow.collectionStatus)">{{ statusLabel(selectedRow.collectionStatus) }}</span></div>
+          <div class="detail-actions finance-review-actions"><button class="confirm" @click="openConfirm">確認本次收款</button><button @click="goToTenancy">前往租客與租金</button><button v-if="selectedRow.latestProofDocumentId" @click="openProof">查看最近憑證</button></div>
+          <div class="detail-section"><h4><span class="num">1</span>本期租金</h4><div class="kv"><span>租約</span><b>{{ selectedRow.leaseNo }}</b></div><div class="kv"><span>帳單月份</span><b>{{ monthLabel(selectedRow.billingMonth) }}</b></div><div class="kv"><span>本期應收</span><b>RM {{ money(selectedRow.amountDue) }}</b></div><div class="kv"><span>已收金額</span><b class="money-green">RM {{ money(selectedRow.amountPaid) }}</b></div><div class="kv"><span>尚欠金額</span><b class="money-red">RM {{ money(selectedRow.outstandingAmount) }}</b></div><div class="progress"><i :style="{width:paymentProgress+'%'}"></i></div></div>
+          <div class="detail-section"><h4><span class="num">2</span>到期狀態</h4><div class="kv"><span>到期日</span><b>{{ selectedRow.dueDate }}</b></div><div class="kv"><span>逾期天數</span><b>{{ selectedRow.overdueDays ? `${selectedRow.overdueDays} 天` : '未逾期' }}</b></div><div class="kv"><span>本次最多確認</span><b>RM {{ money(selectedRow.outstandingAmount) }}</b></div></div>
+          <div class="detail-section"><h4><span class="num">3</span>最近一次收款</h4><div v-if="selectedRow.latestFinanceRecordId"><div class="kv"><span>交易編號</span><b>{{ selectedRow.latestTransactionNo }}</b></div><div class="kv"><span>收款金額</span><b>RM {{ money(selectedRow.latestPaymentAmount) }}</b></div><div class="kv"><span>收款日期</span><b>{{ selectedRow.latestPaymentDate }}</b></div><div class="kv"><span>付款方式</span><b>{{ paymentMethodLabel(selectedRow.latestPaymentMethod) }}</b></div><div class="kv"><span>付款憑證</span><b>{{ selectedRow.latestProofName || '未上傳' }}</b></div></div><p v-else class="empty-note">尚無已確認收款</p></div>
+        </template>
+        <div v-else class="admin-owner-empty">目前沒有待確認的租金帳單</div>
+      </aside>
+
+      <dialog ref="confirmDialog" class="rent-confirm-dialog">
+        <form @submit.prevent="submitConfirm">
+          <header><div><h3>確認租金收款</h3><p>{{ selectedRow?.tenantName }} · {{ selectedRow?.leaseNo }}</p></div><button type="button" @click="closeConfirm">×</button></header>
+          <div class="rent-confirm-body">
+            <div class="rent-amount-summary"><span>本期應收<b>RM {{ money(selectedRow?.amountDue) }}</b></span><span>已收金額<b>RM {{ money(selectedRow?.amountPaid) }}</b></span><span>尚欠金額<b class="money-red">RM {{ money(selectedRow?.outstandingAmount) }}</b></span></div>
+            <div class="rent-form-grid"><label>本次實收金額（RM）<input v-model="form.amount" type="number" min="0.01" :max="selectedRow?.outstandingAmount" step="0.01" required></label><label>收款日期<input v-model="form.paymentDate" type="date" :max="todayDate" required></label></div>
+            <div class="rent-form-grid"><label>付款方式<select v-model="form.paymentMethod" required><option value="bank_transfer">銀行轉帳</option><option value="online_payment">線上支付</option><option value="cash">現金</option><option value="cheque">支票</option></select></label><label>付款人<input v-model.trim="form.payerName" maxlength="160" required></label></div>
+            <label>銀行／付款參考<input v-model.trim="form.paymentReference" maxlength="120" :placeholder="form.paymentMethod==='cash'?'現金收款可留空':'請填寫銀行流水或支票編號'"></label>
+            <label>付款憑證（可選）<input ref="proofInput" type="file" accept="application/pdf,image/jpeg,image/png" @change="selectProof"><small>{{ proof?.name || '可上傳 10MB 以內 PDF、JPG 或 PNG，稍後亦可補充或更換。' }}</small></label>
+            <label>收款備註<textarea v-model.trim="form.note" maxlength="500" rows="3"></textarea></label>
+            <div class="rent-confirm-notice"><b>{{ afterStatusText }}</b><span>確認後立即建立已收租金記錄；若仍未收齊，此帳單會繼續留在待收列表。</span></div>
+            <p v-if="actionError" class="rent-action-error">{{ actionError }}</p>
+          </div>
+          <menu><button type="button" @click="closeConfirm">取消</button><button class="primary-btn" type="submit" :disabled="saving">{{ saving?'入帳中…':'確認收款並入帳' }}</button></menu>
+        </form>
+      </dialog>
+
+      <dialog ref="proofDialog" class="modal admin-finance-proof-dialog"><div class="modal-head"><div><h3>最近租金付款憑證</h3><small>{{ selectedRow?.latestProofName }}</small></div><button class="icon-close" @click="closeProof">×</button></div><div class="finance-proof-viewer"><div v-if="proofLoading" class="admin-owner-state">正在載入…</div><img v-else-if="proofUrl&&selectedRow?.latestProofMimeType?.startsWith('image/')" :src="proofUrl"><iframe v-else-if="proofUrl&&selectedRow?.latestProofMimeType==='application/pdf'" :src="proofUrl"></iframe><div v-else class="admin-owner-state">{{ proofError||'無法預覽憑證' }}</div></div><menu><button @click="closeProof">關閉</button></menu></dialog>
+    </section>
+  </div>
+</template>
+
+<script>
+import { confirmAdminRentCollection, fetchAdminRentCollectionProjects, fetchAdminRentCollections, fetchAdminRentProof } from '../services/propertyApi';
+const localToday=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10);};
+export default {
+  inject:['page'],
+  data(){return{rows:[],selectedId:null,pageNumber:1,pageSize:10,totalRows:0,totalPages:1,loading:false,errorMessage:'',requestSerial:0,todayDate:localToday(),form:{amount:'',paymentDate:localToday(),paymentMethod:'bank_transfer',payerName:'',paymentReference:'',note:''},proof:null,saving:false,actionError:'',proofLoading:false,proofUrl:'',proofError:''};},
+  computed:{selectedRow(){return this.rows.find(r=>r.invoiceId===this.selectedId)||this.rows[0]||null;},visiblePages(){const start=Math.max(1,Math.min(this.pageNumber-2,this.totalPages-4));return Array.from({length:Math.min(5,this.totalPages)},(_,i)=>start+i);},paymentProgress(){return !Number(this.selectedRow?.amountDue)?0:Math.min(100,Math.round(Number(this.selectedRow.amountPaid||0)/Number(this.selectedRow.amountDue)*100));},collectionNonce(){return this.page.adminRentCollectionNonce;},afterStatusText(){const remaining=Number(this.selectedRow?.outstandingAmount||0)-Number(this.form.amount||0);return remaining<=0?'本期租金將標記為已收齊':`入帳後仍有 RM ${this.money(Math.max(remaining,0))} 待收`; }},
+  watch:{'page.moduleSearch'(){this.resetLoad();},'page.globalSearch'(){this.resetLoad();},'page.projectFilter'(){this.resetLoad();},'page.statusFilter'(){this.resetLoad();},'page.dateStart'(){this.resetLoad();},'page.dateEnd'(){this.resetLoad();},pageSize(){this.pageNumber=1;this.loadData();},collectionNonce(v,p){if(v>p)this.$nextTick(this.openConfirm);},rows:{deep:true,handler(v){if(!v.some(r=>r.invoiceId===this.selectedId))this.selectedId=v[0]?.invoiceId||null;}}},
+  mounted(){this.loadData();},beforeUnmount(){this.revokeProof();},
+  methods:{
+    async loadData(){const serial=++this.requestSerial,preferred=this.selectedId;this.loading=true;this.errorMessage='';try{const [response,projects]=await Promise.all([fetchAdminRentCollections({page:this.pageNumber,pageSize:this.pageSize,keyword:this.page.globalSearch||this.page.moduleSearch||'',projectName:String(this.page.projectFilter||'').includes('全部')?'':this.page.projectFilter,status:this.statusParam(this.page.statusFilter),startDate:this.page.dateStart,endDate:this.page.dateEnd}),fetchAdminRentCollectionProjects()]);if(serial!==this.requestSerial)return;this.rows=response.rows||[];this.totalRows=response.page?.totalRows||0;this.totalPages=response.page?.totalPages||1;this.pageNumber=response.page?.page||1;this.selectedId=this.rows.some(r=>r.invoiceId===preferred)?preferred:this.rows[0]?.invoiceId||null;this.page.adminFinanceProjects=projects||[];this.page.adminFinanceMetrics=this.metrics(response.summary||{});}catch(e){if(serial!==this.requestSerial)return;this.rows=[];this.errorMessage=e.message||'API request failed';this.page.adminFinanceMetrics=null;}finally{if(serial===this.requestSerial)this.loading=false;}},
+    metrics(s){return[{label:'待收租金帳單',value:`${Number(s.outstandingCount||0)} 筆`,delta:`RM ${this.money(s.outstandingAmount)}`,trend:Number(s.outstandingCount)?'down':'up'},{label:'完全未支付',value:`${Number(s.unpaidCount||0)} 筆`,delta:'尚未收到任何款項',trend:Number(s.unpaidCount)?'down':'up'},{label:'部分支付',value:`${Number(s.partialCount||0)} 筆`,delta:'仍需繼續收款',trend:Number(s.partialCount)?'down':'up'},{label:'逾期帳單',value:`${Number(s.overdueCount||0)} 筆`,delta:'需要跟進',trend:Number(s.overdueCount)?'down':'up'},{label:'本月已收租金',value:`RM ${this.money(s.monthReceived)}`,delta:'已確認入帳',trend:'up'}];},
+    resetLoad(){this.pageNumber=1;this.loadData();},goPage(n){if(n>=1&&n<=this.totalPages&&n!==this.pageNumber){this.pageNumber=n;this.loadData();}},selectAndConfirm(row){this.selectedId=row.invoiceId;this.$nextTick(this.openConfirm);},
+    openConfirm(){if(!this.selectedRow)return;this.form={amount:Number(this.selectedRow.outstandingAmount||0).toFixed(2),paymentDate:localToday(),paymentMethod:'bank_transfer',payerName:this.selectedRow.tenantName||'',paymentReference:'',note:''};this.proof=null;this.actionError='';if(this.$refs.proofInput)this.$refs.proofInput.value='';this.$refs.confirmDialog?.showModal();},closeConfirm(){if(!this.saving)this.$refs.confirmDialog?.close();},selectProof(e){const f=e.target.files?.[0]||null;if(f&&(!['application/pdf','image/jpeg','image/png'].includes(f.type)||f.size>10*1024*1024)){this.actionError='只支援 10MB 以內的 PDF、JPG 或 PNG 憑證';e.target.value='';this.proof=null;return;}this.proof=f;},
+    async submitConfirm(){const amount=Number(this.form.amount),outstanding=Number(this.selectedRow?.outstandingAmount||0);if(!Number.isFinite(amount)||amount<=0||amount>outstanding){this.actionError='本次實收金額必須大於 0，且不能超過尚欠金額。';return;}if(this.form.paymentMethod!=='cash'&&!this.form.paymentReference){this.actionError='非現金收款必須填寫銀行或付款參考。';return;}this.saving=true;this.actionError='';try{const result=await confirmAdminRentCollection(this.selectedRow.invoiceId,{...this.form,amount:amount.toFixed(2)},this.proof);this.$refs.confirmDialog?.close();await this.loadData();this.page.showToast(`租金已確認入帳：${result.referenceNo}`);}catch(e){this.actionError=e.message||'租金確認失敗';}finally{this.saving=false;}},
+    async openProof(){if(!this.selectedRow?.latestProofDocumentId)return;this.revokeProof();this.proofLoading=true;this.proofError='';this.$refs.proofDialog?.showModal();try{const r=await fetchAdminRentProof(this.selectedRow.latestProofDocumentId);this.proofUrl=URL.createObjectURL(r.blob);}catch(e){this.proofError=e.message||'憑證載入失敗';}finally{this.proofLoading=false;}},closeProof(){this.$refs.proofDialog?.close();this.revokeProof();},revokeProof(){if(this.proofUrl)URL.revokeObjectURL(this.proofUrl);this.proofUrl='';},goToTenancy(){const k=this.selectedRow?.tenantName||'';this.page.selectModule('adminTenants');this.$nextTick(()=>{this.page.globalSearch=k;});},statusParam(v){return({'未支付':'unpaid','部分支付':'partial','已逾期':'overdue'})[v]||'';},statusLabel(v){return({unpaid:'未支付',partial:'部分支付',overdue:'已逾期'})[v]||v;},statusClass(v){return v==='partial'?'orange':v==='overdue'?'red':'gray';},paymentMethodLabel(v){return({bank_transfer:'銀行轉帳',online_payment:'線上支付',cash:'現金',cheque:'支票'})[v]||v||'—';},monthLabel(v){return v?String(v).slice(0,7):'—';},money(v){return Number(v||0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  }
+};
+</script>
+
+<style scoped>
+.panel-head{display:flex;align-items:center;justify-content:space-between}.panel-head h2{margin:0 0 4px}.panel-head span,td small{display:block;color:#6b7d91;font-size:11px;margin-top:4px}.confirm-rent-button{border:0;border-radius:6px;background:#0b376c;color:#fff;padding:6px 10px;white-space:nowrap}.empty-note{color:#718096;text-align:center}.rent-confirm-dialog{width:min(650px,calc(100vw - 30px));padding:0;border:0;border-radius:12px;box-shadow:0 25px 80px #06172c55}.rent-confirm-dialog::backdrop{background:#09182a80}.rent-confirm-dialog header{display:flex;justify-content:space-between;gap:16px;padding:19px 22px;border-bottom:1px solid #e1e8f0}.rent-confirm-dialog h3{margin:0 0 4px}.rent-confirm-dialog header p{margin:0;color:#64748b}.rent-confirm-dialog header button{border:0;background:none;font-size:26px}.rent-confirm-body{display:grid;gap:15px;padding:20px 22px;max-height:68vh;overflow:auto}.rent-amount-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.rent-amount-summary span{display:grid;gap:4px;padding:10px;border-radius:7px;background:#f5f8fb;color:#617287;font-size:12px}.rent-amount-summary b{color:#122943;font-size:15px}.rent-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.rent-confirm-body label{display:grid;gap:6px;color:#293e56;font-size:13px;font-weight:600}.rent-confirm-body input,.rent-confirm-body select,.rent-confirm-body textarea{box-sizing:border-box;width:100%;border:1px solid #cdd8e4;border-radius:7px;padding:10px 11px;background:#fff;font:inherit}.rent-confirm-body textarea{resize:vertical}.rent-confirm-body small{color:#718096;font-weight:400}.rent-confirm-notice{display:grid;gap:4px;padding:11px 13px;border:1px solid #efd28d;border-radius:8px;background:#fff9ea;color:#7a5908;font-size:12px}.rent-action-error{margin:0;color:#d52e39}.rent-confirm-dialog menu{display:flex;justify-content:flex-end;gap:9px;margin:0;padding:14px 22px;background:#f7f9fb}.rent-confirm-dialog menu button{border:1px solid #ced8e4;border-radius:7px;background:#fff;padding:9px 18px}.rent-confirm-dialog menu .primary-btn{background:#d89200;border-color:#d89200;color:#fff}@media(max-width:600px){.rent-form-grid,.rent-amount-summary{grid-template-columns:1fr}}
+</style>

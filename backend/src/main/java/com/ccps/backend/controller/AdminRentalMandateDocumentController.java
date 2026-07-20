@@ -1,0 +1,8 @@
+package com.ccps.backend.controller;
+import com.ccps.backend.config.AuthInterceptor; import com.ccps.backend.dto.AdminRentalMandateDocumentResponse; import com.ccps.backend.service.AdminRentalMandateDocumentService; import jakarta.servlet.http.HttpServletRequest; import org.springframework.core.io.InputStreamResource; import org.springframework.http.*; import org.springframework.web.bind.annotation.*; import org.springframework.web.multipart.MultipartFile; import java.io.*; import java.nio.file.Files; import java.util.*;
+@RestController @RequestMapping("/api/admin/rental-mandates/{mandateId}/documents")
+public class AdminRentalMandateDocumentController { private final AdminRentalMandateDocumentService service; public AdminRentalMandateDocumentController(AdminRentalMandateDocumentService s){service=s;}
+ @GetMapping public List<AdminRentalMandateDocumentResponse> list(@PathVariable Long mandateId){return service.list(mandateId);}
+ @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE) public List<AdminRentalMandateDocumentResponse> upload(@PathVariable Long mandateId,@RequestParam String relationType,@RequestPart MultipartFile file,HttpServletRequest r){return service.upload(AuthInterceptor.userId(r),mandateId,relationType,file);}
+ @GetMapping("/{documentId}/file") public ResponseEntity<InputStreamResource> download(@PathVariable Long mandateId,@PathVariable Long documentId)throws IOException{var d=service.download(mandateId,documentId);return ResponseEntity.ok().contentType(MediaType.parseMediaType(d.mimeType())).contentLength(d.size()).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\""+d.originalName()+"\"").body(new InputStreamResource(Files.newInputStream(d.path())));}
+}

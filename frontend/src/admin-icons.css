@@ -1,0 +1,29 @@
+/* Shared icon language for the administrator shell. */
+.admin-shell .sidebar{background:#172337;box-shadow:8px 0 24px rgba(15,30,52,.14)}
+.admin-shell .brand{background:#172337;border-bottom:1px solid rgba(255,255,255,.1)}
+.admin-shell .crest{border-color:rgba(255,255,255,.48);color:#e0c17d}
+.admin-shell .nav{padding:12px 10px;gap:5px}
+.admin-shell .nav button{min-height:45px;padding:8px 12px;border-left:2px solid transparent;border-radius:6px;color:#cbd5e1;gap:11px;font-size:12px;transition:background .18s,border-color .18s,color .18s}
+.admin-shell .nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+.admin-shell .nav button .ico{width:30px;height:30px;flex-basis:30px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.045);color:#9fb0c4}
+.admin-shell .nav button .ico svg{width:18px;height:18px;stroke-linecap:round;stroke-linejoin:round}
+.admin-shell .nav button.active{border-left-color:#d0aa68;background:rgba(208,170,104,.13);color:#f3dfb4;box-shadow:none}
+.admin-shell .nav button.active .ico{border-color:rgba(208,170,104,.45);background:#2a3445;color:#e0bd7b}
+.admin-shell .project-card{background:#172337}
+.admin-shell .portal-switch{border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:#cbd5e1}
+.admin-shell .portal-switch:hover{background:rgba(255,255,255,.1);color:#fff}
+.admin-shell .admin-metric-icon{background:#f2f5f8;color:#556b82;border:1px solid #e1e7ed;border-radius:9px}
+.admin-shell .admin-metric-icon svg{stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.admin-shell .view-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px}
+.admin-shell .view-tabs button svg{stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.admin-shell .row-actions{display:inline-grid;place-items:center;padding:0;color:#596b80}
+.admin-shell .row-actions svg{stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.admin-shell .metric{position:relative;overflow:hidden;border-color:#dce6f0;background:linear-gradient(180deg,#fff 0%,#f8fbfe 100%);box-shadow:0 4px 14px rgba(35,72,108,.055)}
+.admin-shell .metric::before{content:"";position:absolute;inset:0 auto auto 0;width:100%;height:3px;background:#4e82aa}
+.admin-shell .metric .admin-metric-icon{width:40px;height:40px;flex:0 0 40px;border:1px solid #d8e4ef;border-radius:11px;background:#eef4f9;color:#315f84;box-shadow:none}
+.admin-shell .metric .admin-metric-icon svg{width:19px;height:19px}
+.admin-shell .metric span{color:#274765;font-size:12px;font-weight:800}
+.admin-shell .metric strong{color:#102e4d;font-size:20px;letter-spacing:-.2px}
+.admin-shell .metric small{color:#7a91a6;font-size:10px}
+.admin-shell .metric small.up{color:#27835d}.admin-shell .metric small.down{color:#c26a4c}
+.admin-shell .metric:hover{border-color:#b9cee0;box-shadow:0 7px 18px rgba(35,72,108,.09)}
