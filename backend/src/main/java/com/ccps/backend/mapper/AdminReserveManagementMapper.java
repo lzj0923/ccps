@@ -111,6 +111,13 @@ public interface AdminReserveManagementMapper {
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertDirectTopupFinance(DirectTopupRecord record);
 
+    @Insert("INSERT INTO finance_records (transaction_no,record_type,unit_id,owner_id,amount,currency,transaction_date,payment_method,payment_status,confirmation_status,sync_status,created_by) VALUES (#{transactionNo},'reserve_refund',#{unitId},#{ownerId},#{amount},'MYR',#{paymentDate},#{paymentMethod},'unpaid','pending','not_synced',#{actorId})")
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insertReserveRefundFinance(DirectTopupRecord record);
+
+    @Insert("INSERT INTO cashflow_entries (finance_record_id,unit_id,owner_id,direction,category,description,occurred_on,attachment_status) VALUES (#{financeRecordId},#{unitId},#{ownerId},'expense','other',#{note},CURRENT_DATE,'missing')")
+    int insertReserveRefundCashflow(@Param("financeRecordId") Long financeRecordId,@Param("unitId") Long unitId,@Param("ownerId") Long ownerId,@Param("note") String note);
+
     @Insert("""
             INSERT INTO payment_receipts
               (finance_record_id,receipt_no,payer_name,bank_reference,submission_note,review_note)
@@ -149,6 +156,9 @@ public interface AdminReserveManagementMapper {
     int insertDirectTopupAudit(@Param("actorId") Long actorId, @Param("financeRecordId") Long financeRecordId,
             @Param("accountId") Long accountId, @Param("amount") BigDecimal amount,
             @Param("balanceAfter") BigDecimal balanceAfter, @Param("note") String note);
+
+    @Insert("INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,after_data) VALUES (#{actorId},'create_reserve_refund','finance_record',#{financeRecordId},JSON_OBJECT('reserveAccountId',#{accountId},'amount',#{amount},'note',#{note}))")
+    int insertReserveRefundAudit(@Param("actorId") Long actorId,@Param("financeRecordId") Long financeRecordId,@Param("accountId") Long accountId,@Param("amount") BigDecimal amount,@Param("note") String note);
 
     class SummaryRow {
         private BigDecimal totalBalance, minimumBalance, monthlyTopups, monthlyDebits, pendingTopupAmount;

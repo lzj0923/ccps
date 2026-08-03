@@ -131,7 +131,8 @@ public interface AdminReminderMapper {
             SELECT ri.id AS related_id, 'rent_invoice' AS related_type,
                    o.user_id AS recipient_user_id, o.id AS recipient_owner_id,
                    o.full_name AS recipient_name, o.email AS recipient_email,
-                   p.name AS project_name, u.unit_no, ri.due_date,
+                   p.name AS project_name, u.unit_no,
+                   GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) AS due_date,
                    GREATEST(ri.amount_due - ri.amount_paid, 0) AS amount,
                    DATE_FORMAT(ri.billing_month, '%Y-%m') AS label
             FROM rent_invoices ri
@@ -141,7 +142,7 @@ public interface AdminReminderMapper {
             JOIN owner_units ou ON ou.unit_id = u.id AND ou.status = 'active'
             JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
             WHERE ri.due_date IS NOT NULL AND ri.amount_due > ri.amount_paid
-              AND ri.due_date <= DATE_ADD(CURDATE(), INTERVAL #{daysBefore} DAY)
+              AND GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) <= DATE_ADD(CURDATE(), INTERVAL #{daysBefore} DAY)
               AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.rule_id = #{ruleId}
                   AND n.related_type = 'rent_invoice' AND n.related_id = ri.id
                   AND n.recipient_owner_id = o.id)

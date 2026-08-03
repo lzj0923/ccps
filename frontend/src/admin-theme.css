@@ -1,0 +1,50 @@
+.admin-shell .sidebar,.admin-shell .brand,.admin-shell .project-card{background:#063f52}
+.admin-shell{height:100vh;min-height:0;overflow:hidden}
+.admin-shell .main{height:100vh;min-height:0;overflow-y:auto;overflow-x:hidden}
+.admin-shell .admin-page{min-height:0}
+.admin-shell .nav button.active{background:#0b8f96;color:#fff;box-shadow:0 8px 16px rgba(11,143,150,.24)}
+.admin-shell .nav button:hover{background:rgba(11,143,150,.22)}
+.admin-shell .topbar{background:#fff;color:#0d1b3e;border-bottom-color:#dce5ee}
+.admin-shell .topbar h1,.admin-shell .topbar p{color:#0d1b3e}
+.admin-shell .top-actions .global-search,.admin-shell .top-actions .date-btn,.admin-shell .top-actions .icon-btn,.admin-shell .top-actions .user-btn{border-color:#d8e2ec;background:#fff;color:#0d1b3e}
+.admin-shell .main{background:#f1f8f8}
+.admin-shell .primary-btn{background:linear-gradient(180deg,#f8c51c,#e8a900);border-color:#d89a00}
+.admin-shell .metric::before{background:#0b8f96}
+.admin-shell .view-tabs button.active{background:#0b8f96}
+.admin-shell .pager button.active{background:#e8ad0b;border-color:#e8ad0b}
+.admin-shell .edit-property-row-action{font-size:15px;color:#0b7f88;border-color:#a8d6d8;background:#f0fbfb}
+.admin-shell .edit-property-row-action:hover{background:#d9f3f3;border-color:#0b8f96;color:#075e68}
+.admin-shell .property-list-workspace{font-size:12px}
+.admin-shell .property-list-workspace th{font-size:12px!important;padding:10px 9px!important;line-height:1.35}
+.admin-shell .property-list-workspace td{font-size:12px!important;padding:10px 9px!important;line-height:1.35}
+.admin-shell .property-list-workspace td strong{font-size:13px}
+.admin-shell .property-list-workspace td small{font-size:10px!important;line-height:1.35}
+.admin-shell .property-list-workspace .tag{font-size:11px!important;padding:4px 8px!important}
+.admin-shell .property-list-workspace .owners-pager{font-size:12px}
+.admin-shell .property-list-workspace .owners-pager button,.admin-shell .property-list-workspace .owners-pager select{font-size:12px!important}
+.admin-shell .property-list-workspace{width:100%;min-width:0;overflow:hidden}
+.admin-shell .property-list-workspace .owners-table-panel{min-width:0;width:100%;overflow:hidden}
+.admin-shell .property-list-workspace .owners-table-wrap{width:100%;overflow-x:auto}
+.admin-shell .main{width:calc(100vw - 224px);max-width:calc(100vw - 224px);overflow-x:hidden}
+.admin-shell .property-list-workspace .owners-table-wrap td{padding-top:7px!important;padding-bottom:7px!important;line-height:1.2}
+.admin-shell .property-list-workspace .owners-table-wrap td{height:auto!important}
+.admin-shell .property-list-workspace .owners-table-wrap th{padding-top:7px!important;padding-bottom:7px!important}
+.admin-shell .property-list-workspace .owners-pager{height:44px!important;padding-top:6px!important;padding-bottom:6px!important}
+.admin-shell .property-list-workspace .owners-table-wrap{overflow-x:hidden}
+.admin-shell .property-list-workspace table{width:100%;table-layout:fixed}
+.admin-shell .property-list-workspace th,.admin-shell .property-list-workspace td{overflow:hidden;text-overflow:ellipsis}
+@media(max-width:900px){.admin-shell .main{width:calc(100vw - 190px);max-width:calc(100vw - 190px)}.admin-shell .property-list-workspace table{table-layout:auto}.admin-shell .property-list-workspace .owners-table-wrap{overflow-x:auto}}
+.admin-shell .maintenance-table-wrap,.admin-shell .tenancy-table-wrap,.admin-shell .finance-review-table-wrap,.admin-shell .reminder-table-wrap,.admin-shell .ops-table,.admin-shell .reserve-table-wrap,.admin-shell .report-table{max-height:calc(100vh - 285px);overflow:auto}
+.admin-shell .maintenance-table-wrap table,.admin-shell .tenancy-table-wrap table,.admin-shell .finance-review-table-wrap table,.admin-shell .reminder-table-wrap table,.admin-shell .ops-table table,.admin-shell .reserve-table-wrap table,.admin-shell .report-table table{min-width:0;max-width:100%}
+.admin-shell .admin-tenancy-workspace{width:100%;max-width:100%;min-width:0;height:calc(100vh - 190px);min-height:0;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(280px,32%)!important}
+.admin-shell .admin-tenancy-workspace .tenancy-list-panel,.admin-shell .admin-tenancy-workspace .tenancy-detail-panel{min-width:0;max-width:100%}
+.admin-shell .admin-tenancy-workspace .tenancy-list-panel{min-height:0;display:flex;flex-direction:column}
+.admin-shell .admin-tenancy-workspace .tenancy-detail-panel{align-self:start;max-height:calc(100vh - 190px);overflow-y:auto;overflow-x:hidden}
+.admin-shell .admin-tenancy-workspace .tenancy-table-wrap{min-width:0;max-width:100%;min-height:0;flex:1;overflow:auto}
+@media(max-width:1050px){.admin-shell .admin-tenancy-workspace{grid-template-columns:minmax(0,1fr)!important}.admin-shell .admin-tenancy-workspace .tenancy-detail-panel{max-height:none!important}}
+.admin-shell .reserve-layout{width:100%;max-width:100%;min-width:0;height:calc(100vh - 190px);min-height:0;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(280px,32%)!important}
+.admin-shell .reserve-layout .reserve-list-panel,.admin-shell .reserve-layout .reserve-detail-panel{min-width:0;max-width:100%}
+.admin-shell .reserve-layout .reserve-list-panel{min-height:0;display:flex;flex-direction:column}
+.admin-shell .reserve-layout .reserve-detail-panel{align-self:start;max-height:calc(100vh - 190px);overflow-y:auto;overflow-x:hidden}
+.admin-shell .reserve-layout .reserve-table-wrap{min-width:0;max-width:100%;min-height:0;flex:1;overflow:auto}
+@media(max-width:1050px){.admin-shell .reserve-layout{grid-template-columns:minmax(0,1fr)!important}.admin-shell .reserve-layout .reserve-detail-panel{max-height:none!important}}

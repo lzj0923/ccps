@@ -13,6 +13,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import com.ccps.backend.dto.AdminMaintenanceOptionsResponse.UnitOption;
 import com.ccps.backend.dto.AdminMaintenanceOptionsResponse.VendorOption;
+import com.ccps.backend.dto.AdminPropertyMaintenanceResponse;
 
 @Mapper
 public interface AdminMaintenanceMapper {
@@ -34,6 +35,77 @@ public interface AdminMaintenanceMapper {
     List<VendorOption> findVendorOptions();
 
     @Select("""
+            SELECT ou.id AS owner_unit_id, ou.owner_id, ou.unit_id
+            FROM owner_units ou
+            WHERE ou.id = #{ownerUnitId} AND ou.owner_id = #{ownerId} AND ou.status = 'active'
+            LIMIT 1
+            """)
+    PropertyContext findPropertyContext(@Param("ownerId") Long ownerId,
+            @Param("ownerUnitId") Long ownerUnitId);
+
+    @Select("""
+            SELECT mwo.id, mwo.work_order_no, mwo.vendor_id, v.name AS vendor_name,
+                   mwo.category, mwo.title, mwo.description, mwo.requested_at,
+                   mwo.completed_at, mwo.status, mwo.estimated_amount, mwo.actual_amount,
+                   mwo.cashflow_entry_id,
+                   (SELECT COUNT(*) FROM document_links dl JOIN documents d ON d.id = dl.document_id
+                    WHERE dl.entity_type = 'work_order' AND dl.entity_id = mwo.id
+                      AND d.status = 'active') AS attachment_count,
+                   mwo.updated_at
+            FROM maintenance_work_orders mwo
+            LEFT JOIN vendors v ON v.id = mwo.vendor_id
+            WHERE mwo.unit_id = #{unitId} AND mwo.status <> 'cancelled'
+            ORDER BY mwo.requested_at DESC, mwo.id DESC
+            """)
+    List<AdminPropertyMaintenanceResponse> findPropertyMaintenance(@Param("unitId") Long unitId);
+
+    @Select("""
+            SELECT mwo.id, mwo.work_order_no, mwo.vendor_id, v.name AS vendor_name,
+                   mwo.category, mwo.title, mwo.description, mwo.requested_at,
+                   mwo.completed_at, mwo.status, mwo.estimated_amount, mwo.actual_amount,
+                   mwo.cashflow_entry_id,
+                   (SELECT COUNT(*) FROM document_links dl JOIN documents d ON d.id = dl.document_id
+                    WHERE dl.entity_type = 'work_order' AND dl.entity_id = mwo.id
+                      AND d.status = 'active') AS attachment_count,
+                   mwo.updated_at
+            FROM maintenance_work_orders mwo
+            LEFT JOIN vendors v ON v.id = mwo.vendor_id
+            WHERE mwo.id = #{workOrderId} AND mwo.unit_id = #{unitId}
+            LIMIT 1
+            """)
+    AdminPropertyMaintenanceResponse findPropertyMaintenanceById(@Param("unitId") Long unitId,
+            @Param("workOrderId") Long workOrderId);
+
+    @Update("""
+            UPDATE maintenance_work_orders
+            SET vendor_id = #{vendorId}, category = #{category}, title = #{title},
+                description = #{description}, requested_at = #{requestedAt},
+                estimated_amount = #{estimatedAmount}, status = #{status}
+            WHERE id = #{workOrderId} AND unit_id = #{unitId}
+              AND status NOT IN ('completed', 'cancelled')
+            """)
+    int updatePropertyMaintenance(@Param("unitId") Long unitId,
+            @Param("workOrderId") Long workOrderId, @Param("vendorId") Long vendorId,
+            @Param("category") String category, @Param("title") String title,
+            @Param("description") String description, @Param("requestedAt") LocalDateTime requestedAt,
+            @Param("estimatedAmount") BigDecimal estimatedAmount, @Param("status") String status);
+
+    @Update("""
+            UPDATE maintenance_work_orders
+            SET status = 'cancelled'
+            WHERE id = #{workOrderId} AND unit_id = #{unitId} AND status <> 'cancelled'
+            """)
+    int cancelPropertyMaintenance(@Param("unitId") Long unitId,
+            @Param("workOrderId") Long workOrderId);
+
+    @Insert("""
+            INSERT INTO maintenance_status_history (work_order_id, status, occurred_at, note, changed_by)
+            VALUES (#{workOrderId}, #{status}, NOW(), #{note}, #{actorId})
+            """)
+    int insertPropertyHistory(@Param("workOrderId") Long workOrderId, @Param("status") String status,
+            @Param("note") String note, @Param("actorId") Long actorId);
+
+    @Select("""
             SELECT u.id AS unit_id, o.id AS owner_id, ou.id AS owner_unit_id,
                    ra.id AS reserve_account_id, COALESCE(ra.current_balance, 0) AS reserve_balance
             FROM units u
@@ -52,7 +124,9 @@ public interface AdminMaintenanceMapper {
                    ou.id AS owner_unit_id, ra.id AS reserve_account_id,
                    COALESCE(ra.current_balance, 0) AS reserve_balance,
                    COALESCE((SELECT SUM(rt.amount) FROM reserve_transactions rt
-                     WHERE rt.maintenance_work_order_id = mwo.id AND rt.transaction_type = 'debit'), 0)
+                     WHERE rt.transaction_type = 'debit'
+                       AND (rt.maintenance_work_order_id = mwo.id
+                            OR rt.finance_record_id = ce.finance_record_id)), 0)
                      AS reserve_deducted_amount
             FROM maintenance_work_orders mwo
             LEFT JOIN cashflow_entries ce ON ce.id = mwo.cashflow_entry_id
@@ -80,7 +154,10 @@ public interface AdminMaintenanceMapper {
                sync_status, created_by)
             VALUES
               (#{transactionNo}, 'cashflow', #{unitId}, #{ownerId}, #{amount}, 'MYR', CURRENT_DATE,
-               #{paymentMethod}, 'paid', 'confirmed', #{actorId}, NOW(), 'not_synced', #{actorId})
+               #{paymentMethod}, 'paid', #{confirmationStatus},
+               CASE WHEN #{confirmationStatus} = 'confirmed' THEN #{actorId} ELSE NULL END,
+               CASE WHEN #{confirmationStatus} = 'confirmed' THEN NOW() ELSE NULL END,
+               'not_synced', #{actorId})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertFinance(NewFinance finance);
@@ -88,12 +165,15 @@ public interface AdminMaintenanceMapper {
     @Update("""
             UPDATE finance_records
             SET amount = #{amount}, transaction_date = CURRENT_DATE, payment_method = #{paymentMethod},
-                payment_status = 'paid', confirmation_status = 'confirmed', confirmed_by = #{actorId},
-                confirmed_at = NOW(), sync_status = 'not_synced'
+                payment_status = 'paid', confirmation_status = #{confirmationStatus},
+                confirmed_by = CASE WHEN #{confirmationStatus} = 'confirmed' THEN #{actorId} ELSE NULL END,
+                confirmed_at = CASE WHEN #{confirmationStatus} = 'confirmed' THEN NOW() ELSE NULL END,
+                sync_status = 'not_synced'
             WHERE id = #{financeRecordId}
             """)
     int updateFinance(@Param("financeRecordId") Long financeRecordId, @Param("amount") BigDecimal amount,
-            @Param("paymentMethod") String paymentMethod, @Param("actorId") Long actorId);
+            @Param("paymentMethod") String paymentMethod,
+            @Param("confirmationStatus") String confirmationStatus, @Param("actorId") Long actorId);
 
     @Insert("""
             INSERT INTO cashflow_entries
@@ -116,26 +196,22 @@ public interface AdminMaintenanceMapper {
             @Param("reserveAccountId") Long reserveAccountId, @Param("description") String description);
 
     @Update("""
-            UPDATE reserve_accounts SET current_balance = current_balance - #{amount}
-            WHERE id = #{reserveAccountId} AND current_balance >= #{amount}
+            UPDATE reserve_transactions
+            SET maintenance_work_order_id = #{workOrderId}
+            WHERE finance_record_id = #{financeRecordId} AND transaction_type = 'debit'
+              AND maintenance_work_order_id IS NULL
             """)
-    int deductReserve(@Param("reserveAccountId") Long reserveAccountId, @Param("amount") BigDecimal amount);
+    int linkReserveDebitToWorkOrder(@Param("financeRecordId") Long financeRecordId,
+            @Param("workOrderId") Long workOrderId);
 
-    @Select("SELECT current_balance FROM reserve_accounts WHERE id = #{reserveAccountId}")
-    BigDecimal findReserveBalance(@Param("reserveAccountId") Long reserveAccountId);
-
-    @Insert("""
-            INSERT INTO reserve_transactions
-              (reserve_account_id, finance_record_id, maintenance_work_order_id, transaction_type,
-               amount, occurred_at, balance_after, note, created_by)
-            VALUES
-              (#{reserveAccountId}, #{financeRecordId}, #{workOrderId}, 'debit', #{amount}, NOW(),
-               #{balanceAfter}, #{note}, #{actorId})
+    @Select("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM reserve_transactions
+            WHERE transaction_type = 'debit'
+              AND (finance_record_id = #{financeRecordId} OR maintenance_work_order_id = #{workOrderId})
             """)
-    int insertReserveDebit(@Param("reserveAccountId") Long reserveAccountId,
-            @Param("financeRecordId") Long financeRecordId, @Param("workOrderId") Long workOrderId,
-            @Param("amount") BigDecimal amount, @Param("balanceAfter") BigDecimal balanceAfter,
-            @Param("note") String note, @Param("actorId") Long actorId);
+    BigDecimal findReserveDebitAmount(@Param("financeRecordId") Long financeRecordId,
+            @Param("workOrderId") Long workOrderId);
 
     @Update("""
             UPDATE maintenance_work_orders
@@ -213,6 +289,13 @@ public interface AdminMaintenanceMapper {
             @Param("entityType") String entityType, @Param("entityId") Long entityId,
             @Param("afterData") String afterData);
 
+    class PropertyContext {
+        private Long ownerUnitId; private Long ownerId; private Long unitId;
+        public Long getOwnerUnitId() { return ownerUnitId; } public void setOwnerUnitId(Long value) { ownerUnitId = value; }
+        public Long getOwnerId() { return ownerId; } public void setOwnerId(Long value) { ownerId = value; }
+        public Long getUnitId() { return unitId; } public void setUnitId(Long value) { unitId = value; }
+    }
+
     class UnitContext {
         private Long unitId; private Long ownerId; private Long ownerUnitId;
         private Long reserveAccountId; private BigDecimal reserveBalance;
@@ -288,13 +371,14 @@ public interface AdminMaintenanceMapper {
 
     class NewFinance {
         private Long id; private String transactionNo; private Long unitId; private Long ownerId;
-        private BigDecimal amount; private String paymentMethod; private Long actorId;
+        private BigDecimal amount; private String paymentMethod; private String confirmationStatus; private Long actorId;
         public Long getId() { return id; } public void setId(Long value) { id = value; }
         public String getTransactionNo() { return transactionNo; } public void setTransactionNo(String value) { transactionNo = value; }
         public Long getUnitId() { return unitId; } public void setUnitId(Long value) { unitId = value; }
         public Long getOwnerId() { return ownerId; } public void setOwnerId(Long value) { ownerId = value; }
         public BigDecimal getAmount() { return amount; } public void setAmount(BigDecimal value) { amount = value; }
         public String getPaymentMethod() { return paymentMethod; } public void setPaymentMethod(String value) { paymentMethod = value; }
+        public String getConfirmationStatus() { return confirmationStatus; } public void setConfirmationStatus(String value) { confirmationStatus = value; }
         public Long getActorId() { return actorId; } public void setActorId(Long value) { actorId = value; }
     }
 

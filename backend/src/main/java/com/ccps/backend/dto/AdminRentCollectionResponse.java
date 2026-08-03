@@ -15,5 +15,7 @@ public record AdminRentCollectionResponse(Summary summary, List<Item> rows, Page
             String collectionStatus, long overdueDays, Long latestFinanceRecordId,
             String latestTransactionNo, BigDecimal latestPaymentAmount, LocalDate latestPaymentDate,
             String latestPaymentMethod, Long latestProofDocumentId, String latestProofName,
-            String latestProofMimeType, Long latestProofSize, LocalDateTime latestConfirmedAt) { }
+            String latestProofMimeType, Long latestProofSize, LocalDateTime latestConfirmedAt,
+            BigDecimal monthlyRent, LocalDate leaseStartDate, LocalDate leaseEndDate,
+            String rentCalculationMethod) { }
 }

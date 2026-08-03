@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminReportGenerateRequest;
@@ -28,7 +29,14 @@ import jakarta.validation.Valid;
 public class AdminReportController {
     private final AdminReportService service;
     public AdminReportController(AdminReportService service) { this.service = service; }
-    @GetMapping public AdminReportResponse overview() { return service.overview(); }
+    @GetMapping public AdminReportResponse overview(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String project,
+            @RequestParam(required = false) String status) {
+        return service.overview(page, pageSize, keyword, project, status);
+    }
     @PostMapping("/runs") public AdminReportResponse.Run generate(@Valid @RequestBody AdminReportGenerateRequest body, HttpServletRequest request) { return service.generate(AuthInterceptor.userId(request), body); }
     @GetMapping("/runs/{runId}/file") public ResponseEntity<FileSystemResource> download(@PathVariable Long runId) {
         Download file = service.download(runId);

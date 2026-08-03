@@ -345,6 +345,18 @@ public interface OwnerExpenseMaintenanceMapper {
             """)
     AttachmentFile findAttachmentFile(@Param("userId") Long userId, @Param("documentId") Long documentId);
 
+    @Select("""
+            SELECT d.id AS document_id, d.original_name, d.storage_key, d.mime_type,
+                   COALESCE(d.file_size, 0) AS file_size
+            FROM documents d
+            JOIN document_links dl ON dl.document_id = d.id
+            JOIN maintenance_work_orders mwo ON mwo.id = dl.entity_id AND dl.entity_type = 'work_order'
+            WHERE d.id = #{documentId} AND d.document_type = 'maintenance_attachment'
+              AND d.status = 'active'
+            LIMIT 1
+            """)
+    AttachmentFile findAdminAttachmentFile(@Param("documentId") Long documentId);
+
     class ExpenseTotals {
         private BigDecimal expenseAmount;
         private BigDecimal maintenanceAmount;

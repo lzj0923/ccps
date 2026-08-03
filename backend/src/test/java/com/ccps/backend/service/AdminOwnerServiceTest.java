@@ -8,7 +8,9 @@ import static org.mockito.ArgumentMatchers.any;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,52 @@ class AdminOwnerServiceTest {
         assertThat(result.get(0).fullName()).isEqualTo("Test Owner");
         assertThat(result.get(0).properties()).extracting(AdminOwnerResponse.Property::unitNo)
                 .containsExactly("A-01", "A-02");
+    }
+
+    @Test
+    void treatsLegacyOccupiedListingAsRented() {
+        OwnerPropertyRow row = propertyRow(1L, 11L, 101L, "A-01");
+        row.setAssetStage("OPERATING");
+        row.setListingStatus("occupied");
+        row.setServices("RENTAL");
+        when(mapper.countPropertyPage(null, null, null)).thenReturn(1L);
+        when(mapper.findPropertyPage(null, null, null, 10, 0)).thenReturn(List.of(row));
+
+        var result = service.findProperties(1, 10, null, null, null);
+
+        assertThat(result.rows()).singleElement().extracting("rentalStatus").isEqualTo("rented");
+    }
+
+    @Test
+    void resolvesPrimaryPropertyContextDirectlyFromUnitId() {
+        OwnerPropertyRow row = propertyRow(7L, 12L, 120L, "E-09-03");
+        when(mapper.findPrimaryOwnerPropertyByUnitId(120L)).thenReturn(row);
+
+        var result = service.findPropertyReference(120L);
+
+        assertThat(result.ownerId()).isEqualTo(7L);
+        assertThat(result.ownerUnitId()).isEqualTo(12L);
+    }
+
+    @Test
+    void storesOnlyLeaseReferenceInsteadOfDerivedLeaseSnapshots() {
+        OwnerPropertyRow row = propertyRow(1L, 12L, 120L, "E-09-03");
+        when(mapper.findOwnerProperty(1L, 12L)).thenReturn(row);
+        when(mapper.countPropertyLease(12L, 88L)).thenReturn(1);
+        when(mapper.upsertPropertyBasicProfile(org.mockito.ArgumentMatchers.eq(12L), any(String.class))).thenReturn(1);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("linkedLeaseId", 88);
+        details.put("principalName", "duplicated tenant");
+        details.put("linkedMonthlyRent", 2600);
+        details.put("depositAmount", 5200);
+
+        Map<String, Object> result = service.savePropertyBasicProfile(1L, 12L,
+                Map.of("propertyDetails", details));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> saved = (Map<String, Object>) result.get("propertyDetails");
+        assertThat(saved).containsEntry("linkedLeaseId", 88);
+        assertThat(saved).doesNotContainKeys("principalName", "linkedMonthlyRent", "depositAmount");
     }
 
     @Test

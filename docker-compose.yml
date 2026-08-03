@@ -32,7 +32,10 @@ services:
       dockerfile: docker/backend/Dockerfile
     container_name: ccps-backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
+      SIGNING_FRONTEND_BASE: http://47.108.39.84:8080
       DB_URL: jdbc:mysql://mysql:3306/ccps_property_management?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       DB_USERNAME: root
       DB_PASSWORD: 123456

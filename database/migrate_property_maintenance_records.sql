@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS property_maintenance_records (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  work_order_id BIGINT UNSIGNED NULL,
+  record_no VARCHAR(60) NOT NULL,
+  category VARCHAR(60) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  maintenance_date DATE NOT NULL,
+  duration_minutes INT UNSIGNED NOT NULL DEFAULT 0,
+  details VARCHAR(1000) NULL,
+  result_summary VARCHAR(500) NULL,
+  next_maintenance_date DATE NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_maintenance_no (record_no),
+  UNIQUE KEY uk_property_maintenance_work_order (work_order_id),
+  KEY idx_property_maintenance_unit_date (owner_unit_id, maintenance_date),
+  CONSTRAINT fk_property_maintenance_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_maintenance_work_order FOREIGN KEY (work_order_id) REFERENCES maintenance_work_orders (id),
+  CONSTRAINT fk_property_maintenance_creator FOREIGN KEY (created_by) REFERENCES users (id)
+) ENGINE=InnoDB;

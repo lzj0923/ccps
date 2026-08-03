@@ -1,6 +1,7 @@
 package com.ccps.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,14 +23,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.ccps.backend.dto.AdminLeaseCreateRequest;
+import com.ccps.backend.dto.AdminLeaseCloseRequest;
 import com.ccps.backend.dto.AdminLeaseUpdateRequest;
 import com.ccps.backend.dto.AdminLeaseTransferRequest;
+import com.ccps.backend.dto.AdminRentCollectionRequest;
 import com.ccps.backend.mapper.AdminTenancyMapper;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseContractContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseChangeContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewLease;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewContractDocument;
+import com.ccps.backend.mapper.AdminTenancyMapper.ContractFile;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentProofContext;
+import com.ccps.backend.mapper.AdminTenancyMapper.RentCollectionContext;
+import com.ccps.backend.mapper.AdminTenancyMapper.RentInvoiceAdvanceRow;
+import com.ccps.backend.mapper.AdminTenancyMapper.RentCreditRow;
+import com.ccps.backend.mapper.AdminTenancyMapper.RentInvoiceCreditRow;
 
 @ExtendWith(MockitoExtension.class)
 class AdminTenancyServiceTest {
@@ -42,8 +50,26 @@ class AdminTenancyServiceTest {
                 Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneOffset.UTC), tempDir);
     }
 
+    @Test void createsLeaseWithTheExplicitCurrentRentalMandate() {
+        when(mapper.countActiveTenant(5L)).thenReturn(1);
+        when(mapper.countCurrentRentalMandate(42L, 8L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-06-30"))).thenReturn(1);
+        when(mapper.countOperatingUnit(8L)).thenReturn(1);
+        when(mapper.countOverlappingLease(8L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-06-30"))).thenReturn(0);
+        when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            AdminTenancyMapper.NewLease lease = invocation.getArgument(0); lease.setId(47L); return 1;
+        });
+
+        service.createLease(new AdminLeaseCreateRequest(5L, 8L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2027-06-30"), new BigDecimal("3000.00"), new BigDecimal("6000.00"), 5, "daily_prorated", 42L));
+
+        ArgumentCaptor<NewLease> captor = ArgumentCaptor.forClass(NewLease.class);
+        verify(mapper).insertLease(captor.capture());
+        assertThat(captor.getValue().getRentalMandateId()).isEqualTo(42L);
+    }
+
     @Test void createsCurrentMonthInvoiceForActiveLease() {
         when(mapper.countActiveTenant(5L)).thenReturn(1);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-06-30"))).thenReturn(1);
         when(mapper.countOperatingUnit(8L)).thenReturn(1);
         when(mapper.countOverlappingLease(8L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-06-30"))).thenReturn(0);
         when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
@@ -59,7 +85,100 @@ class AdminTenancyServiceTest {
         verify(mapper).markUnitRented(8L);
     }
 
+    @Test void createsEveryRentInvoiceThroughCurrentMonthWhenLeaseIsEnteredLate() {
+        when(mapper.countActiveTenant(5L)).thenReturn(1);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-05-01"), LocalDate.parse("2026-12-31"))).thenReturn(1);
+        when(mapper.countOperatingUnit(8L)).thenReturn(1);
+        when(mapper.countOverlappingLease(8L, LocalDate.parse("2026-05-01"), LocalDate.parse("2026-12-31"))).thenReturn(0);
+        when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            AdminTenancyMapper.NewLease lease = invocation.getArgument(0); lease.setId(45L); return 1;
+        });
+
+        service.createLease(new AdminLeaseCreateRequest(5L, 8L, LocalDate.parse("2026-05-01"),
+                LocalDate.parse("2026-12-31"), new BigDecimal("5000.00"), BigDecimal.ZERO, 1));
+
+        verify(mapper).insertInvoice(45L, LocalDate.parse("2026-05-01"),
+                LocalDate.parse("2026-05-01"), new BigDecimal("5000.00"));
+        verify(mapper).insertInvoice(45L, LocalDate.parse("2026-06-01"),
+                LocalDate.parse("2026-06-01"), new BigDecimal("5000.00"));
+        verify(mapper).insertInvoice(45L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-01"), new BigDecimal("5000.00"));
+    }
+
+    @Test void proratesFirstMonthByActualDaysWhenRequested() {
+        service = new AdminTenancyService(mapper,
+                Clock.fixed(Instant.parse("2026-09-30T00:00:00Z"), ZoneOffset.UTC), tempDir);
+        when(mapper.countActiveTenant(5L)).thenReturn(1);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-07-16"), LocalDate.parse("2027-06-30"))).thenReturn(1);
+        when(mapper.countOperatingUnit(8L)).thenReturn(1);
+        when(mapper.countOverlappingLease(8L, LocalDate.parse("2026-07-16"), LocalDate.parse("2027-06-30"))).thenReturn(0);
+        when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            AdminTenancyMapper.NewLease lease = invocation.getArgument(0); lease.setId(46L); return 1;
+        });
+
+        service.createLease(new AdminLeaseCreateRequest(5L, 8L, LocalDate.parse("2026-07-16"),
+                LocalDate.parse("2027-06-30"), new BigDecimal("5000.00"), BigDecimal.ZERO, 1, "daily_prorated"));
+
+        verify(mapper).insertInvoice(46L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-01"), new BigDecimal("2580.65"));
+        verify(mapper).insertInvoice(46L, LocalDate.parse("2026-08-01"),
+                LocalDate.parse("2026-08-01"), new BigDecimal("5000.00"));
+    }
+
+    @Test void neverCreatesAZeroRentInvoiceAfterDailyProration() {
+        when(mapper.countActiveTenant(5L)).thenReturn(1);
+        when(mapper.countCurrentRentalMandate(42L, 8L, LocalDate.parse("2026-07-30"), LocalDate.parse("2026-07-31"))).thenReturn(1);
+        when(mapper.countOperatingUnit(8L)).thenReturn(1);
+        when(mapper.countOverlappingLease(8L, LocalDate.parse("2026-07-30"), LocalDate.parse("2026-07-31"))).thenReturn(0);
+        when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            AdminTenancyMapper.NewLease lease = invocation.getArgument(0); lease.setId(48L); return 1;
+        });
+
+        service.createLease(new AdminLeaseCreateRequest(5L, 8L, LocalDate.parse("2026-07-30"),
+                LocalDate.parse("2026-07-31"), new BigDecimal("0.01"), BigDecimal.ZERO, 1,
+                "daily_prorated", 42L));
+
+        verify(mapper).insertInvoice(48L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-01"), new BigDecimal("0.01"));
+    }
+
+    @Test void repairsAnExistingZeroAmountFirstInvoice() {
+        LeaseChangeContext context = new LeaseChangeContext();
+        context.setLeaseId(49L);
+        context.setStatus("active");
+        context.setStartDate(LocalDate.parse("2026-07-30"));
+        context.setEndDate(LocalDate.parse("2026-07-31"));
+        context.setPaymentDay(1);
+        context.setMonthlyRent(new BigDecimal("0.01"));
+        context.setRentCalculationMethod("daily_prorated");
+        when(mapper.lockLeaseForChange(49L)).thenReturn(context);
+        when(mapper.repairZeroAmountInvoice(49L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-01"), new BigDecimal("0.01"))).thenReturn(1);
+
+        service.createLeaseInvoice(49L, new com.ccps.backend.dto.AdminLeaseInvoiceCreateRequest(
+                LocalDate.parse("2026-07-01")));
+
+        verify(mapper).repairZeroAmountInvoice(49L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-01"), new BigDecimal("0.01"));
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never()).insertInvoice(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test void filtersTenantRentRowsByBillingDateRange() {
+        LocalDate startDate = LocalDate.parse("2026-01-01");
+        LocalDate endDate = LocalDate.parse("2026-12-31");
+        when(mapper.countPage(null, null, null, startDate, endDate)).thenReturn(0L);
+        when(mapper.findPage(null, null, null, startDate, endDate, 10, 0)).thenReturn(java.util.List.of());
+
+        service.find(1, 10, null, null, null, startDate, endDate);
+
+        verify(mapper).countPage(null, null, null, startDate, endDate);
+        verify(mapper).findPage(null, null, null, startDate, endDate, 10, 0);
+    }
+
     @Test void uploadsAndBindsLeaseContract() {
+        when(mapper.countLeaseRentalMandate(44L)).thenReturn(1);
         LeaseContractContext context = new LeaseContractContext(); context.setLeaseId(44L); context.setLeaseNo("LEASE-44");
         when(mapper.lockLeaseContract(44L)).thenReturn(context);
         when(mapper.insertContractDocument(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
@@ -79,7 +198,26 @@ class AdminTenancyServiceTest {
         verify(mapper).insertContractAudit(1L, 44L, null, 91L, "signed-lease.pdf", "upload_lease_contract");
     }
 
+    @Test void downloadsLatestSignedLeaseContractWhenAvailable() throws Exception {
+        ContractFile file = new ContractFile();
+        file.setOriginalName("LEASE-44-已簽署.pdf");
+        file.setStorageKey("10/signed-contract.pdf");
+        file.setMimeType("application/pdf");
+        file.setStorageArea("electronic_signature");
+        Path signed = tempDir.getParent().resolve("electronic-signatures/10/signed-contract.pdf");
+        Files.createDirectories(signed.getParent());
+        Files.writeString(signed, "signed contract");
+        file.setFileSize(Files.size(signed));
+        when(mapper.findContractFile(44L)).thenReturn(file);
+
+        AdminTenancyService.Download download = service.downloadContract(44L);
+
+        assertThat(download.path()).isEqualTo(signed);
+        assertThat(download.originalName()).isEqualTo("LEASE-44-已簽署.pdf");
+    }
+
     @Test void replacingContractPreservesOldDocumentAsHistory() {
+        when(mapper.countLeaseRentalMandate(44L)).thenReturn(1);
         LeaseContractContext context = new LeaseContractContext(); context.setLeaseId(44L);
         context.setLeaseNo("LEASE-44"); context.setContractDocumentId(70L);
         when(mapper.lockLeaseContract(44L)).thenReturn(context);
@@ -130,27 +268,102 @@ class AdminTenancyServiceTest {
         verify(mapper).insertRentProofAudit(1L, 18L, 88L, 102L, "replacement.png", "replace_rent_proof");
     }
 
-    @Test void editsActiveLeaseAndOnlyRefreshesUnpaidInvoiceTerms() {
+    @Test void confirmsAdvanceRentByCreatingOnlyTheCoveredFutureInvoiceAndAllocatingTheTailAmount() {
+        RentCollectionContext context = new RentCollectionContext();
+        context.setInvoiceId(1L); context.setLeaseId(10L); context.setTenantId(5L); context.setUnitId(8L); context.setOwnerId(9L);
+        context.setLeaseNo("LEASE-10"); context.setTenantName("租客"); context.setProjectName("建案"); context.setUnitNo("A-01");
+        context.setBillingMonth(LocalDate.parse("2026-07-01")); context.setStartDate(LocalDate.parse("2026-07-01"));
+        context.setEndDate(LocalDate.parse("2026-09-30")); context.setMonthlyRent(new BigDecimal("1000.00"));
+        context.setPaymentDay(5); context.setRentCalculationMethod("daily_prorated");
+        context.setAmountDue(new BigDecimal("1000.00")); context.setAmountPaid(BigDecimal.ZERO);
+        when(mapper.lockRentCollection(1L)).thenReturn(context);
+
+        RentInvoiceAdvanceRow current = invoiceAdvanceRow(1L, "2026-07-01", "1000.00", "0.00");
+        RentInvoiceAdvanceRow august = invoiceAdvanceRow(2L, "2026-08-01", "1000.00", "0.00");
+        when(mapper.lockRentInvoicesForAdvance(10L, LocalDate.parse("2026-07-01"), LocalDate.parse("2026-09-01")))
+                .thenReturn(java.util.List.of(current), java.util.List.of(current, august));
+        when(mapper.insertInvoice(10L, LocalDate.parse("2026-08-01"), LocalDate.parse("2026-08-05"), new BigDecimal("1000.00")))
+                .thenReturn(1);
+        when(mapper.insertConfirmedRentPayment(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            AdminTenancyMapper.NewRentCollection record = invocation.getArgument(0); record.setId(50L); return 1;
+        });
+        when(mapper.linkRentPayment(1L, 50L)).thenReturn(1);
+        when(mapper.insertRentCollectionReceipt(org.mockito.ArgumentMatchers.eq(50L), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        when(mapper.insertRentCashflow(org.mockito.ArgumentMatchers.eq(50L), org.mockito.ArgumentMatchers.eq(8L),
+                org.mockito.ArgumentMatchers.eq(9L), org.mockito.ArgumentMatchers.eq(5L), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq(LocalDate.parse("2026-07-19")))).thenReturn(1);
+        when(mapper.applyRentCollection(1L, new BigDecimal("1000.00"))).thenReturn(1);
+        when(mapper.insertRentCredit(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            AdminTenancyMapper.NewRentCredit credit = invocation.getArgument(0); credit.setId(70L); return 1;
+        });
+        RentCreditRow credit = new RentCreditRow(); credit.setId(70L); credit.setRemainingAmount(new BigDecimal("500.00"));
+        when(mapper.lockAvailableRentCredits(10L)).thenReturn(java.util.List.of(credit));
+        RentInvoiceCreditRow augustCredit = new RentInvoiceCreditRow(); augustCredit.setInvoiceId(2L);
+        augustCredit.setAmountDue(new BigDecimal("1000.00")); augustCredit.setAmountPaid(BigDecimal.ZERO);
+        when(mapper.lockOutstandingInvoicesForCredit(10L)).thenReturn(java.util.List.of(augustCredit));
+        when(mapper.applyRentCollection(2L, new BigDecimal("500.00"))).thenReturn(1);
+        when(mapper.consumeRentCredit(70L, new BigDecimal("500.00"))).thenReturn(1);
+        when(mapper.insertRentCreditAllocation(70L, 2L, new BigDecimal("500.00"), 1L)).thenReturn(1);
+        when(mapper.insertRentCollectionAudit(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(50L),
+                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(BigDecimal.ZERO),
+                org.mockito.ArgumentMatchers.eq(new BigDecimal("1000.00")), org.mockito.ArgumentMatchers.eq(new BigDecimal("1000.00")),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+
+        service.confirmRentCollection(1L, 1L, new AdminRentCollectionRequest(new BigDecimal("1500.00"),
+                LocalDate.parse("2026-07-19"), "cash", "租客", null, null, null), null);
+
+        verify(mapper).insertInvoice(10L, LocalDate.parse("2026-08-01"), LocalDate.parse("2026-08-05"), new BigDecimal("1000.00"));
+        verify(mapper).applyRentCollection(1L, new BigDecimal("1000.00"));
+        verify(mapper).applyRentCollection(2L, new BigDecimal("500.00"));
+    }
+
+    private RentInvoiceAdvanceRow invoiceAdvanceRow(Long id, String month, String amountDue, String amountPaid) {
+        RentInvoiceAdvanceRow row = new RentInvoiceAdvanceRow(); row.setInvoiceId(id);
+        row.setBillingMonth(LocalDate.parse(month)); row.setAmountDue(new BigDecimal(amountDue)); row.setAmountPaid(new BigDecimal(amountPaid));
+        return row;
+    }
+
+    @Test void editsActiveLeaseAndSynchronizesUnpaidInvoiceTerms() {
         LeaseChangeContext lease = activeLease();
         when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-01-01"), LocalDate.parse("2027-03-31"))).thenReturn(1);
         when(mapper.countOtherOverlappingLease(44L, 8L, LocalDate.parse("2026-01-01"), LocalDate.parse("2027-03-31"))).thenReturn(0);
         when(mapper.updateLeaseTerms(44L, LocalDate.parse("2026-01-01"), LocalDate.parse("2027-03-31"),
-                new BigDecimal("3300.00"), new BigDecimal("6600.00"), 8)).thenReturn(1);
+                new BigDecimal("3300.00"), new BigDecimal("6600.00"), 8, "daily_prorated")).thenReturn(1);
 
         service.updateLease(1L, 44L, new AdminLeaseUpdateRequest(LocalDate.parse("2026-01-01"),
                 LocalDate.parse("2027-03-31"), new BigDecimal("3300.00"), new BigDecimal("6600.00"), 8));
 
-        verify(mapper).updateFutureUnpaidInvoiceTerms(44L, LocalDate.parse("2026-07-01"),
-                new BigDecimal("3300.00"), 8);
+        verify(mapper).updateFutureUnpaidInvoiceTerms(44L, LocalDate.parse("2026-01-01"),
+                new BigDecimal("3300.00"), 8, LocalDate.parse("2026-01-01"), LocalDate.parse("2027-03-31"), "daily_prorated");
+        verify(mapper).insertInvoice(44L, LocalDate.parse("2026-01-01"),
+                LocalDate.parse("2026-01-08"), new BigDecimal("3300.00"));
         verify(mapper).insertLeaseUpdateAudit(1L, 44L, lease.getStartDate(), lease.getEndDate(),
                 lease.getMonthlyRent(), lease.getDepositAmount(), lease.getPaymentDay(), LocalDate.parse("2026-01-01"),
                 LocalDate.parse("2027-03-31"), new BigDecimal("3300.00"), new BigDecimal("6600.00"), 8);
+    }
+
+    @Test void removesUnpaidInvoicesOutsideCorrectedLeasePeriod() {
+        LeaseChangeContext lease = activeLease();
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-03-31"))).thenReturn(1);
+        when(mapper.countOtherOverlappingLease(44L, 8L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-03-31"))).thenReturn(0);
+        when(mapper.updateLeaseTerms(44L, LocalDate.parse("2026-07-01"), LocalDate.parse("2027-03-31"),
+                new BigDecimal("3300.00"), new BigDecimal("6600.00"), 8, "daily_prorated")).thenReturn(1);
+
+        service.updateLease(1L, 44L, new AdminLeaseUpdateRequest(LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2027-03-31"), new BigDecimal("3300.00"), new BigDecimal("6600.00"), 8));
+
+        verify(mapper).deleteUnpaidInvoicesOutsideLeasePeriod(44L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2027-03-01"));
     }
 
     @Test void transfersLeaseByClosingOldLeaseAndCreatingNewLease() {
         LeaseChangeContext lease = activeLease();
         when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
         when(mapper.countActiveTenant(9L)).thenReturn(1);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"))).thenReturn(1);
         when(mapper.countOtherOverlappingLease(44L, 8L, LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"))).thenReturn(0);
         when(mapper.closeLeaseForTransfer(44L, LocalDate.parse("2026-07-31"))).thenReturn(1);
         when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
@@ -165,6 +378,31 @@ class AdminTenancyServiceTest {
         verify(mapper).deleteOldFutureInvoices(44L, LocalDate.parse("2026-08-01"));
         verify(mapper).insertLeaseTransferAudit(1L, 44L, 55L, 5L, 9L,
                 LocalDate.parse("2026-12-31"), LocalDate.parse("2026-08-01"));
+    }
+
+    @Test void closesLeaseForEarlyTerminationAndMakesUnitAvailable() {
+        LeaseChangeContext lease = activeLease();
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.closeLease(44L, LocalDate.parse("2026-07-19"), "terminated")).thenReturn(1);
+
+        service.closeLease(1L, 44L, new AdminLeaseCloseRequest(
+                LocalDate.parse("2026-07-19"), "early_termination", "租客提前退租"));
+
+        verify(mapper).deleteOldFutureInvoices(44L, LocalDate.parse("2026-08-01"));
+        verify(mapper).markUnitAvailableIfNoActiveLease(8L);
+        verify(mapper).insertLeaseClosureAudit(1L, 44L, LocalDate.parse("2026-12-31"),
+                LocalDate.parse("2026-07-19"), "early_termination", "租客提前退租");
+    }
+
+    @Test void rejectsLeaseWhenActiveRentalMandateIsMissing() {
+        when(mapper.countActiveTenant(5L)).thenReturn(1);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2027-06-30"))).thenReturn(0);
+
+        assertThatThrownBy(() -> service.createLease(new AdminLeaseCreateRequest(5L, 8L,
+                LocalDate.parse("2026-07-01"), LocalDate.parse("2027-06-30"),
+                new BigDecimal("3000.00"), new BigDecimal("6000.00"), 5)))
+                .hasMessageContaining("active rental mandate");
     }
 
     private LeaseChangeContext activeLease() {

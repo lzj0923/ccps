@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.mapper.AdminFinanceReviewMapper;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReviewActionContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveRefundContext;
 
 @ExtendWith(MockitoExtension.class)
 class AdminFinanceReviewServiceTest {
@@ -85,6 +86,25 @@ class AdminFinanceReviewServiceTest {
 
         verify(mapper, never()).rejectFinanceRecord(11L, 99L);
         verify(mapper, never()).updateReceiptReview(org.mockito.ArgumentMatchers.anyLong(), anyString());
+    }
+
+    @Test
+    void confirmsReserveRefundThenDeductsTheReserveBalance() {
+        ReserveRefundContext refund = new ReserveRefundContext();
+        refund.setReserveAccountId(71L); refund.setAmount(new BigDecimal("1200.00"));
+        refund.setCurrentBalance(new BigDecimal("5000.00")); refund.setOwnerId(8L);
+        refund.setUserId(18L); refund.setProjectName("Pavilion Square"); refund.setUnitNo("A-01");
+        when(mapper.lockRecordType(15L)).thenReturn("reserve_refund");
+        when(mapper.lockReserveRefund(15L)).thenReturn(refund);
+        when(mapper.confirmReserveRefund(15L, 99L)).thenReturn(1);
+        when(mapper.debitReserveBalance(71L, new BigDecimal("1200.00"))).thenReturn(1);
+        when(mapper.insertReserveRefundTransaction(71L, 15L, new BigDecimal("1200.00"), new BigDecimal("3800.00"), 99L)).thenReturn(1);
+
+        service.confirm(99L, 15L, "已完成匯款");
+
+        verify(mapper).debitReserveBalance(71L, new BigDecimal("1200.00"));
+        verify(mapper).insertReserveRefundTransaction(71L, 15L, new BigDecimal("1200.00"), new BigDecimal("3800.00"), 99L);
+        verify(mapper).insertAudit(99L, 15L, "confirm_reserve_refund", "confirmed", "已完成匯款");
     }
 
     private ReviewActionContext context(String status, String due, String paid, String financeAmount, String allocated) {

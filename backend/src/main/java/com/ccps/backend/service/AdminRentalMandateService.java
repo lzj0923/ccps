@@ -26,6 +26,7 @@ import com.ccps.backend.mapper.AdminRentalMandateMapper;
 import com.ccps.backend.mapper.AdminRentalMandateMapper.HistoryRow;
 import com.ccps.backend.mapper.AdminRentalMandateMapper.MandateRow;
 import com.ccps.backend.mapper.AdminRentalMandateMapper.NewMandate;
+import com.ccps.backend.mapper.AdminRentalMandateMapper.ExpiredMandateRow;
 
 @Service
 public class AdminRentalMandateService {
@@ -37,8 +38,9 @@ public class AdminRentalMandateService {
         this.mapper = mapper;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AdminRentalMandateResponse find(int page, int pageSize, String keyword, String status) {
+        expireEndedMandates();
         int safePage = Math.max(1, page);
         int safeSize = Math.min(100, Math.max(1, pageSize));
         String normalizedStatus = normalize(status);
@@ -49,8 +51,9 @@ public class AdminRentalMandateService {
                 total == 0 ? 1 : (int) Math.ceil((double) total / safeSize)));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Options options() {
+        expireEndedMandates();
         return new Options(
                 mapper.findOperatingUnits().stream()
                         .map(row -> new AdminRentalMandateResponse.Option(row.getId(), row.getLabel(), row.getOwnerId(),
@@ -66,6 +69,7 @@ public class AdminRentalMandateService {
 
     @Transactional
     public Item create(Long actorId, AdminRentalMandateCreateRequest request) {
+        expireEndedMandates();
         if (!MANDATE_TYPES.contains(request.mandateType())) {
             throw bad("Unsupported rental mandate type");
         }
@@ -98,6 +102,21 @@ public class AdminRentalMandateService {
     }
 
     @Transactional
+    public int expireEndedMandates() {
+        int expired = 0;
+        for (ExpiredMandateRow candidate : mapper.findExpiredMandates()) {
+            if (mapper.expireMandate(candidate.getId(), candidate.getStatus()) != 1) continue;
+            mapper.insertHistory(candidate.getId(), candidate.getStatus(), "expired", "委托期限已到期", null);
+            audit(null, "auto_expire", candidate.getId(),
+                    "{\"status\":\"" + candidate.getStatus() + "\"}",
+                    "{\"status\":\"expired\",\"reason\":\"委托期限已到期\"}");
+            mapper.updateRentalService(candidate.getId(), "terminated");
+            expired++;
+        }
+        return expired;
+    }
+
+    @Transactional
     public Item submit(Long actorId, Long mandateId) {
         String current = lock(mandateId);
         if (!"draft".equals(current)) throw conflict("Only draft mandates can be submitted");
@@ -108,7 +127,12 @@ public class AdminRentalMandateService {
     @Transactional
     public Item review(Long actorId, Long mandateId, AdminRentalMandateReviewRequest request) {
         String current = lock(mandateId);
-        if (!"pending_review".equals(current)) throw conflict("Only pending mandates can be reviewed");
+        if (!List.of("draft", "pending_review").contains(current)) {
+            throw conflict("Only draft or pending mandates can be reviewed");
+        }
+        if (Boolean.TRUE.equals(request.approved()) && mapper.countAuthorizationDocuments(mandateId) == 0) {
+            throw conflict("请先上传业主签署的授权委托书，再启用出租委托");
+        }
         String next = Boolean.TRUE.equals(request.approved()) ? "active" : "draft";
         transition(actorId, mandateId, current, next, request.note(), actorId,
                 request.note(), null);
@@ -131,6 +155,10 @@ public class AdminRentalMandateService {
         }
         if ("terminated".equals(next) && (request.reason() == null || request.reason().isBlank())) {
             throw bad("Termination reason is required");
+        }
+        if ("terminated".equals(next) && ACTIVE_STATUSES.contains(current)
+                && mapper.countActiveLeasesForMandate(mandateId) > 0) {
+            throw conflict("該房產仍有有效租約，請先結束或轉移租約後再終止出租委託");
         }
         transition(actorId, mandateId, current, next, request.reason(), actorId, null,
                 "terminated".equals(next) ? request.reason() : null);
@@ -157,7 +185,7 @@ public class AdminRentalMandateService {
 
     private Item item(MandateRow row) {
         if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rental mandate not found");
-        return new Item(row.getId(), row.getMandateNo(), row.getOwnerUnitId(), row.getOwnerId(), row.getOwnerName(),
+        return new Item(row.getId(), row.getMandateNo(), row.getOwnerUnitId(), row.getOwnerId(), row.getOwnerName(), row.getOwnerIdentity(), row.getOwnerEmail(),
                 row.getProjectId(), row.getProjectName(), row.getUnitNo(), row.getMandateType(), row.getStartDate(),
                 row.getEndDate(), row.getManagementFee(), row.getCommissionPercent(), row.getResponsibleUserId(),
                 row.getResponsibleUserName(), row.getStatus(), row.getReviewNote(), row.getTerminationReason(),

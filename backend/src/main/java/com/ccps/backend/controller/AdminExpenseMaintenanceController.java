@@ -1,8 +1,13 @@
 package com.ccps.backend.controller;
 
 import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +28,7 @@ import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.OwnerExpenseMaintenanceResponse;
 import com.ccps.backend.service.AdminMaintenanceService;
 import com.ccps.backend.service.MaintenanceAttachmentService;
+import com.ccps.backend.service.MaintenanceAttachmentService.Download;
 import com.ccps.backend.service.OwnerExpenseMaintenanceService;
 import com.ccps.backend.config.AuthInterceptor;
 
@@ -86,6 +92,20 @@ public class AdminExpenseMaintenanceController {
             @RequestParam String relationType, @RequestParam("files") List<MultipartFile> files,
             HttpServletRequest request) {
         return attachmentService.uploadAdmin(AuthInterceptor.userId(request), workOrderId, relationType, files);
+    }
+
+    @GetMapping("/attachments/{documentId}")
+    public ResponseEntity<FileSystemResource> attachment(@PathVariable Long documentId,
+            @RequestParam(defaultValue = "false") boolean download) {
+        Download file = attachmentService.downloadAdmin(documentId);
+        MediaType mediaType;
+        try { mediaType = MediaType.parseMediaType(file.mimeType()); }
+        catch (IllegalArgumentException ignored) { mediaType = MediaType.APPLICATION_OCTET_STREAM; }
+        ContentDisposition disposition = ContentDisposition.builder(download ? "attachment" : "inline")
+                .filename(file.originalName(), StandardCharsets.UTF_8).build();
+        return ResponseEntity.ok().contentType(mediaType).contentLength(file.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(new FileSystemResource(file.path()));
     }
 
     @PostMapping("/maintenance/{workOrderId}/complete")

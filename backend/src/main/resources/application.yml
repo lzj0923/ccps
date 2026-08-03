@@ -15,7 +15,7 @@ spring:
       mode: always
   servlet:
     multipart:
-      max-file-size: 10MB
+      max-file-size: 15MB
       max-request-size: 42MB
   mail:
     host: ${MAIL_HOST:}
@@ -43,6 +43,14 @@ ccps:
     lease-contracts: ${LEASE_CONTRACT_STORAGE:uploads/lease-contracts}
     accounting-exports: ${ACCOUNTING_EXPORT_STORAGE:uploads/accounting-exports}
     reports: ${REPORT_STORAGE_ROOT:uploads/reports}
+    property-contracts: ${PROPERTY_CONTRACT_STORAGE:uploads/property-contracts}
+    property-photos: ${PROPERTY_PHOTO_STORAGE:uploads/property-photos}
+    property-attachments: ${PROPERTY_ATTACHMENT_STORAGE:uploads/property-attachments}
+    property-handover-reports: ${PROPERTY_HANDOVER_REPORT_STORAGE:uploads/property-handover-reports}
+    property-cashflow: ${PROPERTY_CASHFLOW_STORAGE:uploads/property-cashflow}
+    electronic-signatures: ${ELECTRONIC_SIGNATURE_STORAGE:uploads/electronic-signatures}
+  signing:
+    frontend-base: ${SIGNING_FRONTEND_BASE:http://localhost:5173}
 
 server:
   port: 8080

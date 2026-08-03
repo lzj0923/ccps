@@ -13,6 +13,6 @@ public record AdminRentFinanceResponse(Summary summary, List<Item> rows, Page pa
             Long leaseId, String leaseNo, Long invoiceId, LocalDate billingMonth, LocalDate dueDate,
             BigDecimal invoiceAmount, BigDecimal invoicePaid, BigDecimal amount, String currency,
             LocalDate transactionDate, String paymentMethod, String confirmationStatus, String syncStatus,
-            Long proofDocumentId, String proofName, String proofMimeType, Long proofSize,
+            Long proofDocumentId, String proofName, String proofMimeType, Long proofSize, String receiptNo,
             String reviewNote, String confirmedByName, LocalDateTime confirmedAt, LocalDateTime submittedAt) { }
 }

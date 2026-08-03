@@ -23,6 +23,7 @@ import com.ccps.backend.dto.AdminFinanceBatchConfirmRequest;
 import com.ccps.backend.dto.AdminReserveManagementResponse;
 import com.ccps.backend.dto.AdminReserveSettingsRequest;
 import com.ccps.backend.dto.AdminReserveDirectTopupRequest;
+import com.ccps.backend.dto.AdminReserveRefundRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.service.AdminReserveManagementService;
 import com.ccps.backend.service.ReserveTopupService;
@@ -58,6 +59,12 @@ public class AdminReserveController {
     public AdminRecordCreateResponse directTopup(@PathVariable Long accountId,
             @Valid @RequestBody AdminReserveDirectTopupRequest request, HttpServletRequest servletRequest) {
         return managementService.directTopup(AuthInterceptor.userId(servletRequest), accountId, request);
+    }
+
+    @PostMapping("/accounts/{accountId}/refunds")
+    public AdminRecordCreateResponse createRefund(@PathVariable Long accountId,
+            @Valid @RequestBody AdminReserveRefundRequest request, HttpServletRequest servletRequest) {
+        return managementService.createRefund(AuthInterceptor.userId(servletRequest), accountId, request);
     }
 
     @PostMapping("/topups/{financeRecordId}/review")

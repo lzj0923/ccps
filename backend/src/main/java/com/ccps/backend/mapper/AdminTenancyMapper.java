@@ -1,11 +1,11 @@
 package com.ccps.backend.mapper;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
@@ -46,18 +46,27 @@ public interface AdminTenancyMapper {
               WHERE dl.entity_type = 'finance' AND dl.entity_id = fr.id
               ORDER BY dl.id DESC LIMIT 1
             )
+            LEFT JOIN payment_receipts receipt ON receipt.finance_record_id = fr.id
             """;
     String LIST_FROM = """
             FROM tenants t
-            LEFT JOIN leases l ON l.id = (
-              SELECT l2.id FROM leases l2 WHERE l2.tenant_id = t.id
-              ORDER BY CASE WHEN l2.status = 'active' THEN 0 ELSE 1 END, l2.end_date DESC, l2.id DESC LIMIT 1
-            )
+            LEFT JOIN leases l ON l.tenant_id = t.id
             LEFT JOIN units u ON u.id = l.unit_id
             LEFT JOIN projects p ON p.id = u.project_id
             LEFT JOIN documents contract_doc ON contract_doc.id = l.contract_document_id
+            LEFT JOIN owner_units primary_owner_unit ON primary_owner_unit.unit_id = u.id
+              AND primary_owner_unit.is_primary = 1 AND primary_owner_unit.status = 'active'
+            LEFT JOIN owners primary_owner ON primary_owner.id = primary_owner_unit.owner_id
+              AND primary_owner.status = 'active'
             LEFT JOIN rent_invoices ri ON ri.id = (
-              SELECT ri2.id FROM rent_invoices ri2 WHERE ri2.lease_id = l.id
+              SELECT ri2.id FROM rent_invoices ri2
+              WHERE ri2.lease_id = l.id
+              <if test="startDate != null">AND ri2.billing_month &gt;= DATE_FORMAT(#{startDate}, '%Y-%m-01')</if>
+              <if test="endDate != null">AND ri2.billing_month &lt;= DATE_FORMAT(#{endDate}, '%Y-%m-01')</if>
+              <if test="status == 'paid'">AND ri2.amount_due &gt; 0 AND ri2.amount_paid &gt;= ri2.amount_due</if>
+              <if test="status == 'partial'">AND ri2.amount_paid &gt; 0 AND ri2.amount_paid &lt; ri2.amount_due</if>
+              <if test="status == 'overdue'">AND ri2.amount_paid &lt; ri2.amount_due AND CURRENT_DATE &gt; GREATEST(ri2.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>
+              <if test="status == 'unpaid'">AND ri2.amount_paid = 0 AND CURRENT_DATE &lt;= GREATEST(ri2.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>
               ORDER BY ri2.billing_month DESC, ri2.id DESC LIMIT 1
             )
             LEFT JOIN finance_records fr ON fr.id = (
@@ -73,16 +82,27 @@ public interface AdminTenancyMapper {
             "<script>",
             "SELECT t.id AS tenant_id, t.full_name AS tenant_name, t.identity_no, t.phone, t.email, t.status AS tenant_status,",
             "       l.id AS lease_id, l.lease_no, p.id AS project_id, p.name AS project_name, u.id AS unit_id, u.unit_no,",
-            "       l.start_date AS lease_start, l.end_date AS lease_end, l.monthly_rent, l.deposit_amount, l.payment_day,",
+            "       l.start_date AS lease_start, l.end_date AS lease_end, l.monthly_rent, l.deposit_amount, l.payment_day, l.rent_calculation_method,",
             "       l.status AS lease_status, l.contract_document_id, contract_doc.original_name AS contract_document_name,",
             "       contract_doc.mime_type AS contract_document_mime_type, contract_doc.file_size AS contract_document_size,",
+            "       CASE WHEN EXISTS (SELECT 1 FROM electronic_signature_requests signed_request WHERE signed_request.source_document_id = l.contract_document_id AND signed_request.entity_type = 'lease' AND signed_request.entity_id = l.id AND signed_request.status = 'signed') THEN TRUE ELSE FALSE END AS contract_signed,",
+            "       CASE WHEN l.contract_document_id IS NULL THEN 'missing'",
+            "            WHEN EXISTS (SELECT 1 FROM electronic_signature_requests signed_request WHERE signed_request.source_document_id = l.contract_document_id AND signed_request.entity_type = 'lease' AND signed_request.entity_id = l.id AND signed_request.status = 'signed') THEN 'signed'",
+            "            WHEN EXISTS (SELECT 1 FROM electronic_signature_requests pending_request WHERE pending_request.source_document_id = l.contract_document_id AND pending_request.entity_type = 'lease' AND pending_request.entity_id = l.id AND pending_request.status = 'pending') THEN 'pending'",
+            "            ELSE 'uploaded' END AS contract_status,",
             "       ri.id AS invoice_id, ri.billing_month, ri.due_date,",
             "       COALESCE(ri.amount_due, 0) AS amount_due, COALESCE(ri.amount_paid, 0) AS amount_paid,",
             "       GREATEST(COALESCE(ri.amount_due, 0) - COALESCE(ri.amount_paid, 0), 0) AS amount_unpaid,",
+            "       COALESCE((SELECT SUM(GREATEST(ri_total.amount_due - ri_total.amount_paid, 0)) FROM rent_invoices ri_total",
+            "                 WHERE ri_total.lease_id = l.id AND ri_total.billing_month &lt;= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')), 0) AS total_unpaid,",
             "       CASE WHEN ri.id IS NULL THEN 'no_invoice' WHEN ri.amount_paid >= ri.amount_due THEN 'paid'",
-            "            WHEN ri.amount_paid > 0 THEN 'partial' WHEN ri.due_date &lt; CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS rent_status,",
+            "            WHEN ri.amount_paid > 0 THEN 'partial' WHEN CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue' ELSE 'unpaid' END AS rent_status,",
+            "       COALESCE((SELECT SUM(credit.remaining_amount) FROM lease_rent_credits credit",
+            "                 WHERE credit.lease_id=l.id AND credit.status='available'),0) AS prepaid_rent_balance,",
             "       fr.id AS finance_record_id, fr.transaction_no, fr.confirmation_status, fr.payment_method,",
             "       fr.transaction_date AS payment_date, confirmer.display_name AS confirmed_by_name, fr.confirmed_at,",
+            "       primary_owner.id AS owner_id, primary_owner.full_name AS owner_name,",
+            "       COALESCE(NULLIF(TRIM(primary_owner.identity_no), ''), NULLIF(TRIM(primary_owner.passport_no), '')) AS owner_identity,",
             "       (SELECT JSON_UNQUOTE(JSON_EXTRACT(al.after_data, '$.note')) FROM audit_logs al",
             "        WHERE al.entity_type = 'finance_record' AND al.entity_id = fr.id ORDER BY al.id DESC LIMIT 1) AS review_note",
             LIST_FROM,
@@ -91,16 +111,17 @@ public interface AdminTenancyMapper {
             "  <if test=\"projectName != null and projectName != ''\">AND p.name = #{projectName}</if>",
             "  <if test=\"status == 'paid'\">AND ri.amount_due > 0 AND ri.amount_paid >= ri.amount_due</if>",
             "  <if test=\"status == 'partial'\">AND ri.amount_paid > 0 AND ri.amount_paid &lt; ri.amount_due</if>",
-            "  <if test=\"status == 'overdue'\">AND ri.amount_paid &lt; ri.amount_due AND ri.due_date &lt; CURRENT_DATE</if>",
-            "  <if test=\"status == 'unpaid'\">AND ri.amount_paid = 0 AND ri.due_date &gt;= CURRENT_DATE</if>",
+            "  <if test=\"status == 'overdue'\">AND ri.amount_paid &lt; ri.amount_due AND CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>",
+            "  <if test=\"status == 'unpaid'\">AND ri.amount_paid = 0 AND CURRENT_DATE &lt;= GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>",
             "  <if test=\"status == 'pending_review'\">AND fr.confirmation_status = 'pending'</if>",
             "</where>",
-            "ORDER BY CASE WHEN fr.confirmation_status = 'pending' THEN 0 WHEN ri.due_date &lt; CURRENT_DATE AND ri.amount_paid &lt; ri.amount_due THEN 1 ELSE 2 END, t.full_name, t.id",
+            "ORDER BY CASE WHEN fr.confirmation_status = 'pending' THEN 0 WHEN CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) AND ri.amount_paid &lt; ri.amount_due THEN 1 ELSE 2 END, CASE WHEN l.status = 'active' THEN 0 ELSE 1 END, t.full_name, l.end_date DESC, l.id DESC",
             "LIMIT #{limit} OFFSET #{offset}",
             "</script>"
     })
     List<TenancyRow> findPage(@Param("keyword") String keyword, @Param("projectName") String projectName,
-            @Param("status") String status, @Param("limit") int limit, @Param("offset") int offset);
+            @Param("status") String status, @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate, @Param("limit") int limit, @Param("offset") int offset);
 
     @Select({
             "<script>", "SELECT COUNT(*)", LIST_FROM, "<where>",
@@ -108,13 +129,14 @@ public interface AdminTenancyMapper {
             "<if test=\"projectName != null and projectName != ''\">AND p.name = #{projectName}</if>",
             "<if test=\"status == 'paid'\">AND ri.amount_due > 0 AND ri.amount_paid >= ri.amount_due</if>",
             "<if test=\"status == 'partial'\">AND ri.amount_paid > 0 AND ri.amount_paid &lt; ri.amount_due</if>",
-            "<if test=\"status == 'overdue'\">AND ri.amount_paid &lt; ri.amount_due AND ri.due_date &lt; CURRENT_DATE</if>",
-            "<if test=\"status == 'unpaid'\">AND ri.amount_paid = 0 AND ri.due_date &gt;= CURRENT_DATE</if>",
+            "<if test=\"status == 'overdue'\">AND ri.amount_paid &lt; ri.amount_due AND CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>",
+            "<if test=\"status == 'unpaid'\">AND ri.amount_paid = 0 AND CURRENT_DATE &lt;= GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>",
             "<if test=\"status == 'pending_review'\">AND fr.confirmation_status = 'pending'</if>",
             "</where>", "</script>"
     })
     Long countPage(@Param("keyword") String keyword, @Param("projectName") String projectName,
-            @Param("status") String status);
+            @Param("status") String status, @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
 
     @Select("""
             SELECT
@@ -123,15 +145,31 @@ public interface AdminTenancyMapper {
               COALESCE(SUM(ri.amount_due), 0) AS current_due,
               COALESCE(SUM(ri.amount_paid), 0) AS current_paid,
               COALESCE(SUM(GREATEST(ri.amount_due - ri.amount_paid, 0)), 0) AS current_unpaid,
+              (SELECT COALESCE(SUM(GREATEST(ri_all.amount_due - ri_all.amount_paid, 0)), 0) FROM rent_invoices ri_all
+               WHERE ri_all.billing_month <= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')) AS total_unpaid,
               SUM(ri.amount_paid > 0 AND ri.amount_paid < ri.amount_due) AS partial_count,
-              SUM(ri.amount_paid < ri.amount_due AND ri.due_date < CURRENT_DATE) AS overdue_count,
+              SUM(ri.amount_paid < ri.amount_due AND CURRENT_DATE > GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))) AS overdue_count,
               (SELECT COUNT(DISTINCT rp.rent_invoice_id) FROM rent_payments rp
                JOIN finance_records fr ON fr.id = rp.finance_record_id
                WHERE fr.confirmation_status = 'pending') AS pending_review_count
             FROM rent_invoices ri
+            JOIN leases l ON l.id = ri.lease_id
             WHERE ri.billing_month = DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
             """)
     SummaryRow findSummary();
+
+    @Select("""
+            SELECT ri.id AS invoice_id, ri.billing_month, ri.due_date, ri.amount_due, ri.amount_paid,
+                   GREATEST(ri.amount_due - ri.amount_paid, 0) AS amount_unpaid,
+                   CASE WHEN ri.amount_paid >= ri.amount_due THEN 'paid'
+                        WHEN ri.amount_paid > 0 THEN 'partial'
+                        WHEN CURRENT_DATE > GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue' ELSE 'unpaid' END AS rent_status
+            FROM rent_invoices ri JOIN leases l ON l.id = ri.lease_id
+            WHERE ri.lease_id = #{leaseId}
+              AND ri.billing_month <= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+            ORDER BY ri.billing_month DESC, ri.id DESC
+            """)
+    List<LeaseInvoiceRow> findLeaseInvoiceDetails(@Param("leaseId") Long leaseId);
 
     @Select("SELECT DISTINCT p.name FROM projects p JOIN units u ON u.project_id = p.id JOIN leases l ON l.unit_id = u.id ORDER BY p.name")
     List<String> findProjects();
@@ -140,10 +178,14 @@ public interface AdminTenancyMapper {
     List<AdminTenancyOptionsResponse.Tenant> findTenantOptions();
 
     @Select("""
-            SELECT u.id, p.name AS project_name, u.unit_no
+            SELECT DISTINCT u.id, p.name AS project_name, u.unit_no, rm.start_date AS mandate_start_date, rm.end_date AS mandate_end_date
             FROM units u
             JOIN projects p ON p.id = u.project_id AND p.status = 'active'
             JOIN owner_units ou ON ou.unit_id = u.id AND ou.status = 'active' AND ou.asset_stage = 'OPERATING'
+            JOIN rental_mandates rm ON rm.owner_unit_id = ou.id
+              AND rm.status IN ('draft','pending_review','active','suspended')
+              AND rm.start_date <= CURRENT_DATE
+              AND (rm.end_date IS NULL OR rm.end_date >= CURRENT_DATE)
             WHERE NOT EXISTS (
               SELECT 1 FROM leases l WHERE l.unit_id = u.id AND l.status = 'active'
                 AND l.end_date >= CURRENT_DATE
@@ -158,7 +200,7 @@ public interface AdminTenancyMapper {
             "       l.id AS lease_id, l.lease_no, ri.id AS invoice_id, ri.billing_month, ri.due_date,",
             "       ri.amount_due AS invoice_amount, ri.amount_paid AS invoice_paid, fr.amount, fr.currency,",
             "       fr.transaction_date, fr.payment_method, fr.confirmation_status, fr.sync_status,",
-            "       proof.id AS proof_document_id, proof.original_name AS proof_name, proof.mime_type AS proof_mime_type, proof.file_size AS proof_size,",
+            "       proof.id AS proof_document_id, proof.original_name AS proof_name, proof.mime_type AS proof_mime_type, proof.file_size AS proof_size, receipt.receipt_no,",
             "       (SELECT JSON_UNQUOTE(JSON_EXTRACT(al.after_data, '$.note')) FROM audit_logs al",
             "        WHERE al.entity_type = 'finance_record' AND al.entity_id = fr.id ORDER BY al.id DESC LIMIT 1) AS review_note,",
             "       confirmer.display_name AS confirmed_by_name, fr.confirmed_at, fr.created_at AS submitted_at",
@@ -167,6 +209,9 @@ public interface AdminTenancyMapper {
             "  fr.record_type = 'rent_payment'",
             "  <if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ', fr.transaction_no, t.full_name, p.name, u.unit_no, l.lease_no) LIKE CONCAT('%', #{keyword}, '%')</if>",
             "  <if test=\"projectName != null and projectName != ''\">AND p.name = #{projectName}</if>",
+            "  <if test=\"billingMonth != null\">AND ri.billing_month = #{billingMonth}</if>",
+            "  <if test=\"tenantName != null and tenantName != ''\">AND t.full_name LIKE CONCAT('%', #{tenantName}, '%')</if>",
+            "  <if test=\"unitNo != null and unitNo != ''\">AND u.unit_no LIKE CONCAT('%', #{unitNo}, '%')</if>",
             "  <if test=\"confirmationStatus == 'history'\">AND fr.confirmation_status &lt;&gt; 'pending'</if>",
             "  <if test=\"confirmationStatus != null and confirmationStatus != '' and confirmationStatus != 'history'\">AND fr.confirmation_status = #{confirmationStatus}</if>",
             "  <if test=\"syncStatus != null and syncStatus != ''\">AND fr.sync_status = #{syncStatus}</if>",
@@ -181,7 +226,8 @@ public interface AdminTenancyMapper {
     })
     List<RentFinanceRow> findRentFinancePage(@Param("keyword") String keyword, @Param("projectName") String projectName,
             @Param("confirmationStatus") String confirmationStatus, @Param("syncStatus") String syncStatus,
-            @Param("proofStatus") String proofStatus,
+            @Param("proofStatus") String proofStatus, @Param("billingMonth") LocalDate billingMonth,
+            @Param("tenantName") String tenantName, @Param("unitNo") String unitNo,
             @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate,
             @Param("limit") int limit, @Param("offset") int offset);
 
@@ -190,6 +236,9 @@ public interface AdminTenancyMapper {
             "fr.record_type = 'rent_payment'",
             "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ', fr.transaction_no, t.full_name, p.name, u.unit_no, l.lease_no) LIKE CONCAT('%', #{keyword}, '%')</if>",
             "<if test=\"projectName != null and projectName != ''\">AND p.name = #{projectName}</if>",
+            "<if test=\"billingMonth != null\">AND ri.billing_month = #{billingMonth}</if>",
+            "<if test=\"tenantName != null and tenantName != ''\">AND t.full_name LIKE CONCAT('%', #{tenantName}, '%')</if>",
+            "<if test=\"unitNo != null and unitNo != ''\">AND u.unit_no LIKE CONCAT('%', #{unitNo}, '%')</if>",
             "<if test=\"confirmationStatus == 'history'\">AND fr.confirmation_status &lt;&gt; 'pending'</if>",
             "<if test=\"confirmationStatus != null and confirmationStatus != '' and confirmationStatus != 'history'\">AND fr.confirmation_status = #{confirmationStatus}</if>",
             "<if test=\"syncStatus != null and syncStatus != ''\">AND fr.sync_status = #{syncStatus}</if>",
@@ -201,7 +250,8 @@ public interface AdminTenancyMapper {
     })
     Long countRentFinancePage(@Param("keyword") String keyword, @Param("projectName") String projectName,
             @Param("confirmationStatus") String confirmationStatus, @Param("syncStatus") String syncStatus,
-            @Param("proofStatus") String proofStatus,
+            @Param("proofStatus") String proofStatus, @Param("billingMonth") LocalDate billingMonth,
+            @Param("tenantName") String tenantName, @Param("unitNo") String unitNo,
             @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     @Select("""
@@ -223,12 +273,32 @@ public interface AdminTenancyMapper {
     @Select("SELECT DISTINCT p.name FROM finance_records fr JOIN units u ON u.id = fr.unit_id JOIN projects p ON p.id = u.project_id WHERE fr.record_type = 'rent_payment' ORDER BY p.name")
     List<String> findRentFinanceProjects();
 
+    @Select("""
+            SELECT pr.receipt_no, fr.transaction_no, t.full_name AS tenant_name, p.name AS project_name,
+                   u.unit_no, l.lease_no, ri.billing_month, ri.amount_due AS invoice_amount,
+                   ri.amount_paid AS invoice_paid, fr.amount, fr.currency, fr.transaction_date,
+                   fr.payment_method, pr.payer_name, pr.bank_reference, pr.submission_note,
+                   fr.confirmed_at
+            FROM finance_records fr
+            JOIN payment_receipts pr ON pr.finance_record_id = fr.id
+            JOIN rent_payments rp ON rp.finance_record_id = fr.id
+            JOIN rent_invoices ri ON ri.id = rp.rent_invoice_id
+            JOIN leases l ON l.id = ri.lease_id
+            JOIN tenants t ON t.id = l.tenant_id
+            JOIN units u ON u.id = l.unit_id
+            JOIN projects p ON p.id = u.project_id
+            WHERE fr.id = #{financeRecordId} AND fr.record_type = 'rent_payment'
+            LIMIT 1
+            """)
+    RentReceiptRow findRentReceipt(@Param("financeRecordId") Long financeRecordId);
+
     @Select({
             "<script>",
             "SELECT ri.id AS invoice_id,l.id AS lease_id,l.lease_no,t.full_name AS tenant_name,p.name AS project_name,u.unit_no,",
+            "l.monthly_rent,l.start_date AS lease_start_date,l.end_date AS lease_end_date,l.rent_calculation_method,",
             "ri.billing_month,ri.due_date,ri.amount_due,ri.amount_paid,GREATEST(ri.amount_due-ri.amount_paid,0) AS outstanding_amount,",
-            "CASE WHEN ri.amount_paid&gt;0 THEN 'partial' WHEN ri.due_date&lt;CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS collection_status,",
-            "GREATEST(DATEDIFF(CURRENT_DATE,ri.due_date),0) AS overdue_days,latest_fr.id AS latest_finance_record_id,",
+            "CASE WHEN ri.amount_paid&gt;0 THEN 'partial' WHEN CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue' ELSE 'unpaid' END AS collection_status,",
+            "GREATEST(DATEDIFF(CURRENT_DATE,GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))),0) AS overdue_days,latest_fr.id AS latest_finance_record_id,",
             "latest_fr.transaction_no AS latest_transaction_no,latest_fr.amount AS latest_payment_amount,",
             "latest_fr.transaction_date AS latest_payment_date,latest_fr.payment_method AS latest_payment_method,",
             "latest_proof.id AS latest_proof_document_id,latest_proof.original_name AS latest_proof_name,",
@@ -240,11 +310,11 @@ public interface AdminTenancyMapper {
             "<if test=\"projectName != null and projectName != ''\">AND p.name=#{projectName}</if>",
             "<if test=\"status == 'unpaid'\">AND ri.amount_paid=0</if>",
             "<if test=\"status == 'partial'\">AND ri.amount_paid&gt;0 AND ri.amount_paid&lt;ri.amount_due</if>",
-            "<if test=\"status == 'overdue'\">AND ri.due_date&lt;CURRENT_DATE</if>",
+            "<if test=\"status == 'overdue'\">AND CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>",
             "<if test=\"startDate != null\">AND ri.due_date&gt;=#{startDate}</if>",
             "<if test=\"endDate != null\">AND ri.due_date&lt;=#{endDate}</if>",
             "</where>",
-            "ORDER BY (ri.due_date&lt;CURRENT_DATE) DESC,(ri.amount_paid&gt;0) DESC,ri.due_date,ri.id LIMIT #{limit} OFFSET #{offset}",
+            "ORDER BY (CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))) DESC,(ri.amount_paid&gt;0) DESC,ri.due_date,ri.id LIMIT #{limit} OFFSET #{offset}",
             "</script>"
     })
     List<RentCollectionRow> findRentCollections(@Param("keyword") String keyword,
@@ -258,7 +328,7 @@ public interface AdminTenancyMapper {
             "<if test=\"projectName != null and projectName != ''\">AND p.name=#{projectName}</if>",
             "<if test=\"status == 'unpaid'\">AND ri.amount_paid=0</if>",
             "<if test=\"status == 'partial'\">AND ri.amount_paid&gt;0 AND ri.amount_paid&lt;ri.amount_due</if>",
-            "<if test=\"status == 'overdue'\">AND ri.due_date&lt;CURRENT_DATE</if>",
+            "<if test=\"status == 'overdue'\">AND CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))</if>",
             "<if test=\"startDate != null\">AND ri.due_date&gt;=#{startDate}</if>",
             "<if test=\"endDate != null\">AND ri.due_date&lt;=#{endDate}</if>","</where>","</script>"})
     Long countRentCollections(@Param("keyword") String keyword, @Param("projectName") String projectName,
@@ -269,12 +339,12 @@ public interface AdminTenancyMapper {
             SELECT COUNT(*) AS outstanding_count,
                    COALESCE(SUM(ri.amount_paid=0),0) AS unpaid_count,
                    COALESCE(SUM(ri.amount_paid>0 AND ri.amount_paid<ri.amount_due),0) AS partial_count,
-                   COALESCE(SUM(ri.due_date<CURRENT_DATE),0) AS overdue_count,
+                   COALESCE(SUM(CURRENT_DATE > GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))),0) AS overdue_count,
                    COALESCE(SUM(GREATEST(ri.amount_due-ri.amount_paid,0)),0) AS outstanding_amount,
                    COALESCE((SELECT SUM(fr.amount) FROM finance_records fr
                      WHERE fr.record_type='rent_payment' AND fr.confirmation_status='confirmed'
                        AND fr.transaction_date>=DATE_FORMAT(CURRENT_DATE,'%Y-%m-01')),0) AS month_received
-            FROM rent_invoices ri WHERE ri.amount_paid<ri.amount_due
+            FROM rent_invoices ri JOIN leases l ON l.id=ri.lease_id WHERE ri.amount_paid<ri.amount_due
             """)
     RentCollectionSummaryRow findRentCollectionSummary();
 
@@ -282,7 +352,8 @@ public interface AdminTenancyMapper {
     List<String> findRentCollectionProjects();
 
     @Select("""
-            SELECT ri.id AS invoice_id,ri.amount_due,ri.amount_paid,l.id AS lease_id,l.lease_no,
+            SELECT ri.id AS invoice_id,ri.billing_month,ri.amount_due,ri.amount_paid,l.id AS lease_id,l.lease_no,
+                   l.start_date,l.end_date,l.monthly_rent,l.payment_day,l.rent_calculation_method,
                    t.id AS tenant_id,t.user_id,t.full_name AS tenant_name,u.id AS unit_id,u.unit_no,p.name AS project_name,
                    (SELECT ou.owner_id FROM owner_units ou WHERE ou.unit_id=u.id AND ou.status='active' ORDER BY ou.id DESC LIMIT 1) AS owner_id
             FROM rent_invoices ri JOIN leases l ON l.id=ri.lease_id JOIN tenants t ON t.id=l.tenant_id
@@ -290,6 +361,15 @@ public interface AdminTenancyMapper {
             WHERE ri.id=#{invoiceId} FOR UPDATE
             """)
     RentCollectionContext lockRentCollection(@Param("invoiceId") Long invoiceId);
+
+    @Select("""
+            SELECT id AS invoice_id,billing_month,amount_due,amount_paid
+            FROM rent_invoices
+            WHERE lease_id=#{leaseId} AND billing_month BETWEEN #{fromMonth} AND #{toMonth}
+            ORDER BY billing_month,id FOR UPDATE
+            """)
+    List<RentInvoiceAdvanceRow> lockRentInvoicesForAdvance(@Param("leaseId") Long leaseId,
+            @Param("fromMonth") LocalDate fromMonth, @Param("toMonth") LocalDate toMonth);
 
     @Insert("""
             INSERT INTO finance_records
@@ -304,6 +384,9 @@ public interface AdminTenancyMapper {
     @Insert("INSERT INTO rent_payments (rent_invoice_id,finance_record_id) VALUES (#{invoiceId},#{financeRecordId})")
     int linkRentPayment(@Param("invoiceId") Long invoiceId,@Param("financeRecordId") Long financeRecordId);
 
+    @Insert("INSERT INTO cashflow_entries (finance_record_id,unit_id,owner_id,tenant_id,direction,category,description,occurred_on,attachment_status) VALUES (#{financeRecordId},#{unitId},#{ownerId},#{tenantId},'income','rent',#{description},#{occurredOn},'missing')")
+    int insertRentCashflow(@Param("financeRecordId") Long financeRecordId,@Param("unitId") Long unitId,@Param("ownerId") Long ownerId,@Param("tenantId") Long tenantId,@Param("description") String description,@Param("occurredOn") LocalDate occurredOn);
+
     @Insert("""
             INSERT INTO payment_receipts (finance_record_id,receipt_no,payer_name,bank_reference,submission_note,review_note)
             VALUES (#{financeRecordId},#{receiptNo},#{payerName},#{paymentReference},#{note},'管理員確認租金收款')
@@ -317,6 +400,44 @@ public interface AdminTenancyMapper {
             WHERE id=#{invoiceId} AND amount_paid+#{amount}<=amount_due
             """)
     int applyRentCollection(@Param("invoiceId") Long invoiceId,@Param("amount") BigDecimal amount);
+
+    @Insert("""
+            INSERT INTO lease_rent_credits (lease_id,finance_record_id,received_amount,allocated_amount,remaining_amount,status,created_by)
+            VALUES (#{leaseId},#{financeRecordId},#{receivedAmount},0,#{remainingAmount},'available',#{actorId})
+            """)
+    @Options(useGeneratedKeys=true,keyProperty="id")
+    int insertRentCredit(NewRentCredit credit);
+
+    @Select("SELECT id FROM lease_rent_credits WHERE status='available' AND remaining_amount>0 ORDER BY lease_id")
+    List<Long> findLeaseIdsWithAvailableRentCredit();
+
+    @Select("""
+            SELECT id,remaining_amount FROM lease_rent_credits
+            WHERE lease_id=#{leaseId} AND status='available' AND remaining_amount>0
+            ORDER BY created_at,id FOR UPDATE
+            """)
+    List<RentCreditRow> lockAvailableRentCredits(@Param("leaseId") Long leaseId);
+
+    @Select("""
+            SELECT id AS invoice_id,amount_due,amount_paid FROM rent_invoices
+            WHERE lease_id=#{leaseId} AND amount_paid<amount_due
+            ORDER BY billing_month,id FOR UPDATE
+            """)
+    List<RentInvoiceCreditRow> lockOutstandingInvoicesForCredit(@Param("leaseId") Long leaseId);
+
+    @Update("""
+            UPDATE lease_rent_credits SET allocated_amount=allocated_amount+#{amount},remaining_amount=remaining_amount-#{amount},
+              status=CASE WHEN remaining_amount-#{amount}<=0 THEN 'allocated' ELSE 'available' END
+            WHERE id=#{creditId} AND status='available' AND remaining_amount>=#{amount}
+            """)
+    int consumeRentCredit(@Param("creditId") Long creditId,@Param("amount") BigDecimal amount);
+
+    @Insert("""
+            INSERT INTO lease_rent_credit_allocations (rent_credit_id,rent_invoice_id,amount,allocated_by)
+            VALUES (#{creditId},#{invoiceId},#{amount},#{actorId})
+            """)
+    int insertRentCreditAllocation(@Param("creditId") Long creditId,@Param("invoiceId") Long invoiceId,
+            @Param("amount") BigDecimal amount,@Param("actorId") Long actorId);
 
     @Insert("""
             INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data)
@@ -386,6 +507,111 @@ public interface AdminTenancyMapper {
     @Select("SELECT COUNT(*) FROM tenants WHERE email = #{value}")
     int countTenantEmail(@Param("value") String value);
 
+    @Select("SELECT COUNT(*) FROM tenants WHERE identity_no = #{value} AND id <> #{tenantId}")
+    int countTenantIdentityExcluding(@Param("value") String value,@Param("tenantId") Long tenantId);
+
+    @Select("SELECT COUNT(*) FROM tenants WHERE email = #{value} AND id <> #{tenantId}")
+    int countTenantEmailExcluding(@Param("value") String value,@Param("tenantId") Long tenantId);
+
+    @Select("SELECT COUNT(*) FROM tenants WHERE id=#{tenantId}")
+    int countTenant(@Param("tenantId") Long tenantId);
+
+    @Select("SELECT COUNT(*) FROM leases WHERE tenant_id = #{tenantId}")
+    int countTenantLeases(@Param("tenantId") Long tenantId);
+
+    @Delete("DELETE FROM tenants WHERE id = #{tenantId}")
+    int deleteTenant(@Param("tenantId") Long tenantId);
+
+    @Select("""
+            SELECT t.id AS tenant_id, t.full_name, t.identity_no, t.phone, t.email, t.status,
+              (SELECT l.lease_no FROM leases l WHERE l.tenant_id=t.id AND l.status='active'
+                 AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE()
+               ORDER BY l.start_date DESC, l.id DESC LIMIT 1) AS current_lease_no,
+              (SELECT p.name FROM leases l JOIN units u ON u.id=l.unit_id JOIN projects p ON p.id=u.project_id
+               WHERE l.tenant_id=t.id AND l.status='active' AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE()
+               ORDER BY l.start_date DESC, l.id DESC LIMIT 1) AS project_name,
+              (SELECT u.unit_no FROM leases l JOIN units u ON u.id=l.unit_id
+               WHERE l.tenant_id=t.id AND l.status='active' AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE()
+               ORDER BY l.start_date DESC, l.id DESC LIMIT 1) AS unit_no,
+              (SELECT l.start_date FROM leases l WHERE l.tenant_id=t.id AND l.status='active'
+               AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE() ORDER BY l.start_date DESC, l.id DESC LIMIT 1) AS lease_start,
+              (SELECT l.end_date FROM leases l WHERE l.tenant_id=t.id AND l.status='active'
+               AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE() ORDER BY l.start_date DESC, l.id DESC LIMIT 1) AS lease_end,
+              (SELECT COUNT(*) FROM leases l WHERE l.tenant_id=t.id) AS lease_count,
+              (SELECT COUNT(*) FROM leases l WHERE l.tenant_id=t.id AND l.status='active'
+                 AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE()) AS active_lease_count
+            FROM tenants t
+            WHERE (#{status} IS NULL OR #{status} = '' OR t.status = #{status})
+              AND (#{keyword} IS NULL OR #{keyword} = ''
+                OR t.full_name LIKE CONCAT('%', #{keyword}, '%')
+                OR t.identity_no LIKE CONCAT('%', #{keyword}, '%')
+                OR t.phone LIKE CONCAT('%', #{keyword}, '%')
+                OR t.email LIKE CONCAT('%', #{keyword}, '%'))
+            ORDER BY t.status='active' DESC, t.full_name ASC, t.id DESC
+            LIMIT #{limit} OFFSET #{offset}
+            """)
+    List<TenantDirectoryRow> findTenantDirectoryPage(@Param("keyword") String keyword, @Param("status") String status,
+            @Param("limit") int limit, @Param("offset") int offset);
+
+    @Select("""
+            SELECT COUNT(*) FROM tenants t
+            WHERE (#{status} IS NULL OR #{status} = '' OR t.status = #{status})
+              AND (#{keyword} IS NULL OR #{keyword} = ''
+                OR t.full_name LIKE CONCAT('%', #{keyword}, '%')
+                OR t.identity_no LIKE CONCAT('%', #{keyword}, '%')
+                OR t.phone LIKE CONCAT('%', #{keyword}, '%')
+                OR t.email LIKE CONCAT('%', #{keyword}, '%'))
+            """)
+    long countTenantDirectory(@Param("keyword") String keyword, @Param("status") String status);
+
+    @Select("""
+            SELECT COUNT(*) AS total_count,
+              COALESCE(SUM(CASE WHEN t.status='active' THEN 1 ELSE 0 END), 0) AS active_count,
+              COALESCE(SUM(CASE WHEN t.status='inactive' THEN 1 ELSE 0 END), 0) AS inactive_count,
+              COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM leases l WHERE l.tenant_id=t.id AND l.status='active'
+                  AND l.start_date <= CURRENT_DATE() AND l.end_date >= CURRENT_DATE()) THEN 1 ELSE 0 END), 0) AS active_lease_tenant_count
+            FROM tenants t
+            """)
+    TenantDirectorySummaryRow findTenantDirectorySummary();
+
+    @Select("""
+            SELECT l.id AS lease_id, u.id AS unit_id, l.lease_no, p.name AS project_name, u.unit_no, l.status,
+                   l.start_date, l.end_date, l.monthly_rent, l.deposit_amount, l.payment_day,
+                   COALESCE((SELECT SUM(GREATEST(ri.amount_due-ri.amount_paid,0)) FROM rent_invoices ri WHERE ri.lease_id=l.id),0) AS unpaid_rent,
+                   (SELECT COUNT(*) FROM maintenance_work_orders m WHERE m.lease_id=l.id AND m.status NOT IN ('completed','cancelled')) AS pending_maintenance_count,
+                   CASE WHEN l.contract_document_id IS NULL THEN 'not_generated'
+                        WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.status='signed') THEN 'signed'
+                        WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.status='pending') THEN 'pending_signature'
+                        ELSE 'ready_to_sign' END AS signature_status,
+                   CASE WHEN l.status = 'expired' THEN 'completed'
+                        WHEN l.status <> 'active' THEN 'closed'
+                        WHEN l.contract_document_id IS NULL THEN 'contract_pending'
+                        WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.status='pending') THEN 'signature_pending'
+                        WHEN l.end_date < CURRENT_DATE() THEN 'completed'
+                        WHEN l.start_date > CURRENT_DATE() THEN 'ready_to_start'
+                        ELSE 'active_tenancy' END AS workflow_step
+            FROM leases l
+            JOIN units u ON u.id = l.unit_id
+            JOIN projects p ON p.id = u.project_id
+            WHERE l.tenant_id = #{tenantId}
+            ORDER BY l.start_date DESC, l.id DESC
+            """)
+    List<TenantLeaseHistoryRow> findTenantLeaseHistory(@Param("tenantId") Long tenantId);
+
+    @Select("""
+            SELECT
+              COALESCE((SELECT SUM(GREATEST(ri.amount_due-ri.amount_paid,0)) FROM rent_invoices ri
+                JOIN leases l ON l.id=ri.lease_id WHERE l.tenant_id=#{tenantId}),0) AS unpaid_rent,
+              (SELECT COUNT(*) FROM maintenance_work_orders m WHERE m.tenant_id=#{tenantId}
+                AND m.status NOT IN ('completed','cancelled')) AS pending_maintenance_count,
+              (SELECT COUNT(*) FROM electronic_signature_requests sr JOIN leases l ON l.id=sr.entity_id
+                WHERE sr.entity_type='lease' AND l.tenant_id=#{tenantId} AND sr.status='pending') AS pending_signature_count
+            """)
+    TenantDirectoryOverviewRow findTenantDirectoryOverview(@Param("tenantId") Long tenantId);
+
+    @Update("UPDATE tenants SET full_name=#{fullName},identity_no=#{identityNo},phone=#{phone},email=#{email},status=#{status} WHERE id=#{id}")
+    int updateTenant(NewTenant tenant);
+
     @Insert("""
             INSERT INTO tenants (full_name, identity_no, phone, email, status)
             VALUES (#{fullName}, #{identityNo}, #{phone}, #{email}, #{status})
@@ -411,8 +637,39 @@ public interface AdminTenancyMapper {
             @Param("endDate") LocalDate endDate);
 
     @Select("""
+            SELECT COUNT(*)
+            FROM rental_mandates rm
+            JOIN owner_units ou ON ou.id=rm.owner_unit_id
+            WHERE ou.unit_id=#{unitId}
+              AND rm.status IN ('draft','pending_review','active','suspended')
+              AND rm.start_date<=#{startDate} AND (rm.end_date IS NULL OR rm.end_date>=#{endDate})
+            """)
+    int countActiveRentalMandate(@Param("unitId") Long unitId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM rental_mandates rm
+            JOIN owner_units ou ON ou.id = rm.owner_unit_id
+            WHERE rm.id = #{mandateId} AND ou.unit_id = #{unitId}
+              AND rm.status IN ('draft','pending_review','active','suspended')
+              AND rm.start_date <= #{startDate} AND (rm.end_date IS NULL OR rm.end_date >= #{endDate})
+            """)
+    int countCurrentRentalMandate(@Param("mandateId") Long mandateId, @Param("unitId") Long unitId,
+            @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM leases l
+            JOIN owner_units ou ON ou.unit_id=l.unit_id AND ou.status='active'
+            JOIN rental_mandates rm ON rm.owner_unit_id=ou.id AND rm.status='active'
+              AND rm.start_date<=l.start_date AND (rm.end_date IS NULL OR rm.end_date>=l.end_date)
+            WHERE l.id=#{leaseId}
+            """)
+    int countLeaseRentalMandate(@Param("leaseId") Long leaseId);
+
+    @Select("""
             SELECT l.id AS lease_id,l.unit_id,l.tenant_id,l.lease_no,l.start_date,l.end_date,
-                   l.monthly_rent,l.deposit_amount,l.payment_day,l.status,p.name AS project_name,u.unit_no
+                   l.monthly_rent,l.deposit_amount,l.payment_day,l.rent_calculation_method,l.status,p.name AS project_name,u.unit_no
             FROM leases l JOIN units u ON u.id=l.unit_id JOIN projects p ON p.id=u.project_id
             WHERE l.id=#{leaseId} FOR UPDATE
             """)
@@ -428,24 +685,63 @@ public interface AdminTenancyMapper {
 
     @Update("""
             UPDATE leases SET start_date=#{startDate},end_date=#{endDate},monthly_rent=#{monthlyRent},
-              deposit_amount=#{depositAmount},payment_day=#{paymentDay}
+              deposit_amount=#{depositAmount},payment_day=#{paymentDay},rent_calculation_method=#{rentCalculationMethod}
             WHERE id=#{leaseId} AND status='active'
             """)
     int updateLeaseTerms(@Param("leaseId") Long leaseId,@Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,@Param("monthlyRent") BigDecimal monthlyRent,
-            @Param("depositAmount") BigDecimal depositAmount,@Param("paymentDay") int paymentDay);
+            @Param("depositAmount") BigDecimal depositAmount,@Param("paymentDay") int paymentDay,
+            @Param("rentCalculationMethod") String rentCalculationMethod);
 
     @Update("""
-            UPDATE rent_invoices SET amount_due=#{monthlyRent},
+            UPDATE rent_invoices SET amount_due=CASE WHEN #{rentCalculationMethod}='daily_prorated'
+                THEN ROUND(#{monthlyRent} / DAY(LAST_DAY(billing_month)) *
+                  GREATEST(DATEDIFF(LEAST(LAST_DAY(billing_month), #{endDate}),
+                    GREATEST(billing_month, #{startDate})) + 1, 0), 2)
+                ELSE #{monthlyRent} END,
               due_date=DATE_ADD(billing_month,INTERVAL (LEAST(#{paymentDay},DAY(LAST_DAY(billing_month)))-1) DAY)
             WHERE lease_id=#{leaseId} AND billing_month>=#{fromMonth} AND amount_paid=0
               AND NOT EXISTS (SELECT 1 FROM rent_payments rp WHERE rp.rent_invoice_id=rent_invoices.id)
             """)
     int updateFutureUnpaidInvoiceTerms(@Param("leaseId") Long leaseId,@Param("fromMonth") LocalDate fromMonth,
-            @Param("monthlyRent") BigDecimal monthlyRent,@Param("paymentDay") int paymentDay);
+            @Param("monthlyRent") BigDecimal monthlyRent,@Param("paymentDay") int paymentDay,
+            @Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate,
+            @Param("rentCalculationMethod") String rentCalculationMethod);
+
+    @org.apache.ibatis.annotations.Delete("""
+            DELETE FROM rent_invoices
+            WHERE lease_id = #{leaseId}
+              AND (billing_month < #{startMonth} OR billing_month > #{endMonth})
+              AND amount_paid = 0
+              AND NOT EXISTS (SELECT 1 FROM rent_payments rp WHERE rp.rent_invoice_id = rent_invoices.id)
+            """)
+    int deleteUnpaidInvoicesOutsideLeasePeriod(@Param("leaseId") Long leaseId,
+            @Param("startMonth") LocalDate startMonth, @Param("endMonth") LocalDate endMonth);
 
     @Update("UPDATE leases SET end_date=#{endDate},status='transferred' WHERE id=#{leaseId} AND status='active'")
     int closeLeaseForTransfer(@Param("leaseId") Long leaseId,@Param("endDate") LocalDate endDate);
+
+    @Update("UPDATE leases SET end_date=#{endDate},status=#{status} WHERE id=#{leaseId} AND status='active'")
+    int closeLease(@Param("leaseId") Long leaseId, @Param("endDate") LocalDate endDate,
+            @Param("status") String status);
+
+    @Select("SELECT id AS lease_id, unit_id, end_date FROM leases WHERE status='active' AND end_date < #{today} ORDER BY id")
+    List<ExpiredLeaseRow> findExpiredLeases(@Param("today") LocalDate today);
+
+    @Update("UPDATE leases SET status='expired' WHERE id=#{leaseId} AND status='active' AND end_date < #{today}")
+    int expireLease(@Param("leaseId") Long leaseId, @Param("today") LocalDate today);
+
+    @Update("UPDATE units SET listing_status='available' WHERE id=#{unitId} AND NOT EXISTS "
+            + "(SELECT 1 FROM leases WHERE unit_id=#{unitId} AND status='active')")
+    int markUnitAvailableIfNoActiveLease(@Param("unitId") Long unitId);
+
+    @Insert("INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data) "
+            + "VALUES (#{actorId},'close_lease','lease',#{leaseId},"
+            + "JSON_OBJECT('endDate',#{oldEndDate}),"
+            + "JSON_OBJECT('endDate',#{endDate},'reason',#{reason},'notes',#{notes}))")
+    int insertLeaseClosureAudit(@Param("actorId") Long actorId, @Param("leaseId") Long leaseId,
+            @Param("oldEndDate") LocalDate oldEndDate, @Param("endDate") LocalDate endDate,
+            @Param("reason") String reason, @Param("notes") String notes);
 
     @org.apache.ibatis.annotations.Delete("""
             DELETE FROM rent_invoices WHERE lease_id=#{leaseId} AND billing_month>#{transferMonth}
@@ -477,10 +773,10 @@ public interface AdminTenancyMapper {
             @Param("transferDate") LocalDate transferDate);
 
     @Insert("""
-            INSERT INTO leases (unit_id, tenant_id, lease_no, start_date, end_date,
-                                monthly_rent, deposit_amount, payment_day, status)
-            VALUES (#{unitId}, #{tenantId}, #{leaseNo}, #{startDate}, #{endDate},
-                    #{monthlyRent}, #{depositAmount}, #{paymentDay}, 'active')
+            INSERT INTO leases (unit_id, tenant_id, rental_mandate_id, lease_no, start_date, end_date,
+                                monthly_rent, deposit_amount, payment_day, rent_calculation_method, status)
+            VALUES (#{unitId}, #{tenantId}, #{rentalMandateId}, #{leaseNo}, #{startDate}, #{endDate},
+                    #{monthlyRent}, #{depositAmount}, #{paymentDay}, #{rentCalculationMethod}, 'active')
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertLease(NewLease lease);
@@ -497,10 +793,19 @@ public interface AdminTenancyMapper {
     int markUnitRented(@Param("unitId") Long unitId);
 
     @Insert("""
-            INSERT INTO rent_invoices (lease_id, billing_month, due_date, amount_due, amount_paid, status)
+            INSERT IGNORE INTO rent_invoices (lease_id, billing_month, due_date, amount_due, amount_paid, status)
             VALUES (#{leaseId}, #{billingMonth}, #{dueDate}, #{amountDue}, 0, 'unpaid')
             """)
     int insertInvoice(@Param("leaseId") Long leaseId, @Param("billingMonth") LocalDate billingMonth,
+            @Param("dueDate") LocalDate dueDate, @Param("amountDue") BigDecimal amountDue);
+
+    @Update("""
+            UPDATE rent_invoices
+            SET amount_due = #{amountDue}, status = 'unpaid'
+            WHERE lease_id = #{leaseId} AND billing_month = #{billingMonth}
+              AND amount_paid = 0 AND amount_due <= 0
+            """)
+    int repairZeroAmountInvoice(@Param("leaseId") Long leaseId, @Param("billingMonth") LocalDate billingMonth,
             @Param("dueDate") LocalDate dueDate, @Param("amountDue") BigDecimal amountDue);
 
     @Insert("""
@@ -508,7 +813,10 @@ public interface AdminTenancyMapper {
                 (lease_id, billing_month, due_date, amount_due, amount_paid, status)
             SELECT l.id, #{billingMonth},
                    DATE_ADD(#{billingMonth}, INTERVAL (LEAST(l.payment_day, DAY(LAST_DAY(#{billingMonth}))) - 1) DAY),
-                   l.monthly_rent, 0, 'unpaid'
+                   CASE WHEN l.rent_calculation_method='daily_prorated'
+                     THEN GREATEST(ROUND(l.monthly_rent / DAY(LAST_DAY(#{billingMonth})) *
+                       (DATEDIFF(LEAST(l.end_date, LAST_DAY(#{billingMonth})), GREATEST(l.start_date, #{billingMonth})) + 1), 2), 0.01)
+                     ELSE l.monthly_rent END, 0, 'unpaid'
             FROM leases l
             WHERE l.status = 'active'
               AND l.start_date &lt;= LAST_DAY(#{billingMonth})
@@ -542,6 +850,13 @@ public interface AdminTenancyMapper {
     @Update("UPDATE documents SET status = 'superseded' WHERE id = #{documentId} AND document_type = 'lease'")
     int supersedeContractDocument(@Param("documentId") Long documentId);
 
+    @Update("""
+            UPDATE electronic_signature_requests
+            SET status='cancelled', updated_at=CURRENT_TIMESTAMP
+            WHERE entity_type='lease' AND entity_id=#{leaseId} AND status='pending'
+            """)
+    int cancelPendingLeaseSignatures(@Param("leaseId") Long leaseId);
+
     @Update("UPDATE leases SET contract_document_id = #{documentId} WHERE id = #{leaseId}")
     int updateLeaseContract(@Param("leaseId") Long leaseId, @Param("documentId") Long documentId);
 
@@ -556,11 +871,22 @@ public interface AdminTenancyMapper {
             @Param("fileName") String fileName, @Param("action") String action);
 
     @Select("""
-            SELECT d.id, d.original_name, d.storage_key, d.mime_type, d.file_size
+            SELECT COALESCE(signed.id, d.id) AS id,
+                   COALESCE(signed.original_name, d.original_name) AS original_name,
+                   COALESCE(signed.storage_key, d.storage_key) AS storage_key,
+                   COALESCE(signed.mime_type, d.mime_type) AS mime_type,
+                   COALESCE(signed.file_size, d.file_size) AS file_size,
+                   CASE WHEN signed.id IS NULL THEN 'lease' ELSE 'electronic_signature' END AS storage_area
             FROM leases l JOIN documents d ON d.id = l.contract_document_id
             JOIN document_links dl ON dl.document_id = d.id AND dl.entity_type = 'lease'
               AND dl.entity_id = l.id AND dl.relation_type = 'contract'
+            LEFT JOIN electronic_signature_requests sr ON sr.source_document_id = d.id
+              AND sr.entity_type = 'lease' AND sr.entity_id = l.id AND sr.status = 'signed'
+            LEFT JOIN documents signed ON signed.id = sr.signed_document_id
+              AND signed.status NOT IN ('voided', 'superseded')
             WHERE l.id = #{leaseId} AND d.document_type = 'lease'
+            ORDER BY sr.signed_at DESC, sr.id DESC
+            LIMIT 1
             """)
     ContractFile findContractFile(@Param("leaseId") Long leaseId);
 
@@ -584,7 +910,7 @@ public interface AdminTenancyMapper {
 
     class SummaryRow {
         private Long tenantCount, activeLeaseCount, partialCount, overdueCount, pendingReviewCount;
-        private BigDecimal currentDue, currentPaid, currentUnpaid;
+        private BigDecimal currentDue, currentPaid, currentUnpaid, totalUnpaid;
         public Long getTenantCount() { return tenantCount; } public void setTenantCount(Long v) { tenantCount = v; }
         public Long getActiveLeaseCount() { return activeLeaseCount; } public void setActiveLeaseCount(Long v) { activeLeaseCount = v; }
         public Long getPartialCount() { return partialCount; } public void setPartialCount(Long v) { partialCount = v; }
@@ -593,23 +919,37 @@ public interface AdminTenancyMapper {
         public BigDecimal getCurrentDue() { return currentDue; } public void setCurrentDue(BigDecimal v) { currentDue = v; }
         public BigDecimal getCurrentPaid() { return currentPaid; } public void setCurrentPaid(BigDecimal v) { currentPaid = v; }
         public BigDecimal getCurrentUnpaid() { return currentUnpaid; } public void setCurrentUnpaid(BigDecimal v) { currentUnpaid = v; }
+        public BigDecimal getTotalUnpaid() { return totalUnpaid; } public void setTotalUnpaid(BigDecimal v) { totalUnpaid = v; }
     }
 
     class TenancyRow {
-        private Long tenantId, leaseId, projectId, unitId, contractDocumentId, invoiceId, financeRecordId;
+        private Long tenantId, leaseId, projectId, unitId, contractDocumentId, invoiceId, financeRecordId, ownerId;
         private String tenantName, identityNo, phone, email, tenantStatus, leaseNo, projectName, unitNo, leaseStatus,
-                contractDocumentName, contractDocumentMimeType,
-                rentStatus, transactionNo, confirmationStatus, paymentMethod, reviewNote, confirmedByName;
+                rentCalculationMethod, contractDocumentName, contractDocumentMimeType,
+                rentStatus, transactionNo, confirmationStatus, paymentMethod, reviewNote, confirmedByName,
+                ownerName, ownerIdentity;
         private LocalDate leaseStart, leaseEnd, billingMonth, dueDate, paymentDate;
         private LocalDateTime confirmedAt;
-        private BigDecimal monthlyRent, depositAmount, amountDue, amountPaid, amountUnpaid;
+        private BigDecimal monthlyRent, depositAmount, amountDue, amountPaid, amountUnpaid, totalUnpaid, prepaidRentBalance;
         private Long contractDocumentSize;
+        private Boolean contractSigned;
+        private String contractStatus;
+        public String getContractStatus() {
+            return contractStatus;
+        }
+
+        public void setContractStatus(String contractStatus) {
+            this.contractStatus = contractStatus;
+        }
+
         private Integer paymentDay;
         public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;}
         public Long getProjectId(){return projectId;} public void setProjectId(Long v){projectId=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;}
         public Long getContractDocumentId(){return contractDocumentId;} public void setContractDocumentId(Long v){contractDocumentId=v;} public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;}
-        public String getContractDocumentName(){return contractDocumentName;} public void setContractDocumentName(String v){contractDocumentName=v;} public String getContractDocumentMimeType(){return contractDocumentMimeType;} public void setContractDocumentMimeType(String v){contractDocumentMimeType=v;} public Long getContractDocumentSize(){return contractDocumentSize;} public void setContractDocumentSize(Long v){contractDocumentSize=v;}
+        public String getContractDocumentName(){return contractDocumentName;} public void setContractDocumentName(String v){contractDocumentName=v;} public String getContractDocumentMimeType(){return contractDocumentMimeType;} public void setContractDocumentMimeType(String v){contractDocumentMimeType=v;} public Long getContractDocumentSize(){return contractDocumentSize;} public void setContractDocumentSize(Long v){contractDocumentSize=v;} public Boolean getContractSigned(){return contractSigned;} public void setContractSigned(Boolean v){contractSigned=v;}
         public Long getFinanceRecordId(){return financeRecordId;} public void setFinanceRecordId(Long v){financeRecordId=v;} public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;}
+        public Long getOwnerId(){return ownerId;} public void setOwnerId(Long v){ownerId=v;} public String getOwnerName(){return ownerName;} public void setOwnerName(String v){ownerName=v;}
+        public String getOwnerIdentity(){return ownerIdentity;} public void setOwnerIdentity(String v){ownerIdentity=v;}
         public String getIdentityNo(){return identityNo;} public void setIdentityNo(String v){identityNo=v;} public String getPhone(){return phone;} public void setPhone(String v){phone=v;}
         public String getEmail(){return email;} public void setEmail(String v){email=v;} public String getTenantStatus(){return tenantStatus;} public void setTenantStatus(String v){tenantStatus=v;}
         public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
@@ -622,34 +962,54 @@ public interface AdminTenancyMapper {
         public LocalDate getPaymentDate(){return paymentDate;} public void setPaymentDate(LocalDate v){paymentDate=v;} public LocalDateTime getConfirmedAt(){return confirmedAt;} public void setConfirmedAt(LocalDateTime v){confirmedAt=v;}
         public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;}
         public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;} public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;}
-        public BigDecimal getAmountUnpaid(){return amountUnpaid;} public void setAmountUnpaid(BigDecimal v){amountUnpaid=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;}
+        public BigDecimal getAmountUnpaid(){return amountUnpaid;} public void setAmountUnpaid(BigDecimal v){amountUnpaid=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;}
+        public BigDecimal getTotalUnpaid(){return totalUnpaid;} public void setTotalUnpaid(BigDecimal v){totalUnpaid=v;}
+        public BigDecimal getPrepaidRentBalance(){return prepaidRentBalance;} public void setPrepaidRentBalance(BigDecimal v){prepaidRentBalance=v;}
+    }
+
+    class LeaseInvoiceRow {
+        private Long invoiceId; private LocalDate billingMonth, dueDate; private BigDecimal amountDue, amountPaid, amountUnpaid; private String rentStatus;
+        public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;}
+        public LocalDate getDueDate(){return dueDate;} public void setDueDate(LocalDate v){dueDate=v;} public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;}
+        public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;} public BigDecimal getAmountUnpaid(){return amountUnpaid;} public void setAmountUnpaid(BigDecimal v){amountUnpaid=v;}
+        public String getRentStatus(){return rentStatus;} public void setRentStatus(String v){rentStatus=v;}
     }
 
     class NewTenant { private Long id; private String fullName, identityNo, phone, email, status;
         public Long getId(){return id;} public void setId(Long v){id=v;} public String getFullName(){return fullName;} public void setFullName(String v){fullName=v;}
         public String getIdentityNo(){return identityNo;} public void setIdentityNo(String v){identityNo=v;} public String getPhone(){return phone;} public void setPhone(String v){phone=v;}
         public String getEmail(){return email;} public void setEmail(String v){email=v;} public String getStatus(){return status;} public void setStatus(String v){status=v;}}
-    class NewLease { private Long id, unitId, tenantId; private String leaseNo; private LocalDate startDate,endDate; private BigDecimal monthlyRent,depositAmount; private Integer paymentDay;
-        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;}
+    class TenantDirectoryRow { private Long tenantId, leaseCount, activeLeaseCount; private String fullName, identityNo, phone, email, status, currentLeaseNo, projectName, unitNo; private LocalDate leaseStart, leaseEnd;
+        public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public String getFullName(){return fullName;} public void setFullName(String v){fullName=v;} public String getIdentityNo(){return identityNo;} public void setIdentityNo(String v){identityNo=v;} public String getPhone(){return phone;} public void setPhone(String v){phone=v;} public String getEmail(){return email;} public void setEmail(String v){email=v;} public String getStatus(){return status;} public void setStatus(String v){status=v;} public String getCurrentLeaseNo(){return currentLeaseNo;} public void setCurrentLeaseNo(String v){currentLeaseNo=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public LocalDate getLeaseStart(){return leaseStart;} public void setLeaseStart(LocalDate v){leaseStart=v;} public LocalDate getLeaseEnd(){return leaseEnd;} public void setLeaseEnd(LocalDate v){leaseEnd=v;} public Long getLeaseCount(){return leaseCount;} public void setLeaseCount(Long v){leaseCount=v;} public Long getActiveLeaseCount(){return activeLeaseCount;} public void setActiveLeaseCount(Long v){activeLeaseCount=v;} }
+    class TenantDirectorySummaryRow { private Long totalCount, activeCount, inactiveCount, activeLeaseTenantCount;
+        public Long getTotalCount(){return totalCount;} public void setTotalCount(Long v){totalCount=v;} public Long getActiveCount(){return activeCount;} public void setActiveCount(Long v){activeCount=v;} public Long getInactiveCount(){return inactiveCount;} public void setInactiveCount(Long v){inactiveCount=v;} public Long getActiveLeaseTenantCount(){return activeLeaseTenantCount;} public void setActiveLeaseTenantCount(Long v){activeLeaseTenantCount=v;} }
+    class TenantLeaseHistoryRow { private Long leaseId, unitId, pendingMaintenanceCount; private String leaseNo, projectName, unitNo, status, signatureStatus, workflowStep; private LocalDate startDate, endDate; private BigDecimal monthlyRent, depositAmount, unpaidRent; private Integer paymentDay;
+        public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getStatus(){return status;} public void setStatus(String v){status=v;} public LocalDate getStartDate(){return startDate;} public void setStartDate(LocalDate v){startDate=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;} public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;} public BigDecimal getUnpaidRent(){return unpaidRent;} public void setUnpaidRent(BigDecimal v){unpaidRent=v;} public Long getPendingMaintenanceCount(){return pendingMaintenanceCount;} public void setPendingMaintenanceCount(Long v){pendingMaintenanceCount=v;} public String getSignatureStatus(){return signatureStatus;} public void setSignatureStatus(String v){signatureStatus=v;} public String getWorkflowStep(){return workflowStep;} public void setWorkflowStep(String v){workflowStep=v;} }
+    class TenantDirectoryOverviewRow { private BigDecimal unpaidRent; private Long pendingMaintenanceCount, pendingSignatureCount;
+        public BigDecimal getUnpaidRent(){return unpaidRent;} public void setUnpaidRent(BigDecimal v){unpaidRent=v;} public Long getPendingMaintenanceCount(){return pendingMaintenanceCount;} public void setPendingMaintenanceCount(Long v){pendingMaintenanceCount=v;} public Long getPendingSignatureCount(){return pendingSignatureCount;} public void setPendingSignatureCount(Long v){pendingSignatureCount=v;} }
+    class ExpiredLeaseRow { private Long leaseId, unitId; private LocalDate endDate;
+        public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;} }
+    class NewLease { private Long id, unitId, tenantId, rentalMandateId; private String leaseNo,rentCalculationMethod; private LocalDate startDate,endDate; private BigDecimal monthlyRent,depositAmount; private Integer paymentDay;
+        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public Long getRentalMandateId(){return rentalMandateId;} public void setRentalMandateId(Long v){rentalMandateId=v;}
         public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public LocalDate getStartDate(){return startDate;} public void setStartDate(LocalDate v){startDate=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;}
-        public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;}}
+        public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;}}
     class ReminderContext { private Long invoiceId,tenantId; private String tenantName,projectName,unitNo; private BigDecimal amountDue,amountPaid; private LocalDate dueDate;
         public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;} public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;} public LocalDate getDueDate(){return dueDate;} public void setDueDate(LocalDate v){dueDate=v;}}
     class LeaseContractContext { private Long leaseId, contractDocumentId; private String leaseNo;
         public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getContractDocumentId(){return contractDocumentId;} public void setContractDocumentId(Long v){contractDocumentId=v;} public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;}}
     class LeaseChangeContext {
         private Long leaseId,unitId,tenantId; private String leaseNo,status,projectName,unitNo;
-        private LocalDate startDate,endDate; private BigDecimal monthlyRent,depositAmount; private Integer paymentDay;
+        private LocalDate startDate,endDate; private BigDecimal monthlyRent,depositAmount; private Integer paymentDay; private String rentCalculationMethod;
         public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;}
         public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public String getStatus(){return status;} public void setStatus(String v){status=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;}
-        public LocalDate getStartDate(){return startDate;} public void setStartDate(LocalDate v){startDate=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;} public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;}
+        public LocalDate getStartDate(){return startDate;} public void setStartDate(LocalDate v){startDate=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;} public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;}
     }
     class NewContractDocument { private Long id, fileSize, uploadedBy; private String documentNo,originalName,storageKey,mimeType,checksumSha256;
         public Long getId(){return id;} public void setId(Long v){id=v;} public Long getFileSize(){return fileSize;} public void setFileSize(Long v){fileSize=v;} public Long getUploadedBy(){return uploadedBy;} public void setUploadedBy(Long v){uploadedBy=v;} public String getDocumentNo(){return documentNo;} public void setDocumentNo(String v){documentNo=v;} public String getOriginalName(){return originalName;} public void setOriginalName(String v){originalName=v;} public String getStorageKey(){return storageKey;} public void setStorageKey(String v){storageKey=v;} public String getMimeType(){return mimeType;} public void setMimeType(String v){mimeType=v;} public String getChecksumSha256(){return checksumSha256;} public void setChecksumSha256(String v){checksumSha256=v;}}
-    class ContractFile { private Long id,fileSize; private String originalName,storageKey,mimeType;
-        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getFileSize(){return fileSize;} public void setFileSize(Long v){fileSize=v;} public String getOriginalName(){return originalName;} public void setOriginalName(String v){originalName=v;} public String getStorageKey(){return storageKey;} public void setStorageKey(String v){storageKey=v;} public String getMimeType(){return mimeType;} public void setMimeType(String v){mimeType=v;}}
-    class RentFinanceRow { private Long id,leaseId,invoiceId,proofDocumentId,proofSize; private String transactionNo,tenantName,projectName,unitNo,leaseNo,currency,paymentMethod,confirmationStatus,syncStatus,proofName,proofMimeType,reviewNote,confirmedByName; private LocalDate billingMonth,dueDate,transactionDate; private LocalDateTime confirmedAt,submittedAt; private BigDecimal invoiceAmount,invoicePaid,amount;
-        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public Long getProofDocumentId(){return proofDocumentId;} public void setProofDocumentId(Long v){proofDocumentId=v;} public Long getProofSize(){return proofSize;} public void setProofSize(Long v){proofSize=v;} public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;} public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;} public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String v){paymentMethod=v;} public String getConfirmationStatus(){return confirmationStatus;} public void setConfirmationStatus(String v){confirmationStatus=v;} public String getSyncStatus(){return syncStatus;} public void setSyncStatus(String v){syncStatus=v;} public String getProofName(){return proofName;} public void setProofName(String v){proofName=v;} public String getProofMimeType(){return proofMimeType;} public void setProofMimeType(String v){proofMimeType=v;} public String getReviewNote(){return reviewNote;} public void setReviewNote(String v){reviewNote=v;} public String getConfirmedByName(){return confirmedByName;} public void setConfirmedByName(String v){confirmedByName=v;} public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;} public LocalDate getDueDate(){return dueDate;} public void setDueDate(LocalDate v){dueDate=v;} public LocalDate getTransactionDate(){return transactionDate;} public void setTransactionDate(LocalDate v){transactionDate=v;} public LocalDateTime getConfirmedAt(){return confirmedAt;} public void setConfirmedAt(LocalDateTime v){confirmedAt=v;} public LocalDateTime getSubmittedAt(){return submittedAt;} public void setSubmittedAt(LocalDateTime v){submittedAt=v;} public BigDecimal getInvoiceAmount(){return invoiceAmount;} public void setInvoiceAmount(BigDecimal v){invoiceAmount=v;} public BigDecimal getInvoicePaid(){return invoicePaid;} public void setInvoicePaid(BigDecimal v){invoicePaid=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}}
+    class ContractFile { private Long id,fileSize; private String originalName,storageKey,mimeType,storageArea;
+        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getFileSize(){return fileSize;} public void setFileSize(Long v){fileSize=v;} public String getOriginalName(){return originalName;} public void setOriginalName(String v){originalName=v;} public String getStorageKey(){return storageKey;} public void setStorageKey(String v){storageKey=v;} public String getMimeType(){return mimeType;} public void setMimeType(String v){mimeType=v;} public String getStorageArea(){return storageArea;} public void setStorageArea(String v){storageArea=v;}}
+    class RentFinanceRow { private Long id,leaseId,invoiceId,proofDocumentId,proofSize; private String transactionNo,tenantName,projectName,unitNo,leaseNo,currency,paymentMethod,confirmationStatus,syncStatus,proofName,proofMimeType,receiptNo,reviewNote,confirmedByName; private LocalDate billingMonth,dueDate,transactionDate; private LocalDateTime confirmedAt,submittedAt; private BigDecimal invoiceAmount,invoicePaid,amount;
+        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public Long getProofDocumentId(){return proofDocumentId;} public void setProofDocumentId(Long v){proofDocumentId=v;} public Long getProofSize(){return proofSize;} public void setProofSize(Long v){proofSize=v;} public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;} public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;} public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String v){paymentMethod=v;} public String getConfirmationStatus(){return confirmationStatus;} public void setConfirmationStatus(String v){confirmationStatus=v;} public String getSyncStatus(){return syncStatus;} public void setSyncStatus(String v){syncStatus=v;} public String getProofName(){return proofName;} public void setProofName(String v){proofName=v;} public String getProofMimeType(){return proofMimeType;} public void setProofMimeType(String v){proofMimeType=v;} public String getReceiptNo(){return receiptNo;} public void setReceiptNo(String v){receiptNo=v;} public String getReviewNote(){return reviewNote;} public void setReviewNote(String v){reviewNote=v;} public String getConfirmedByName(){return confirmedByName;} public void setConfirmedByName(String v){confirmedByName=v;} public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;} public LocalDate getDueDate(){return dueDate;} public void setDueDate(LocalDate v){dueDate=v;} public LocalDate getTransactionDate(){return transactionDate;} public void setTransactionDate(LocalDate v){transactionDate=v;} public LocalDateTime getConfirmedAt(){return confirmedAt;} public void setConfirmedAt(LocalDateTime v){confirmedAt=v;} public LocalDateTime getSubmittedAt(){return submittedAt;} public void setSubmittedAt(LocalDateTime v){submittedAt=v;} public BigDecimal getInvoiceAmount(){return invoiceAmount;} public void setInvoiceAmount(BigDecimal v){invoiceAmount=v;} public BigDecimal getInvoicePaid(){return invoicePaid;} public void setInvoicePaid(BigDecimal v){invoicePaid=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}}
     class RentFinanceSummaryRow { private Long totalCount,withProofCount,missingProofCount,pendingSyncCount; private BigDecimal totalAmount,monthAmount;
         public Long getTotalCount(){return totalCount;} public void setTotalCount(Long v){totalCount=v;} public Long getWithProofCount(){return withProofCount;} public void setWithProofCount(Long v){withProofCount=v;} public Long getMissingProofCount(){return missingProofCount;} public void setMissingProofCount(Long v){missingProofCount=v;} public Long getPendingSyncCount(){return pendingSyncCount;} public void setPendingSyncCount(Long v){pendingSyncCount=v;} public BigDecimal getTotalAmount(){return totalAmount;} public void setTotalAmount(BigDecimal v){totalAmount=v;} public BigDecimal getMonthAmount(){return monthAmount;} public void setMonthAmount(BigDecimal v){monthAmount=v;}}
     class RentProofContext { private Long financeRecordId,proofDocumentId; private String transactionNo;
@@ -659,7 +1019,8 @@ public interface AdminTenancyMapper {
         private String leaseNo,tenantName,projectName,unitNo,collectionStatus,latestTransactionNo,latestPaymentMethod,
                 latestProofName,latestProofMimeType;
         private LocalDate billingMonth,dueDate,latestPaymentDate; private LocalDateTime latestConfirmedAt;
-        private BigDecimal amountDue,amountPaid,outstandingAmount,latestPaymentAmount;
+        private LocalDate leaseStartDate,leaseEndDate; private String rentCalculationMethod;
+        private BigDecimal amountDue,amountPaid,outstandingAmount,latestPaymentAmount,monthlyRent;
         public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;}
         public Long getLatestFinanceRecordId(){return latestFinanceRecordId;} public void setLatestFinanceRecordId(Long v){latestFinanceRecordId=v;} public Long getLatestProofDocumentId(){return latestProofDocumentId;} public void setLatestProofDocumentId(Long v){latestProofDocumentId=v;}
         public Long getLatestProofSize(){return latestProofSize;} public void setLatestProofSize(Long v){latestProofSize=v;} public Long getOverdueDays(){return overdueDays;} public void setOverdueDays(Long v){overdueDays=v;}
@@ -672,6 +1033,17 @@ public interface AdminTenancyMapper {
         public LocalDateTime getLatestConfirmedAt(){return latestConfirmedAt;} public void setLatestConfirmedAt(LocalDateTime v){latestConfirmedAt=v;} public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;}
         public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;} public BigDecimal getOutstandingAmount(){return outstandingAmount;} public void setOutstandingAmount(BigDecimal v){outstandingAmount=v;}
         public BigDecimal getLatestPaymentAmount(){return latestPaymentAmount;} public void setLatestPaymentAmount(BigDecimal v){latestPaymentAmount=v;}
+        public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public LocalDate getLeaseStartDate(){return leaseStartDate;} public void setLeaseStartDate(LocalDate v){leaseStartDate=v;} public LocalDate getLeaseEndDate(){return leaseEndDate;} public void setLeaseEndDate(LocalDate v){leaseEndDate=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;}
+    }
+    class RentReceiptRow {
+        private String receiptNo, transactionNo, tenantName, projectName, unitNo, leaseNo, currency, paymentMethod, payerName, bankReference, submissionNote;
+        private LocalDate billingMonth, transactionDate; private LocalDateTime confirmedAt;
+        private BigDecimal invoiceAmount, invoicePaid, amount;
+        public String getReceiptNo(){return receiptNo;} public void setReceiptNo(String v){receiptNo=v;} public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;}
+        public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;}
+        public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;} public LocalDate getTransactionDate(){return transactionDate;} public void setTransactionDate(LocalDate v){transactionDate=v;} public LocalDateTime getConfirmedAt(){return confirmedAt;} public void setConfirmedAt(LocalDateTime v){confirmedAt=v;}
+        public BigDecimal getInvoiceAmount(){return invoiceAmount;} public void setInvoiceAmount(BigDecimal v){invoiceAmount=v;} public BigDecimal getInvoicePaid(){return invoicePaid;} public void setInvoicePaid(BigDecimal v){invoicePaid=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}
+        public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;} public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String v){paymentMethod=v;} public String getPayerName(){return payerName;} public void setPayerName(String v){payerName=v;} public String getBankReference(){return bankReference;} public void setBankReference(String v){bankReference=v;} public String getSubmissionNote(){return submissionNote;} public void setSubmissionNote(String v){submissionNote=v;}
     }
     class RentCollectionSummaryRow {
         private Long outstandingCount,unpaidCount,partialCount,overdueCount; private BigDecimal outstandingAmount,monthReceived;
@@ -681,13 +1053,19 @@ public interface AdminTenancyMapper {
     }
     class RentCollectionContext {
         private Long invoiceId,leaseId,tenantId,userId,unitId,ownerId; private String leaseNo,tenantName,unitNo,projectName;
-        private BigDecimal amountDue,amountPaid;
+        private LocalDate billingMonth,startDate,endDate; private Integer paymentDay; private String rentCalculationMethod;
+        private BigDecimal amountDue,amountPaid,monthlyRent;
         public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;}
         public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public Long getUserId(){return userId;} public void setUserId(Long v){userId=v;}
         public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getOwnerId(){return ownerId;} public void setOwnerId(Long v){ownerId=v;}
         public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;}
         public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
         public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;} public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;}
+        public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;} public LocalDate getStartDate(){return startDate;} public void setStartDate(LocalDate v){startDate=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;} public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;}
+    }
+    class RentInvoiceAdvanceRow {
+        private Long invoiceId; private LocalDate billingMonth; private BigDecimal amountDue,amountPaid;
+        public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;} public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;} public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;}
     }
     class NewRentCollection {
         private Long id,unitId,ownerId,tenantId,actorId; private String transactionNo,paymentMethod; private LocalDate paymentDate; private BigDecimal amount;
@@ -695,5 +1073,20 @@ public interface AdminTenancyMapper {
         public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public Long getActorId(){return actorId;} public void setActorId(Long v){actorId=v;}
         public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;} public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String v){paymentMethod=v;}
         public LocalDate getPaymentDate(){return paymentDate;} public void setPaymentDate(LocalDate v){paymentDate=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}
+    }
+    class NewRentCredit {
+        private Long id,leaseId,financeRecordId,actorId; private BigDecimal receivedAmount,remainingAmount;
+        public Long getId(){return id;} public void setId(Long v){id=v;} public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;}
+        public Long getFinanceRecordId(){return financeRecordId;} public void setFinanceRecordId(Long v){financeRecordId=v;} public Long getActorId(){return actorId;} public void setActorId(Long v){actorId=v;}
+        public BigDecimal getReceivedAmount(){return receivedAmount;} public void setReceivedAmount(BigDecimal v){receivedAmount=v;} public BigDecimal getRemainingAmount(){return remainingAmount;} public void setRemainingAmount(BigDecimal v){remainingAmount=v;}
+    }
+    class RentCreditRow {
+        private Long id; private BigDecimal remainingAmount;
+        public Long getId(){return id;} public void setId(Long v){id=v;} public BigDecimal getRemainingAmount(){return remainingAmount;} public void setRemainingAmount(BigDecimal v){remainingAmount=v;}
+    }
+    class RentInvoiceCreditRow {
+        private Long invoiceId; private BigDecimal amountDue,amountPaid;
+        public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;}
+        public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;}
     }
 }

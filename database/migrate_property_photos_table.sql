@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS property_photos (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  lease_id BIGINT UNSIGNED NULL,
+  rental_stage VARCHAR(20) NULL COMMENT 'before / after',
+  document_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(120) NOT NULL,
+  category VARCHAR(30) NOT NULL DEFAULT 'interior',
+  description VARCHAR(500) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_cover TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_photos_document (document_id),
+  KEY idx_property_photos_lease_stage (lease_id, rental_stage),
+  KEY idx_property_photos_order (owner_unit_id, sort_order, id),
+  CONSTRAINT fk_property_photos_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_photos_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
+  CONSTRAINT fk_property_photos_document FOREIGN KEY (document_id) REFERENCES documents (id)
+) ENGINE=InnoDB;

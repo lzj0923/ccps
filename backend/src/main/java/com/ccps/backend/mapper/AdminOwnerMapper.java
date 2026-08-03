@@ -3,6 +3,7 @@ package com.ccps.backend.mapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import com.ccps.backend.dto.AdminPropertyContractResponse;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Insert;
@@ -16,6 +17,35 @@ import com.ccps.backend.dto.AdminOwnerSummaryResponse;
 
 @Mapper
 public interface AdminOwnerMapper {
+    @Select("SELECT profile_json FROM property_basic_profiles WHERE owner_unit_id = #{ownerUnitId}")
+    String findPropertyBasicProfile(@Param("ownerUnitId") Long ownerUnitId);
+
+    @Insert("""
+            INSERT INTO property_basic_profiles (owner_unit_id, profile_json, updated_at)
+            VALUES (#{ownerUnitId}, #{profileJson}, NOW())
+            ON DUPLICATE KEY UPDATE profile_json = VALUES(profile_json), updated_at = NOW()
+            """)
+    int upsertPropertyBasicProfile(@Param("ownerUnitId") Long ownerUnitId,
+                                   @Param("profileJson") String profileJson);
+
+    @Select("SELECT COUNT(*) FROM owner_units ou JOIN leases l ON l.unit_id=ou.unit_id WHERE ou.id=#{ownerUnitId} AND l.id=#{leaseId}")
+    int countPropertyLease(@Param("ownerUnitId") Long ownerUnitId, @Param("leaseId") Long leaseId);
+
+    @Select("SELECT id, owner_unit_id AS ownerUnitId, contract_no AS contractNo, purchase_price AS purchasePrice, currency, signed_date AS signedDate, handover_date AS handoverDate, status FROM purchase_contracts WHERE owner_unit_id = #{ownerUnitId} ORDER BY id DESC LIMIT 1")
+    AdminPropertyContractResponse findPropertyContract(@Param("ownerUnitId") Long ownerUnitId);
+
+    @Insert("INSERT INTO purchase_contracts (owner_unit_id, contract_no, purchase_price, currency, signed_date, handover_date, status) VALUES (#{ownerUnitId}, #{contractNo}, #{purchasePrice}, 'MYR', #{signedDate}, #{handoverDate}, 'active')")
+    int insertPropertyContract(@Param("ownerUnitId") Long ownerUnitId, @Param("contractNo") String contractNo,
+            @Param("purchasePrice") BigDecimal purchasePrice, @Param("signedDate") LocalDate signedDate,
+            @Param("handoverDate") LocalDate handoverDate);
+
+    @Update("UPDATE purchase_contracts SET contract_no=#{contractNo}, purchase_price=#{purchasePrice}, signed_date=#{signedDate}, handover_date=#{handoverDate} WHERE id=#{contractId} AND owner_unit_id=#{ownerUnitId}")
+    int updatePropertyContract(@Param("contractId") Long contractId, @Param("ownerUnitId") Long ownerUnitId,
+            @Param("contractNo") String contractNo, @Param("purchasePrice") BigDecimal purchasePrice,
+            @Param("signedDate") LocalDate signedDate, @Param("handoverDate") LocalDate handoverDate);
+
+    @Update("UPDATE purchase_contracts SET status='cancelled' WHERE id=#{contractId} AND owner_unit_id=#{ownerUnitId} AND status <> 'cancelled'")
+    int cancelPropertyContract(@Param("contractId") Long contractId, @Param("ownerUnitId") Long ownerUnitId);
 
     @Select("""
             SELECT
@@ -55,9 +85,14 @@ public interface AdminOwnerMapper {
     String OWNER_PROPERTY_SELECT = """
             SELECT
               o.id AS owner_id,
+              o.owner_no,
               o.full_name,
               o.identity_no,
               o.phone,
+              o.mobile_phone,
+              o.home_phone,
+              o.office_phone,
+              o.passport_no,
               o.email,
               o.status AS owner_status,
               ou.id AS owner_unit_id,
@@ -138,9 +173,9 @@ public interface AdminOwnerMapper {
               </if>
               <if test="projectName != null and projectName != ''">AND project_name = #{projectName}</if>
               <if test="rentalStatus == 'pre_handover'">AND asset_stage = 'PRE_HANDOVER'</if>
-              <if test="rentalStatus == 'pending_rental'">AND asset_stage = 'OPERATING' AND FIND_IN_SET('RENTAL', COALESCE(services, '')) &gt; 0 AND listing_status &lt;&gt; 'rented'</if>
-              <if test="rentalStatus == 'rented'">AND asset_stage = 'OPERATING' AND listing_status = 'rented'</if>
-              <if test="rentalStatus == 'not_for_rent'">AND asset_stage = 'OPERATING' AND listing_status &lt;&gt; 'rented' AND FIND_IN_SET('RENTAL', COALESCE(services, '')) = 0</if>
+              <if test="rentalStatus == 'pending_rental'">AND asset_stage = 'OPERATING' AND FIND_IN_SET('RENTAL', COALESCE(services, '')) &gt; 0 AND listing_status NOT IN ('rented', 'occupied')</if>
+              <if test="rentalStatus == 'rented'">AND asset_stage = 'OPERATING' AND listing_status IN ('rented', 'occupied')</if>
+              <if test="rentalStatus == 'not_for_rent'">AND asset_stage = 'OPERATING' AND listing_status NOT IN ('rented', 'occupied') AND FIND_IN_SET('RENTAL', COALESCE(services, '')) = 0</if>
             </where>
             """;
 
@@ -169,6 +204,13 @@ public interface AdminOwnerMapper {
     OwnerPropertyRow findOwnerProperty(@Param("ownerId") Long ownerId,
                                        @Param("ownerUnitId") Long ownerUnitId);
 
+    @Select(OWNER_PROPERTY_SELECT + """
+            WHERE u.id = #{unitId}
+            ORDER BY ou.is_primary DESC, ou.ownership_percent DESC, ou.id
+            LIMIT 1
+            """)
+    OwnerPropertyRow findPrimaryOwnerPropertyByUnitId(@Param("unitId") Long unitId);
+
     @Select("""
             SELECT COUNT(*)
             FROM units
@@ -186,9 +228,21 @@ public interface AdminOwnerMapper {
     @Select("SELECT COUNT(*) FROM owners WHERE LOWER(email) = LOWER(#{email})")
     int countOwnersByEmail(@Param("email") String email);
 
+    @Select("SELECT COUNT(*) FROM owners WHERE identity_no = #{identityNo} AND id <> #{ownerId}")
+    int countOtherOwnersByIdentityNo(@Param("ownerId") Long ownerId, @Param("identityNo") String identityNo);
+
+    @Select("SELECT COUNT(*) FROM owners WHERE LOWER(email) = LOWER(#{email}) AND id <> #{ownerId}")
+    int countOtherOwnersByEmail(@Param("ownerId") Long ownerId, @Param("email") String email);
+
+    @Update("UPDATE owners SET owner_no=#{ownerNo}, full_name=#{fullName}, identity_no=#{identityNo}, phone=#{phone}, mobile_phone=#{mobilePhone}, home_phone=#{homePhone}, office_phone=#{officePhone}, passport_no=#{passportNo}, email=#{email}, status=#{status} WHERE id=#{ownerId}")
+    int updateOwner(@Param("ownerId") Long ownerId, @Param("ownerNo") String ownerNo, @Param("fullName") String fullName,
+            @Param("identityNo") String identityNo, @Param("phone") String phone, @Param("mobilePhone") String mobilePhone,
+            @Param("homePhone") String homePhone, @Param("officePhone") String officePhone, @Param("passportNo") String passportNo,
+            @Param("email") String email, @Param("status") String status);
+
     @Insert("""
-            INSERT INTO owners (user_id, full_name, identity_no, phone, email, status)
-            VALUES (#{userId}, #{fullName}, #{identityNo}, #{phone}, #{email}, #{status})
+            INSERT INTO owners (user_id, owner_no, full_name, identity_no, phone, mobile_phone, home_phone, office_phone, passport_no, email, status)
+            VALUES (#{userId}, #{ownerNo}, #{fullName}, #{identityNo}, #{phone}, #{mobilePhone}, #{homePhone}, #{officePhone}, #{passportNo}, #{email}, #{status})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertOwner(NewOwner owner);
@@ -206,6 +260,19 @@ public interface AdminOwnerMapper {
 
     @Select("SELECT COUNT(*) FROM projects WHERE id = #{projectId} AND status = 'active'")
     int countActiveProject(@Param("projectId") Long projectId);
+
+    @Select("SELECT id, project_code AS code, name, city FROM projects WHERE status = 'active' AND LOWER(name) = LOWER(#{name}) LIMIT 1")
+    AdminProjectOption findActiveProjectByName(@Param("name") String name);
+
+    @Select("SELECT COUNT(*) FROM projects WHERE project_code = #{projectCode}")
+    int countProjectCode(@Param("projectCode") String projectCode);
+
+    @Insert("""
+            INSERT INTO projects (project_code, name, address, city, country_code, status)
+            VALUES (#{projectCode}, #{name}, NULL, NULL, 'MY', 'active')
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insertProject(NewProject project);
 
     @Select("SELECT COUNT(*) FROM units WHERE project_id = #{projectId} AND unit_no = #{unitNo}")
     int countUnitNumberExists(@Param("projectId") Long projectId, @Param("unitNo") String unitNo);
@@ -332,9 +399,14 @@ public interface AdminOwnerMapper {
 
     class OwnerPropertyRow {
         private Long ownerId;
+        private String ownerNo;
         private String fullName;
         private String identityNo;
         private String phone;
+        private String mobilePhone;
+        private String homePhone;
+        private String officePhone;
+        private String passportNo;
         private String email;
         private String ownerStatus;
         private Long ownerUnitId;
@@ -365,12 +437,22 @@ public interface AdminOwnerMapper {
 
         public Long getOwnerId() { return ownerId; }
         public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
+        public String getOwnerNo() { return ownerNo; }
+        public void setOwnerNo(String ownerNo) { this.ownerNo = ownerNo; }
         public String getFullName() { return fullName; }
         public void setFullName(String fullName) { this.fullName = fullName; }
         public String getIdentityNo() { return identityNo; }
         public void setIdentityNo(String identityNo) { this.identityNo = identityNo; }
         public String getPhone() { return phone; }
         public void setPhone(String phone) { this.phone = phone; }
+        public String getMobilePhone() { return mobilePhone; }
+        public void setMobilePhone(String mobilePhone) { this.mobilePhone = mobilePhone; }
+        public String getHomePhone() { return homePhone; }
+        public void setHomePhone(String homePhone) { this.homePhone = homePhone; }
+        public String getOfficePhone() { return officePhone; }
+        public void setOfficePhone(String officePhone) { this.officePhone = officePhone; }
+        public String getPassportNo() { return passportNo; }
+        public void setPassportNo(String passportNo) { this.passportNo = passportNo; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
         public String getOwnerStatus() { return ownerStatus; }
@@ -430,14 +512,21 @@ public interface AdminOwnerMapper {
     class NewOwner {
         private Long id;
         private Long userId;
+        private String ownerNo;
         private String fullName;
         private String identityNo;
         private String phone;
+        private String mobilePhone;
+        private String homePhone;
+        private String officePhone;
+        private String passportNo;
         private String email;
         private String status;
 
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
+        public String getOwnerNo() { return ownerNo; }
+        public void setOwnerNo(String ownerNo) { this.ownerNo = ownerNo; }
         public Long getUserId() { return userId; }
         public void setUserId(Long userId) { this.userId = userId; }
         public String getFullName() { return fullName; }
@@ -446,6 +535,14 @@ public interface AdminOwnerMapper {
         public void setIdentityNo(String identityNo) { this.identityNo = identityNo; }
         public String getPhone() { return phone; }
         public void setPhone(String phone) { this.phone = phone; }
+        public String getMobilePhone() { return mobilePhone; }
+        public void setMobilePhone(String mobilePhone) { this.mobilePhone = mobilePhone; }
+        public String getHomePhone() { return homePhone; }
+        public void setHomePhone(String homePhone) { this.homePhone = homePhone; }
+        public String getOfficePhone() { return officePhone; }
+        public void setOfficePhone(String officePhone) { this.officePhone = officePhone; }
+        public String getPassportNo() { return passportNo; }
+        public void setPassportNo(String passportNo) { this.passportNo = passportNo; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
         public String getStatus() { return status; }
@@ -481,6 +578,19 @@ public interface AdminOwnerMapper {
         public void setBedroomCount(Integer bedroomCount) { this.bedroomCount = bedroomCount; }
         public String getListingStatus() { return listingStatus; }
         public void setListingStatus(String listingStatus) { this.listingStatus = listingStatus; }
+    }
+
+    class NewProject {
+        private Long id;
+        private String projectCode;
+        private String name;
+
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+        public String getProjectCode() { return projectCode; }
+        public void setProjectCode(String projectCode) { this.projectCode = projectCode; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
     }
 
     class NewOwnerUnit {

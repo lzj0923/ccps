@@ -27,10 +27,18 @@ DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS notification_rules;
 DROP TABLE IF EXISTS sync_batch_items;
 DROP TABLE IF EXISTS sync_batches;
+DROP TABLE IF EXISTS property_attachments;
+DROP TABLE IF EXISTS property_handover_reports;
+DROP TABLE IF EXISTS property_important_messages;
+DROP TABLE IF EXISTS property_bank_accounts;
+DROP TABLE IF EXISTS property_photos;
 DROP TABLE IF EXISTS document_links;
+DROP TABLE IF EXISTS electronic_signature_events;
+DROP TABLE IF EXISTS electronic_signature_requests;
 DROP TABLE IF EXISTS documents;
 DROP TABLE IF EXISTS reserve_transactions;
 DROP TABLE IF EXISTS reserve_accounts;
+DROP TABLE IF EXISTS property_maintenance_records;
 DROP TABLE IF EXISTS maintenance_status_history;
 DROP TABLE IF EXISTS maintenance_work_orders;
 DROP TABLE IF EXISTS cashflow_entries;
@@ -48,6 +56,9 @@ DROP TABLE IF EXISTS property_handovers;
 DROP TABLE IF EXISTS rental_mandate_status_history;
 DROP TABLE IF EXISTS rental_mandates;
 DROP TABLE IF EXISTS owner_unit_services;
+DROP TABLE IF EXISTS property_contract_records;
+DROP TABLE IF EXISTS property_expense_postings;
+DROP TABLE IF EXISTS property_basic_profiles;
 DROP TABLE IF EXISTS owner_units;
 DROP TABLE IF EXISTS tenants;
 DROP TABLE IF EXISTS owners;
@@ -156,9 +167,14 @@ CREATE TABLE units (
 CREATE TABLE owners (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NULL,
+  owner_no VARCHAR(30) NULL,
   full_name VARCHAR(160) NOT NULL,
   identity_no VARCHAR(120) NULL COMMENT '敏感資料；應在應用層或欄位層加密，禁止寫入日誌',
   phone VARCHAR(40) NULL,
+  mobile_phone VARCHAR(40) NULL,
+  home_phone VARCHAR(40) NULL,
+  office_phone VARCHAR(40) NULL,
+  passport_no VARCHAR(80) NULL,
   email VARCHAR(190) NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -223,6 +239,16 @@ CREATE TABLE owner_unit_services (
   CONSTRAINT fk_owner_unit_services_holding FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE property_basic_profiles (
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  profile_json JSON NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (owner_unit_id),
+  CONSTRAINT fk_property_basic_profiles_owner_unit
+    FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id)
+) ENGINE=InnoDB;
+
 CREATE TABLE rental_mandates (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   owner_unit_id BIGINT UNSIGNED NOT NULL,
@@ -253,7 +279,7 @@ CREATE TABLE rental_mandates (
   CONSTRAINT chk_rental_mandates_dates CHECK (end_date IS NULL OR end_date >= start_date),
   CONSTRAINT chk_rental_mandates_fee CHECK (management_fee IS NULL OR management_fee >= 0),
   CONSTRAINT chk_rental_mandates_commission CHECK (commission_percent IS NULL OR (commission_percent >= 0 AND commission_percent <= 100)),
-  CONSTRAINT chk_rental_mandates_status CHECK (status IN ('draft', 'pending_review', 'active', 'suspended', 'terminated'))
+  CONSTRAINT chk_rental_mandates_status CHECK (status IN ('draft', 'pending_review', 'active', 'suspended', 'terminated', 'expired'))
 ) ENGINE=InnoDB;
 
 CREATE TABLE rental_mandate_status_history (
@@ -369,6 +395,50 @@ CREATE TABLE finance_records (
   CONSTRAINT chk_finance_records_amount CHECK (amount >= 0)
 ) ENGINE=InnoDB;
 
+CREATE TABLE property_expense_postings (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  charge_key VARCHAR(120) NOT NULL,
+  charge_name VARCHAR(180) NOT NULL,
+  period_key VARCHAR(20) NOT NULL,
+  finance_record_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_expense_period (owner_unit_id, charge_key, period_key),
+  KEY idx_property_expense_finance (finance_record_id),
+  CONSTRAINT fk_property_expense_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_expense_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE property_contract_records (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  lease_id BIGINT UNSIGNED NULL,
+  contract_type VARCHAR(40) NOT NULL,
+  contract_no VARCHAR(80) NOT NULL,
+  signed_date DATE NULL,
+  valid_from DATE NULL,
+  valid_to DATE NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  notes VARCHAR(1000) NULL,
+  original_name VARCHAR(255) NOT NULL,
+  storage_key VARCHAR(500) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  file_size BIGINT UNSIGNED NOT NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_contract_records_no (owner_unit_id, contract_no),
+  UNIQUE KEY uk_property_contract_records_lease (lease_id),
+  KEY idx_property_contract_records_type (owner_unit_id, contract_type, status),
+  CONSTRAINT fk_property_contract_records_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_contract_records_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_property_contract_records_dates CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from),
+  CONSTRAINT chk_property_contract_records_status CHECK (status IN ('draft', 'active', 'completed', 'cancelled'))
+) ENGINE=InnoDB;
+
 CREATE TABLE purchase_contracts (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   owner_unit_id BIGINT UNSIGNED NOT NULL,
@@ -456,26 +526,34 @@ CREATE TABLE leases (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   unit_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
+  rental_mandate_id BIGINT UNSIGNED NULL,
   lease_no VARCHAR(60) NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   monthly_rent DECIMAL(18,2) NOT NULL,
   deposit_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
   payment_day TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  rent_calculation_method VARCHAR(30) NOT NULL DEFAULT 'daily_prorated' COMMENT '按當月實際承租天數折算',
   status VARCHAR(30) NOT NULL DEFAULT 'active',
   contract_document_id BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_leases_no (lease_no),
+  KEY idx_leases_rental_mandate (rental_mandate_id, status),
   KEY idx_leases_unit_status (unit_id, status),
   KEY idx_leases_tenant_status (tenant_id, status),
   KEY idx_leases_end_date (end_date, status),
   CONSTRAINT fk_leases_unit FOREIGN KEY (unit_id) REFERENCES units (id),
   CONSTRAINT fk_leases_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+  CONSTRAINT fk_leases_rental_mandate FOREIGN KEY (rental_mandate_id) REFERENCES rental_mandates (id),
   CONSTRAINT chk_leases_dates CHECK (end_date >= start_date),
   CONSTRAINT chk_leases_payment_day CHECK (payment_day BETWEEN 1 AND 31)
 ) ENGINE=InnoDB;
+
+ALTER TABLE property_contract_records
+  ADD CONSTRAINT fk_property_contract_records_lease
+  FOREIGN KEY (lease_id) REFERENCES leases (id);
 
 CREATE TABLE rent_invoices (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -492,6 +570,27 @@ CREATE TABLE rent_invoices (
   KEY idx_rent_invoices_due_status (due_date, status),
   CONSTRAINT fk_rent_invoices_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
   CONSTRAINT chk_rent_invoices_amount CHECK (amount_due >= 0 AND amount_paid >= 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE rent_invoice_items (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  invoice_id BIGINT UNSIGNED NOT NULL,
+  charge_type VARCHAR(40) NOT NULL COMMENT 'management / utilities / maintenance / other',
+  description VARCHAR(255) NOT NULL,
+  amount DECIMAL(18,2) NOT NULL,
+  payer VARCHAR(20) NOT NULL DEFAULT 'tenant' COMMENT 'tenant / owner / agency',
+  source_type VARCHAR(40) NULL,
+  source_id BIGINT UNSIGNED NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_invoice_items_invoice (invoice_id),
+  KEY idx_invoice_items_source (source_type, source_id),
+  CONSTRAINT fk_invoice_items_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_invoice_items_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_invoice_items_amount CHECK (amount > 0),
+  CONSTRAINT chk_invoice_items_payer CHECK (payer IN ('tenant', 'owner', 'agency'))
 ) ENGINE=InnoDB;
 
 CREATE TABLE rent_payments (
@@ -514,6 +613,7 @@ CREATE TABLE cashflow_entries (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   finance_record_id BIGINT UNSIGNED NOT NULL,
   unit_id BIGINT UNSIGNED NULL,
+  lease_id BIGINT UNSIGNED NULL,
   owner_id BIGINT UNSIGNED NULL,
   tenant_id BIGINT UNSIGNED NULL,
   vendor_id BIGINT UNSIGNED NULL,
@@ -531,6 +631,7 @@ CREATE TABLE cashflow_entries (
   KEY idx_cashflow_unit (unit_id, occurred_on),
   CONSTRAINT fk_cashflow_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
   CONSTRAINT fk_cashflow_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_cashflow_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
   CONSTRAINT fk_cashflow_owner FOREIGN KEY (owner_id) REFERENCES owners (id),
   CONSTRAINT fk_cashflow_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id),
   CONSTRAINT fk_cashflow_vendor FOREIGN KEY (vendor_id) REFERENCES vendors (id),
@@ -541,6 +642,7 @@ CREATE TABLE maintenance_work_orders (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   work_order_no VARCHAR(60) NOT NULL,
   unit_id BIGINT UNSIGNED NOT NULL,
+  lease_id BIGINT UNSIGNED NULL,
   owner_id BIGINT UNSIGNED NULL,
   tenant_id BIGINT UNSIGNED NULL,
   vendor_id BIGINT UNSIGNED NULL,
@@ -561,6 +663,7 @@ CREATE TABLE maintenance_work_orders (
   KEY idx_work_orders_status_date (status, requested_at),
   KEY idx_work_orders_unit (unit_id, status),
   CONSTRAINT fk_work_orders_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_work_orders_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
   CONSTRAINT fk_work_orders_owner FOREIGN KEY (owner_id) REFERENCES owners (id),
   CONSTRAINT fk_work_orders_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id),
   CONSTRAINT fk_work_orders_vendor FOREIGN KEY (vendor_id) REFERENCES vendors (id),
@@ -580,6 +683,30 @@ CREATE TABLE maintenance_status_history (
   KEY idx_maintenance_history_order_time (work_order_id, occurred_at),
   CONSTRAINT fk_maintenance_history_order FOREIGN KEY (work_order_id) REFERENCES maintenance_work_orders (id),
   CONSTRAINT fk_maintenance_history_user FOREIGN KEY (changed_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE property_maintenance_records (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  work_order_id BIGINT UNSIGNED NULL,
+  record_no VARCHAR(60) NOT NULL,
+  category VARCHAR(60) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  maintenance_date DATE NOT NULL,
+  duration_minutes INT UNSIGNED NOT NULL DEFAULT 0,
+  details VARCHAR(1000) NULL,
+  result_summary VARCHAR(500) NULL,
+  next_maintenance_date DATE NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_maintenance_no (record_no),
+  UNIQUE KEY uk_property_maintenance_work_order (work_order_id),
+  KEY idx_property_maintenance_unit_date (owner_unit_id, maintenance_date),
+  CONSTRAINT fk_property_maintenance_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_maintenance_work_order FOREIGN KEY (work_order_id) REFERENCES maintenance_work_orders (id),
+  CONSTRAINT fk_property_maintenance_creator FOREIGN KEY (created_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -677,6 +804,127 @@ CREATE TABLE document_links (
   UNIQUE KEY uk_document_links (document_id, entity_type, entity_id, relation_type),
   KEY idx_document_links_entity (entity_type, entity_id),
   CONSTRAINT fk_document_links_document FOREIGN KEY (document_id) REFERENCES documents (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE electronic_signature_requests (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  source_document_id BIGINT UNSIGNED NOT NULL,
+  entity_type VARCHAR(40) NOT NULL,
+  entity_id BIGINT UNSIGNED NOT NULL,
+  signer_name VARCHAR(190) NOT NULL,
+  signer_email VARCHAR(190) NOT NULL,
+  access_token_hash CHAR(64) NOT NULL,
+  verification_code_hash VARCHAR(100) NOT NULL,
+  verification_expires_at DATETIME NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  expires_at DATETIME NOT NULL,
+  requested_by BIGINT UNSIGNED NULL,
+  requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  signed_at DATETIME NULL,
+  signed_document_id BIGINT UNSIGNED NULL,
+  source_checksum_sha256 CHAR(64) NULL,
+  signature_hash CHAR(64) NULL,
+  signer_ip VARCHAR(64) NULL,
+  signer_user_agent VARCHAR(500) NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_e_signature_token (access_token_hash),
+  KEY idx_e_signature_entity (entity_type, entity_id, status),
+  KEY idx_e_signature_expiry (status, expires_at),
+  CONSTRAINT fk_e_signature_source_document FOREIGN KEY (source_document_id) REFERENCES documents (id),
+  CONSTRAINT fk_e_signature_signed_document FOREIGN KEY (signed_document_id) REFERENCES documents (id),
+  CONSTRAINT fk_e_signature_requester FOREIGN KEY (requested_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE electronic_signature_events (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  signature_request_id BIGINT UNSIGNED NOT NULL,
+  event_type VARCHAR(40) NOT NULL,
+  detail VARCHAR(500) NULL,
+  remote_ip VARCHAR(64) NULL,
+  user_agent VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_e_signature_events_request (signature_request_id, created_at),
+  CONSTRAINT fk_e_signature_events_request FOREIGN KEY (signature_request_id) REFERENCES electronic_signature_requests (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE property_photos (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  lease_id BIGINT UNSIGNED NULL,
+  rental_stage VARCHAR(20) NULL COMMENT 'before / after',
+  document_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(120) NOT NULL,
+  category VARCHAR(30) NOT NULL DEFAULT 'interior',
+  description VARCHAR(500) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_cover TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_photos_document (document_id),
+  KEY idx_property_photos_lease_stage (lease_id, rental_stage),
+  KEY idx_property_photos_order (owner_unit_id, sort_order, id),
+  CONSTRAINT fk_property_photos_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_photos_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
+  CONSTRAINT fk_property_photos_document FOREIGN KEY (document_id) REFERENCES documents (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE property_attachments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  document_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  remarks VARCHAR(1000) NULL,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_attachments_document (document_id),
+  KEY idx_property_attachments_owner_unit (owner_unit_id, enabled, created_at),
+  CONSTRAINT fk_property_attachments_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_attachments_document FOREIGN KEY (document_id) REFERENCES documents (id),
+  CONSTRAINT fk_property_attachments_creator FOREIGN KEY (created_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE property_handover_reports (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  document_id BIGINT UNSIGNED NULL,
+  title VARCHAR(160) NOT NULL,
+  report_date DATE NOT NULL,
+  tracking_start_date DATE NULL,
+  tracking_end_date DATE NULL,
+  remarks VARCHAR(1000) NULL,
+  content_json MEDIUMTEXT NULL,
+  completed TINYINT(1) NOT NULL DEFAULT 0,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_handover_reports_document (document_id),
+  KEY idx_property_handover_reports_owner_unit (owner_unit_id, completed, report_date),
+  CONSTRAINT fk_property_handover_reports_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_handover_reports_document FOREIGN KEY (document_id) REFERENCES documents (id),
+  CONSTRAINT fk_property_handover_reports_creator FOREIGN KEY (created_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE property_handover_checklist_items (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  item_name VARCHAR(255) NOT NULL,
+  default_quantity VARCHAR(80) NULL,
+  notes VARCHAR(500) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_property_handover_checklist_owner (owner_unit_id, enabled, category, sort_order),
+  CONSTRAINT fk_property_handover_checklist_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id)
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -879,7 +1127,7 @@ SELECT
   CASE
     WHEN ri.amount_paid >= ri.amount_due THEN 'paid'
     WHEN ri.amount_paid > 0 THEN 'partial'
-    WHEN ri.due_date < CURRENT_DATE THEN 'overdue'
+    WHEN CURRENT_DATE > GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
     ELSE 'unpaid'
   END AS calculated_status
 FROM rent_invoices ri
@@ -893,6 +1141,41 @@ WHERE EXISTS (
     AND ou.asset_stage = 'OPERATING'
     AND ous.service_type = 'RENTAL'
     AND ous.status = 'active'
+);
+
+CREATE TABLE property_important_messages (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  subject VARCHAR(200) NOT NULL,
+  content VARCHAR(2000) NULL,
+  announcement_start_date DATE NOT NULL,
+  announcement_end_date DATE NULL,
+  importance VARCHAR(20) NOT NULL DEFAULT 'normal',
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_property_important_messages_unit_date (owner_unit_id, announcement_start_date, announcement_end_date),
+  KEY idx_property_important_messages_flags (owner_unit_id, importance, is_read),
+  CONSTRAINT fk_property_important_messages_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_important_messages_creator FOREIGN KEY (created_by) REFERENCES users (id)
+);
+
+CREATE TABLE property_bank_accounts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  item_name VARCHAR(120) NOT NULL,
+  payment_name VARCHAR(160) NOT NULL,
+  account_no VARCHAR(120) NOT NULL,
+  remarks VARCHAR(1000) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_property_bank_accounts_owner_unit (owner_unit_id, id),
+  CONSTRAINT fk_property_bank_accounts_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_bank_accounts_creator FOREIGN KEY (created_by) REFERENCES users (id)
 );
 
 CREATE OR REPLACE VIEW v_reserve_balances AS

@@ -1,0 +1,22 @@
+USE ccps_property_management;
+
+CREATE TABLE IF NOT EXISTS property_handover_reports (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_unit_id BIGINT UNSIGNED NOT NULL,
+  document_id BIGINT UNSIGNED NULL,
+  title VARCHAR(160) NOT NULL,
+  report_date DATE NOT NULL,
+  tracking_start_date DATE NULL,
+  tracking_end_date DATE NULL,
+  remarks VARCHAR(1000) NULL,
+  completed TINYINT(1) NOT NULL DEFAULT 0,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_property_handover_reports_document (document_id),
+  KEY idx_property_handover_reports_owner_unit (owner_unit_id, completed, report_date),
+  CONSTRAINT fk_property_handover_reports_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
+  CONSTRAINT fk_property_handover_reports_document FOREIGN KEY (document_id) REFERENCES documents (id),
+  CONSTRAINT fk_property_handover_reports_creator FOREIGN KEY (created_by) REFERENCES users (id)
+) ENGINE=InnoDB;

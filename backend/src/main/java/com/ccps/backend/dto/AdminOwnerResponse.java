@@ -6,9 +6,14 @@ import java.util.List;
 
 public record AdminOwnerResponse(
         Long id,
+        String ownerNo,
         String fullName,
         String identityNo,
         String phone,
+        String mobilePhone,
+        String homePhone,
+        String officePhone,
+        String passportNo,
         String email,
         String status,
         List<Property> properties) {

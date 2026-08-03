@@ -1,6 +1,7 @@
 package com.ccps.backend.controller;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -88,6 +89,32 @@ public class AdminFinanceReviewController {
                 .filename(file.originalName(), StandardCharsets.UTF_8).build();
         return ResponseEntity.ok()
                 .contentType(mediaType)
+                .contentLength(file.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(new FileSystemResource(file.path()));
+    }
+
+    @GetMapping("/reviews/{financeRecordId}/document")
+    public ResponseEntity<FileSystemResource> financeDocument(@PathVariable Long financeRecordId,
+            @RequestParam String documentType) {
+        Download file = service.downloadFinancialDocument(financeRecordId, documentType);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(file.originalName(), StandardCharsets.UTF_8).build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(file.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(new FileSystemResource(file.path()));
+    }
+
+    @PostMapping("/reviews/documents/batch")
+    public ResponseEntity<FileSystemResource> financeDocumentsBatch(@RequestParam String documentType,
+            @RequestBody List<Long> financeRecordIds) {
+        Download file = service.downloadFinancialDocuments(financeRecordIds, documentType);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(file.originalName(), StandardCharsets.UTF_8).build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.mimeType()))
                 .contentLength(file.size())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(new FileSystemResource(file.path()));

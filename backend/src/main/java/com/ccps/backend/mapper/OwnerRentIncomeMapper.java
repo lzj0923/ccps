@@ -113,7 +113,12 @@ public interface OwnerRentIncomeMapper {
               rcs.amount_paid,
               rcs.unpaid_amount,
               payment.received_date,
-              rcs.calculated_status AS status,
+              CASE
+                WHEN rcs.amount_paid >= rcs.amount_due THEN 'paid'
+                WHEN rcs.amount_paid > 0 THEN 'partial'
+                WHEN CURRENT_DATE > GREATEST(rcs.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
+                ELSE 'unpaid'
+              END AS status,
               CASE
                 WHEN payment.payment_count IS NULL THEN NULL
                 WHEN payment.rejected_count &gt; 0 THEN 'rejected'
@@ -124,6 +129,7 @@ public interface OwnerRentIncomeMapper {
             JOIN units u ON u.id = rcs.unit_id
             JOIN projects p ON p.id = u.project_id
             JOIN tenants t ON t.id = rcs.tenant_id
+            JOIN leases l ON l.id = rcs.lease_id
             LEFT JOIN (
               SELECT
                 rp.rent_invoice_id,
@@ -151,7 +157,12 @@ public interface OwnerRentIncomeMapper {
               AND p.id = #{projectId}
             </if>
             <if test="status != null and status != ''">
-              AND rcs.calculated_status = #{status}
+              AND (CASE
+                WHEN rcs.amount_paid >= rcs.amount_due THEN 'paid'
+                WHEN rcs.amount_paid > 0 THEN 'partial'
+                WHEN CURRENT_DATE > GREATEST(rcs.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
+                ELSE 'unpaid'
+              END) = #{status}
             </if>
             ORDER BY rcs.due_date DESC, p.name, u.unit_no
             </script>

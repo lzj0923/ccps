@@ -89,6 +89,15 @@ public class MaintenanceAttachmentService {
     @Transactional(readOnly = true)
     public Download download(Long userId, Long documentId) {
         AttachmentFile file = mapper.findAttachmentFile(userId, documentId);
+        return download(file);
+    }
+
+    @Transactional(readOnly = true)
+    public Download downloadAdmin(Long documentId) {
+        return download(mapper.findAdminAttachmentFile(documentId));
+    }
+
+    private Download download(AttachmentFile file) {
         if (file == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Maintenance attachment not found");
         }

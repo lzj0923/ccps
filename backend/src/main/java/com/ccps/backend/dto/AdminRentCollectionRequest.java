@@ -15,4 +15,5 @@ public record AdminRentCollectionRequest(
         @NotBlank @Size(max = 40) String paymentMethod,
         @Size(max = 160) String payerName,
         @Size(max = 120) String paymentReference,
-        @Size(max = 500) String note) { }
+        @Size(max = 500) String note,
+        Boolean convertExcessToPrepayment) { }

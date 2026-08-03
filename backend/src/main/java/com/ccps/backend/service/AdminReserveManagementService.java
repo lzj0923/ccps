@@ -16,6 +16,7 @@ import com.ccps.backend.dto.AdminReserveManagementResponse;
 import com.ccps.backend.dto.AdminReserveSettingsRequest;
 import com.ccps.backend.dto.AdminReserveDirectTopupRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
+import com.ccps.backend.dto.AdminReserveRefundRequest;
 import com.ccps.backend.mapper.AdminReserveManagementMapper;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.SummaryRow;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.SettingsRow;
@@ -93,6 +94,30 @@ public class AdminReserveManagementService {
                         request.amount().setScale(2).toPlainString()));
         mapper.insertDirectTopupAudit(actorId, finance.getId(), accountId, request.amount(), balanceAfter, note);
         return new AdminRecordCreateResponse(finance.getId(), transactionNo);
+    }
+
+    @Transactional
+    public AdminRecordCreateResponse createRefund(Long actorId, Long accountId, AdminReserveRefundRequest request) {
+        if (!PAYMENT_METHODS.contains(request.paymentMethod())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reserve refund payment method");
+        }
+        DirectTopupContext context = mapper.findDirectTopupContext(accountId);
+        if (context == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserve account not found");
+        if (request.amount().compareTo(zero(context.getCurrentBalance())) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund amount cannot exceed the current reserve balance");
+        }
+        String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        String transactionNo = "RRF-ADM-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + "-" + token;
+        DirectTopupRecord refund = new DirectTopupRecord();
+        refund.setTransactionNo(transactionNo); refund.setUnitId(context.getUnitId()); refund.setOwnerId(context.getOwnerId());
+        refund.setAmount(request.amount()); refund.setPaymentDate(LocalDate.now()); refund.setPaymentMethod(request.paymentMethod()); refund.setActorId(actorId);
+        String note = blank(request.note()) ? "業主預備金返還" : request.note().trim();
+        if (mapper.insertReserveRefundFinance(refund) != 1 || refund.getId() == null
+                || mapper.insertReserveRefundCashflow(refund.getId(), context.getUnitId(), context.getOwnerId(), note) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund could not be created");
+        }
+        mapper.insertReserveRefundAudit(actorId, refund.getId(), accountId, request.amount(), note);
+        return new AdminRecordCreateResponse(refund.getId(), transactionNo);
     }
 
     private BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }

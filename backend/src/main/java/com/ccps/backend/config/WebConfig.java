@@ -23,7 +23,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(new AuthInterceptor(portalSessionService))
                 .addPathPatterns("/api/**")
                 .excludePathPatterns("/api/auth/**", "/api/health", "/api/admin/**", "/api/owner/**",
-                        "/api/properties/**");
+                        "/api/properties/**", "/api/public/signatures/**");
     }
 
     @Override

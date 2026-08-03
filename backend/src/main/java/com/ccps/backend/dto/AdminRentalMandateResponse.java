@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record AdminRentalMandateResponse(List<Item> rows, Summary summary, Page page) {
-    public record Item(Long id, String mandateNo, Long ownerUnitId, Long ownerId, String ownerName,
+    public record Item(Long id, String mandateNo, Long ownerUnitId, Long ownerId, String ownerName, String ownerIdentity, String ownerEmail,
             Long projectId, String projectName, String unitNo, String mandateType,
             LocalDate startDate, LocalDate endDate, BigDecimal managementFee,
             BigDecimal commissionPercent, Long responsibleUserId, String responsibleUserName,

@@ -6,8 +6,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,21 +21,26 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.AdminOwnerResponse;
 import com.ccps.backend.dto.AdminOwnerCreateRequest;
+import com.ccps.backend.dto.AdminOwnerUpdateRequest;
 import com.ccps.backend.dto.AdminProjectOption;
 import com.ccps.backend.dto.AdminPropertyCreateRequest;
 import com.ccps.backend.dto.AdminOwnerResponse.Property;
 import com.ccps.backend.dto.AdminPropertyUpdateRequest;
 import com.ccps.backend.dto.AdminOwnerSummaryResponse;
 import com.ccps.backend.dto.AdminPropertyPageResponse;
+import com.ccps.backend.dto.AdminPropertyContractRequest;
+import com.ccps.backend.dto.AdminPropertyContractResponse;
 import com.ccps.backend.mapper.AdminOwnerMapper;
 import com.ccps.backend.mapper.AdminOwnerMapper.OwnerPropertyRow;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewOwner;
+import com.ccps.backend.mapper.AdminOwnerMapper.NewProject;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewOwnerUnit;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewPurchaseContract;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewUnit;
 
 @Service
 public class AdminOwnerService {
+    private static final ObjectMapper JSON = new ObjectMapper();
     private static final String PRE_HANDOVER = "PRE_HANDOVER";
     private static final String OPERATING = "OPERATING";
     private static final String DISPOSED = "DISPOSED";
@@ -57,6 +66,17 @@ public class AdminOwnerService {
             if (row.getOwnerUnitId() != null) owner.properties.add(toProperty(row));
         }
         return owners.values().stream().map(OwnerAccumulator::response).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AdminOwnerResponse findOwner(Long ownerId) {
+        List<OwnerPropertyRow> rows = mapper.findOwnerById(ownerId);
+        if (rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
+        }
+        OwnerAccumulator owner = new OwnerAccumulator(rows.get(0));
+        rows.stream().filter(row -> row.getOwnerUnitId() != null).map(this::toProperty).forEach(owner.properties::add);
+        return owner.response();
     }
 
     @Transactional(readOnly = true)
@@ -88,9 +108,16 @@ public class AdminOwnerService {
 
     private String rentalStatus(OwnerPropertyRow row) {
         if (PRE_HANDOVER.equals(row.getAssetStage())) return "pre_handover";
-        if ("rented".equals(row.getListingStatus())) return "rented";
+        // "occupied" is the legacy value used by existing units. It has the
+        // same business meaning as the newer "rented" value, so both must be
+        // presented as 出租中 in the property list.
+        if (isRentedListingStatus(row.getListingStatus())) return "rented";
         if (serviceList(row.getServices()).contains("RENTAL")) return "pending_rental";
         return "not_for_rent";
+    }
+
+    static boolean isRentedListingStatus(String listingStatus) {
+        return "rented".equalsIgnoreCase(listingStatus) || "occupied".equalsIgnoreCase(listingStatus);
     }
 
     @Transactional
@@ -105,9 +132,14 @@ public class AdminOwnerService {
         }
 
         NewOwner owner = new NewOwner();
+        owner.setOwnerNo(trimToNull(request.ownerNo()));
         owner.setFullName(request.fullName().trim());
         owner.setIdentityNo(identityNo);
-        owner.setPhone(trimToNull(request.phone()));
+        owner.setPhone(trimToNull(request.mobilePhone() != null ? request.mobilePhone() : request.phone()));
+        owner.setMobilePhone(trimToNull(request.mobilePhone()));
+        owner.setHomePhone(trimToNull(request.homePhone()));
+        owner.setOfficePhone(trimToNull(request.officePhone()));
+        owner.setPassportNo(trimToNull(request.passportNo()));
         owner.setEmail(email);
         owner.setStatus(request.status());
         if (accountService != null) {
@@ -120,8 +152,27 @@ public class AdminOwnerService {
         List<OwnerPropertyRow> rows = mapper.findOwnerById(owner.getId());
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Created owner could not be loaded");
         OwnerPropertyRow row = rows.get(0);
-        return new AdminOwnerResponse(row.getOwnerId(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
-                row.getEmail(), row.getOwnerStatus(), List.of());
+        return new AdminOwnerResponse(row.getOwnerId(), row.getOwnerNo(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
+                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getOwnerStatus(), List.of());
+    }
+
+    @Transactional
+    public AdminOwnerResponse updateOwner(Long ownerId, AdminOwnerUpdateRequest request) {
+        String identityNo = trimToNull(request.identityNo());
+        String email = trimToNull(request.email());
+        if (identityNo != null && mapper.countOtherOwnersByIdentityNo(ownerId, identityNo) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner identity number already exists");
+        if (email != null && mapper.countOtherOwnersByEmail(ownerId, email) > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner email already exists");
+        String mobile = trimToNull(request.mobilePhone() != null ? request.mobilePhone() : request.phone());
+        if (mapper.updateOwner(ownerId, trimToNull(request.ownerNo()), request.fullName().trim(), identityNo,
+                mobile, mobile, trimToNull(request.homePhone()), trimToNull(request.officePhone()), trimToNull(request.passportNo()), email, request.status()) != 1)
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
+        List<OwnerPropertyRow> rows = mapper.findOwnerById(ownerId);
+        if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
+        OwnerPropertyRow row = rows.get(0);
+        return new AdminOwnerResponse(row.getOwnerId(), row.getOwnerNo(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
+                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getOwnerStatus(), List.of());
     }
 
     @Transactional(readOnly = true)
@@ -136,17 +187,15 @@ public class AdminOwnerService {
         if (mapper.countActiveOwner(ownerId) != 1) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Active owner not found");
         }
-        if (mapper.countActiveProject(request.projectId()) != 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active project not found");
-        }
+        Long projectId = resolveProjectId(request);
 
         String unitNo = request.unitNo().trim();
-        if (mapper.countUnitNumberExists(request.projectId(), unitNo) > 0) {
+        if (mapper.countUnitNumberExists(projectId, unitNo) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unit number already exists in this project");
         }
 
         NewUnit unit = new NewUnit();
-        unit.setProjectId(request.projectId());
+        unit.setProjectId(projectId);
         unit.setBuilding(trimToNull(request.building()));
         unit.setFloorNo(trimToNull(request.floorNo()));
         unit.setUnitNo(unitNo);
@@ -187,10 +236,105 @@ public class AdminOwnerService {
         return toProperty(requireProperty(ownerId, ownerUnit.getId()));
     }
 
+    private Long resolveProjectId(AdminPropertyCreateRequest request) {
+        if (request.projectId() != null) {
+            if (mapper.countActiveProject(request.projectId()) != 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active project not found");
+            }
+            return request.projectId();
+        }
+
+        String name = trimToNull(request.projectName());
+        if (name == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an existing project or enter a new project name");
+        }
+        AdminProjectOption existing = mapper.findActiveProjectByName(name);
+        if (existing != null) return existing.id();
+
+        String baseCode = name.toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "-")
+                .replaceAll("^-|-$", "");
+        if (baseCode.isBlank()) baseCode = "PROJECT";
+        baseCode = baseCode.substring(0, Math.min(baseCode.length(), 34));
+        String projectCode = baseCode;
+        int suffix = 2;
+        while (mapper.countProjectCode(projectCode) > 0) {
+            String suffixText = "-" + suffix++;
+            projectCode = baseCode.substring(0, Math.min(baseCode.length(), 40 - suffixText.length())) + suffixText;
+        }
+
+        NewProject project = new NewProject();
+        project.setProjectCode(projectCode);
+        project.setName(name);
+        if (mapper.insertProject(project) != 1 || project.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Project could not be created");
+        }
+        return project.getId();
+    }
+
     @Transactional(readOnly = true)
     public Property findProperty(Long ownerId, Long ownerUnitId) {
         OwnerPropertyRow row = requireProperty(ownerId, ownerUnitId);
         return toProperty(row);
+    }
+
+    @Transactional(readOnly = true)
+    public PropertyReference findPropertyReference(Long unitId) {
+        if (unitId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property unit id is required");
+        OwnerPropertyRow row = mapper.findPrimaryOwnerPropertyByUnitId(unitId);
+        if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property unit not found");
+        return new PropertyReference(row.getOwnerId(), row.getOwnerUnitId());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> findPropertyBasicProfile(Long ownerId, Long ownerUnitId) {
+        requireProperty(ownerId, ownerUnitId);
+        String json = mapper.findPropertyBasicProfile(ownerUnitId);
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return JSON.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception error) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Property basic profile is invalid");
+        }
+    }
+
+    @Transactional
+    public Map<String, Object> savePropertyBasicProfile(Long ownerId, Long ownerUnitId,
+            Map<String, Object> profile) {
+        requireProperty(ownerId, ownerUnitId);
+        try {
+            Map<String, Object> normalized = profile == null ? new LinkedHashMap<>()
+                    : JSON.convertValue(profile, new TypeReference<Map<String, Object>>() {});
+            removeDerivedLeaseSnapshots(ownerUnitId, normalized);
+            String json = JSON.writeValueAsString(normalized);
+            mapper.upsertPropertyBasicProfile(ownerUnitId, json);
+            return JSON.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (ResponseStatusException error) {
+            throw error;
+        } catch (Exception error) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unable to save property basic profile");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void removeDerivedLeaseSnapshots(Long ownerUnitId, Map<String, Object> profile) {
+        Object value = profile.get("propertyDetails");
+        if (!(value instanceof Map<?, ?> rawDetails)) return;
+        Map<String, Object> details = (Map<String, Object>) rawDetails;
+        Object linkedValue = details.get("linkedLeaseId");
+        if (linkedValue == null || linkedValue.toString().isBlank()) return;
+        Long leaseId;
+        try {
+            leaseId = Long.valueOf(linkedValue.toString());
+        } catch (NumberFormatException error) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid linked lease");
+        }
+        if (mapper.countPropertyLease(ownerUnitId, leaseId) != 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Linked lease does not belong to this property");
+        }
+        details.put("linkedLeaseId", leaseId);
+        List.of("principalName", "agencyContractNo", "mandateDate", "mandateExpiryDate",
+                "linkedMonthlyRent", "totalRent", "depositAmount").forEach(details::remove);
     }
 
     @Transactional
@@ -227,6 +371,32 @@ public class AdminOwnerService {
         }
         syncLifecycleResources(ownerUnitId, request.assetStage(), request.actualHandoverDate(), services);
         return toProperty(requireProperty(ownerId, ownerUnitId));
+    }
+
+    @Transactional(readOnly = true)
+    public AdminPropertyContractResponse findPropertyContract(Long ownerId, Long ownerUnitId) {
+        requireProperty(ownerId, ownerUnitId);
+        return mapper.findPropertyContract(ownerUnitId);
+    }
+
+    @Transactional
+    public AdminPropertyContractResponse savePropertyContract(Long ownerId, Long ownerUnitId, AdminPropertyContractRequest request) {
+        requireProperty(ownerId, ownerUnitId);
+        AdminPropertyContractResponse current = mapper.findPropertyContract(ownerUnitId);
+        if (current == null) {
+            mapper.insertPropertyContract(ownerUnitId, request.contractNo().trim(), request.purchasePrice(), request.signedDate(), request.handoverDate());
+        } else if (mapper.updatePropertyContract(current.id(), ownerUnitId, request.contractNo().trim(), request.purchasePrice(), request.signedDate(), request.handoverDate()) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Property contract was changed by another request");
+        }
+        return mapper.findPropertyContract(ownerUnitId);
+    }
+
+    @Transactional
+    public void cancelPropertyContract(Long ownerId, Long ownerUnitId) {
+        requireProperty(ownerId, ownerUnitId);
+        AdminPropertyContractResponse current = mapper.findPropertyContract(ownerUnitId);
+        if (current == null || mapper.cancelPropertyContract(current.id(), ownerUnitId) != 1)
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property contract not found");
     }
 
     private OwnerPropertyRow requireProperty(Long ownerId, Long ownerUnitId) {
@@ -317,6 +487,8 @@ public class AdminOwnerService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    public record PropertyReference(Long ownerId, Long ownerUnitId) { }
+
     private static final class OwnerAccumulator {
         private final OwnerPropertyRow owner;
         private final List<Property> properties = new ArrayList<>();
@@ -326,8 +498,8 @@ public class AdminOwnerService {
         }
 
         private AdminOwnerResponse response() {
-            return new AdminOwnerResponse(owner.getOwnerId(), owner.getFullName(), owner.getIdentityNo(), owner.getPhone(),
-                    owner.getEmail(), owner.getOwnerStatus(), List.copyOf(properties));
+            return new AdminOwnerResponse(owner.getOwnerId(), owner.getOwnerNo(), owner.getFullName(), owner.getIdentityNo(), owner.getPhone(),
+                    owner.getMobilePhone(), owner.getHomePhone(), owner.getOfficePhone(), owner.getPassportNo(), owner.getEmail(), owner.getOwnerStatus(), List.copyOf(properties));
         }
     }
 }

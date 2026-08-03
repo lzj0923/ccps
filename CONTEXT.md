@@ -1,69 +1,21 @@
-# CCPS Property Operations
+# CCPS 領域詞彙
 
-CCPS tracks an owner's relationship with a property from purchase before handover through day-to-day operation and eventual disposal.
+## 租房生命週期
 
-## Property lifecycle
+- **当前出租周期**：同一套房产本次从出租准备、委托授权、招租签约到入住交接的一轮出租，不包含历史委托、旧租约或日常收租。
+- **入住交接**：租客开始入住时完成的交接资料、清单和报告；完成后当前出租流程即完成。
+- **日常运营**：入住后的收租、账单、催缴、维修、预备金和提醒，不参与出租流程完成度。
+- **结束租约**：正常租期届满且账单结清、转租或提前退租时结束原租约；结束动作必须保留原租约的审计关系。
+- **退租交接报告**：结束租约后记录房屋、物件、钥匙、费用和问题交接的报告；必须关联被结束的原租约，与入住交接报告分开。
+- **运营月份**：日常运营的月份筛选范围；账单、杂费和收款只在当前租约的该月份内聚合。
+- **运营账单明细**：附加在当月租金账单上的管理费、水电费、维修转收费或其他费用；每条明细保留承担方和来源。
+- **维修工单**：当前租约下的一次报修处理记录；必须绑定当前 lease_id，不能把旧租约的维修记录混入本次运营。
+- **运营月份**：日常运营的月份筛选范围；账单、杂费和收款只在当前租约的该月份内聚合。
+- **运营账单明细**：附加在当月租金账单上的管理费、水电费、维修转收费或其他费用；每条明细保留承担方和来源。
+- **维修工单**：当前租约下的一次报修处理记录；必须绑定当前 lease_id，不能把旧租约的维修记录混入本次运营。
 
-**Property Holding**:
-An owner's time-bounded relationship with one property unit.
-_Avoid_: Property type, owner property
+## 已确认规则
 
-**Pre-handover Holding**:
-A property holding whose unit has not yet been handed over and whose active concern is the purchase payment plan.
-_Avoid_: Unfinished house, payment property
-
-**Operating Holding**:
-A handed-over property holding that may receive operating services and hold reserve, income, expense, lease, and maintenance records.
-_Avoid_: Normal property, owned house
-
-**Disposed Holding**:
-A historical property holding that ended when ownership was transferred or otherwise terminated.
-_Avoid_: Deleted property
-
-## Property services
-
-**Rental Service**:
-An operating holding's active instruction to offer or manage the property for rent; it is distinct from an actual lease.
-_Avoid_: Rental status
-
-**Resale Service**:
-An operating holding's active instruction to offer the property for sale; it may coexist with rental and management services.
-_Avoid_: Sale status
-
-**Management Service**:
-An operating holding's active instruction for day-to-day property management; it may coexist with rental and resale services.
-_Avoid_: Managed property type
-
-## Rental operations
-
-**Rental Mandate**:
-An owner's time-bounded instruction for CCPS to offer or manage one operating holding for rent. A rental mandate may exist before a lease and is distinct from both the Rental Service flag and the actual Lease.
-_Avoid_: Rental status, rental property, management contract (unless the document specifically means the legal contract)
-
-**Lease**:
-A time-bounded agreement between a Tenant and a Unit that defines rent, deposit, payment day and occupancy period.
-_Avoid_: Rental mandate, rental invoice
-
-**Property Handover**:
-The recorded operational acceptance of a Unit, including the date, condition, inventory, keys and responsible parties.
-_Avoid_: Property activation, normal property
-
-## Finance operations
-
-**Cashflow Entry**:
-An auditable income or expense event linked to a Unit, owner, tenant, vendor or reserve account. A cashflow entry is not deleted after posting; corrections are represented by an adjustment or reversal.
-_Avoid_: Payment (a payment is one possible settlement of an entry), expense record when the direction is not known
-
-**Finance Review**:
-The controlled decision that moves a finance record from submitted or pending to approved, rejected, paid or voided, with an actor, timestamp and reason.
-_Avoid_: Confirmation (unless the decision is specifically receipt confirmation)
-
-## Operational closure
-
-**Offboarding Case**:
-A tracked request to pause or end the operational services of a holding, including dependency checks, financial settlement, approvals, notifications and effective date.
-_Avoid_: Delete property, archive property, disposed holding
-
-**Disposed Holding**:
-A historical property holding that ended when ownership was transferred or otherwise terminated. It is a terminal holding state and must not be used for temporary rental suspension.
-_Avoid_: Downlisted property, inactive listing
+1. 出租主流程到入住交接完成即结束，不等待首期收款。
+2. 正常到期、转租、提前退租都必须先结束原租约，再完成退租交接报告。
+3. 收租、转租和提前退租产生的历史资料不能把新的当前出租周期标记为已完成。
