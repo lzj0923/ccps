@@ -12,3 +12,6 @@ backend/config/
 *.log
 .DS_Store
 Thumbs.db
+.pnpm-store/
+.codex-ppt-build/
+scripts/rebuild_db.py

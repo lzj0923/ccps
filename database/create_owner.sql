@@ -1,0 +1,1 @@
+INSERT INTO users (username, email, password_hash, display_name, account_type, status) VALUES ('owner', 'owner@test.com', '$2a$10$t7f520HQJ8ESKbwL9fB3yeqp6dGd00K.kcwUZURNED1qsq07xkmOy', '测试业主', 'OWNER', 'active');

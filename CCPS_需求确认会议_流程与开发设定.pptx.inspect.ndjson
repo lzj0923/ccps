@@ -1,0 +1,364 @@
+{"kind":"deck","id":"pr/9bgvh1","name":"Deck"}
+{"kind":"layout","layoutId":"ff7012ee-23a1-40c2-8a63-f6a230fe0d27","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"7441316d-9695-4f39-8673-1898b0359435","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/8n55s1","slide":1,"title":"CCPS 房产管理系统","textShapes":3}
+{"kind":"textbox","id":"sh/u1krqlov","slide":1,"text":"CCPS 房产管理系统","textPreview":"CCPS 房产管理系统","textChars":11,"textLines":1,"bbox":[42,42,650,54]}
+{"kind":"textbox","id":"sh/h4vq10nm","slide":1,"text":"客户需求确认会议 · 2026/08","textPreview":"客户需求确认会议 · 2026/08","textChars":18,"textLines":1,"bbox":[828,42,410,54]}
+{"kind":"textbox","id":"sh/g329svm1","slide":1,"text":"流程差异\n开发设定\n交付与支持","textPreview":"流程差异 | 开发设定 | 交付与支持","textChars":15,"textLines":3,"bbox":[42,255,1050,390]}
+{"kind":"notes","id":"nt/8n55s1","slide":1,"text":"开场目标：今天不做泛泛演示，而是把流程差异、系统边界和交付支持方式逐项确认。\n标识规则：当前系统＝代码中可核验；待确认＝会议决策；目标方向＝客户已提出但仍需验收。\n\n[Sources]\n- CCPS local source code: frontend/src/components/AdminPropertyProcessWorkspace.vue; AdminTenancyWorkspace.vue; AdminBuildingPaymentWorkspace.vue\n- Customer requirements supplied in the CCPS meeting-preparation conversation"}
+{"kind":"slide","id":"sl/zyxvag","slide":2,"title":"需求确认会议","textShapes":13}
+{"kind":"textbox","id":"sh/bml472xk","slide":2,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/c7elg7y5","slide":2,"text":"今天要确认三类问题","textPreview":"今天要确认三类问题","textChars":9,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/d8nm9cfq","slide":2,"bbox":[42,132,1196,0.01]}
+{"kind":"textbox","id":"sh/2hc3axg3","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[42,184,120,74]}
+{"kind":"textbox","id":"sh/3ilk32ho","slide":2,"text":"流程差异","textPreview":"流程差异","textChars":4,"textLines":1,"bbox":[42,272,330,50]}
+{"kind":"textbox","id":"sh/ojulcny9","slide":2,"text":"现在系统怎么走？\n客户实际怎么做？\n差异优先级是什么？","textPreview":"现在系统怎么走？ | 客户实际怎么做？ | 差异优先级是什么？","textChars":27,"textLines":3,"bbox":[42,340,330,142]}
+{"kind":"textbox","id":"sh/pk3m5sfu","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[455,184,120,74]}
+{"kind":"textbox","id":"sh/eds36dgr","slide":2,"text":"开发设定","textPreview":"开发设定","textChars":4,"textLines":1,"bbox":[455,272,330,50]}
+{"kind":"textbox","id":"sh/fe1kzihc","slide":2,"text":"状态和附件谁说了算？\n权限、账单、日期、审计\n如何统一规则？","textPreview":"状态和附件谁说了算？ | 权限、账单、日期、审计 | 如何统一规则？","textChars":30,"textLines":3,"bbox":[455,340,330,142]}
+{"kind":"textbox","id":"sh/vyxczq90","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[868,184,120,74]}
+{"kind":"textbox","id":"sh/ax4vqlsf","slide":2,"text":"交付与支持","textPreview":"交付与支持","textChars":5,"textLines":1,"bbox":[868,272,330,50]}
+{"kind":"textbox","id":"sh/h0fe10rq","slide":2,"text":"服务器由谁负责？\n如何发布、备份、监控？\n问题如何提交和闭环？","textPreview":"服务器由谁负责？ | 如何发布、备份、监控？ | 问题如何提交和闭环？","textChars":31,"textLines":3,"bbox":[868,340,330,142]}
+{"kind":"shape","id":"sh/wz6dsva5","slide":2,"bbox":[42,564,1156,70]}
+{"kind":"textbox","id":"sh/j2xw3q9w","slide":2,"text":"会议完成标准：每个待确认项都有明确选择、负责人和验收方式。","textPreview":"会议完成标准：每个待确认项都有明确选择、负责人和验收方式。","textChars":29,"textLines":1,"bbox":[66,584,1110,32]}
+{"kind":"textbox","id":"sh/i1ovulsb","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/zyxvag","slide":2,"text":"建议先确认流程事实，再讨论技术方案，最后确认服务器和反馈机制。\n\n[Sources]\n- Customer meeting agenda derived from the user’s three requested sections"}
+{"kind":"slide","id":"sl/s53v83","slide":3,"title":"需求确认会议","textShapes":41}
+{"kind":"textbox","id":"sh/qpwv2t8v","slide":3,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/dsnexo7m","slide":3,"text":"当前租房主流程｜以系统中可操作内容为准","textPreview":"当前租房主流程｜以系统中可操作内容为准","textChars":19,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/cred4jq1","slide":3,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/zepwzyps","slide":3,"bbox":[1000,88,198,28]}
+{"kind":"textbox","id":"sh/ytgv6t87","slide":3,"text":"当前系统 · 会上核验","textPreview":"当前系统 · 会上核验","textChars":11,"textLines":1,"bbox":[1015,93,168,20]}
+{"kind":"shape","id":"sh/lg7e187i","slide":3,"bbox":[227,224,14,0.01]}
+{"kind":"shape","id":"sh/0fyd83qx","slide":3,"bbox":[430,224,14,0.01]}
+{"kind":"shape","id":"sh/fylcnu98","slide":3,"bbox":[633,224,14,0.01]}
+{"kind":"shape","id":"sh/excvup8n","slide":3,"bbox":[836,224,14,0.01]}
+{"kind":"shape","id":"sh/8batwjql","slide":3,"bbox":[1039,224,14,0.01]}
+{"kind":"shape","id":"sh/9cju5or6","slide":3,"bbox":[42,176,181,98]}
+{"kind":"textbox","id":"sh/m9sbu98v","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[56,188,38,24]}
+{"kind":"textbox","id":"sh/na1c3e90","slide":3,"text":"出租委托","textPreview":"出租委托","textChars":4,"textLines":1,"bbox":[56,218,153,42]}
+{"kind":"textbox","id":"sh/wzad03qx","slide":3,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[42,298,181,24]}
+{"kind":"textbox","id":"sh/h0ju9ori","slide":3,"text":"新建委托\n提交审核并启用","textPreview":"新建委托 | 提交审核并启用","textChars":12,"textLines":2,"bbox":[42,327,181,78]}
+{"kind":"textbox","id":"sh/axsvyt8r","slide":3,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[42,422,181,24]}
+{"kind":"textbox","id":"sh/vy1c7y9c","slide":3,"text":"委托记录\n授权文件（如使用）","textPreview":"委托记录 | 授权文件（如使用）","textChars":14,"textLines":2,"bbox":[42,451,181,74]}
+{"kind":"shape","id":"sh/c3qtozqd","slide":3,"bbox":[245,176,181,98]}
+{"kind":"textbox","id":"sh/d4zux4ry","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[259,188,38,24]}
+{"kind":"textbox","id":"sh/d0ra10j2","slide":3,"text":"租客","textPreview":"租客","textChars":2,"textLines":1,"bbox":[259,218,153,42]}
+{"kind":"textbox","id":"sh/szi9svih","slide":3,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[245,298,181,24]}
+{"kind":"textbox","id":"sh/ry9szq1w","slide":3,"text":"新建或选择租客\n补充基础信息","textPreview":"新建或选择租客 | 补充基础信息","textChars":14,"textLines":2,"bbox":[245,327,181,78]}
+{"kind":"textbox","id":"sh/qxgrqlkb","slide":3,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[245,422,181,24]}
+{"kind":"textbox","id":"sh/14ra50jy","slide":3,"text":"租客档案","textPreview":"租客档案","textChars":4,"textLines":1,"bbox":[245,451,181,74]}
+{"kind":"shape","id":"sh/03i9wvid","slide":3,"bbox":[448,176,181,98]}
+{"kind":"textbox","id":"sh/f29s3q1s","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[462,188,38,24]}
+{"kind":"textbox","id":"sh/e10rul07","slide":3,"text":"租约","textPreview":"租约","textChars":2,"textLines":1,"bbox":[462,218,153,42]}
+{"kind":"textbox","id":"sh/psba9kju","slide":3,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[448,298,181,24]}
+{"kind":"textbox","id":"sh/or2t0fip","slide":3,"text":"选房产与租客\n设置日期、租金等","textPreview":"选房产与租客 | 设置日期、租金等","textChars":15,"textLines":2,"bbox":[448,327,181,78]}
+{"kind":"textbox","id":"sh/6dc7uh07","slide":3,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[448,422,181,24]}
+{"kind":"textbox","id":"sh/7e5on2hc","slide":3,"text":"租约记录","textPreview":"租约记录","textChars":4,"textLines":1,"bbox":[448,451,181,74]}
+{"kind":"shape","id":"sh/8fepw7ix","slide":3,"bbox":[651,176,181,98]}
+{"kind":"textbox","id":"sh/t0n6pczi","slide":3,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[665,188,38,24]}
+{"kind":"textbox","id":"sh/u1w7yhg3","slide":3,"text":"合同","textPreview":"合同","textChars":2,"textLines":1,"bbox":[665,218,153,42]}
+{"kind":"textbox","id":"sh/v25ormho","slide":3,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[651,298,181,24]}
+{"kind":"textbox","id":"sh/g3ep0ry9","slide":3,"text":"生成/上传合同\n进入电子签约","textPreview":"生成/上传合同 | 进入电子签约","textChars":14,"textLines":2,"bbox":[651,327,181,78]}
+{"kind":"textbox","id":"sh/h4nqtwzu","slide":3,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[651,422,181,24]}
+{"kind":"textbox","id":"sh/i5w721gz","slide":3,"text":"租赁合同文件\n签约状态","textPreview":"租赁合同文件 | 签约状态","textChars":11,"textLines":2,"bbox":[651,451,181,74]}
+{"kind":"shape","id":"sh/36p8vmhk","slide":3,"bbox":[854,176,181,98]}
+{"kind":"textbox","id":"sh/ra1gz25s","slide":3,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[868,188,38,24]}
+{"kind":"textbox","id":"sh/q9sfqx47","slide":3,"text":"账单收款","textPreview":"账单收款","textChars":4,"textLines":1,"bbox":[868,218,153,42]}
+{"kind":"textbox","id":"sh/dcjy1sni","slide":3,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[854,298,181,24]}
+{"kind":"textbox","id":"sh/sbaxs7md","slide":3,"text":"查看租金账单\n登记收款、财务确认","textPreview":"查看租金账单 | 登记收款、财务确认","textChars":16,"textLines":2,"bbox":[854,327,181,78]}
+{"kind":"textbox","id":"sh/fe1g325o","slide":3,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[854,422,181,24]}
+{"kind":"textbox","id":"sh/edsfux43","slide":3,"text":"付款凭证（可选）\n收据","textPreview":"付款凭证（可选） | 收据","textChars":11,"textLines":2,"bbox":[854,451,181,74]}
+{"kind":"shape","id":"sh/1g3y5cnu","slide":3,"bbox":[1057,176,181,98]}
+{"kind":"textbox","id":"sh/0fuxw7m9","slide":3,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1071,188,38,24]}
+{"kind":"textbox","id":"sh/vihgri5k","slide":3,"text":"续租","textPreview":"续租","textChars":2,"textLines":1,"bbox":[1071,218,153,42]}
+{"kind":"textbox","id":"sh/uh8fid4z","slide":3,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[1057,298,181,24]}
+{"kind":"textbox","id":"sh/knmdsj2x","slide":3,"text":"沿用房产和租客\n新建下一份租约","textPreview":"沿用房产和租客 | 新建下一份租约","textChars":15,"textLines":2,"bbox":[1057,327,181,78]}
+{"kind":"textbox","id":"sh/lofu1o32","slide":3,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[1057,422,181,24]}
+{"kind":"textbox","id":"sh/yl4vq9kr","slide":3,"text":"新租约\n新合同与新账单","textPreview":"新租约 | 新合同与新账单","textChars":11,"textLines":2,"bbox":[1057,451,181,74]}
+{"kind":"shape","id":"sh/zmdczelc","slide":3,"bbox":[42,586,1196,62]}
+{"kind":"textbox","id":"sh/czmdoz2l","slide":3,"text":"重点核验：提前交租、服务费账单、委托状态转换、续租起始日与新账单是否符合实际业务。","textPreview":"重点核验：提前交租、服务费账单、委托状态转换、续租起始日与新账单是否符合实际业务。","textChars":41,"textLines":1,"bbox":[62,604,1156,28]}
+{"kind":"textbox","id":"sh/xkvux436","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/s53v83","slide":3,"text":"不要把附件名称延伸为系统中不存在的文件。电子签约只写签约状态，不写‘签署记录附件’。续租按新建租约理解，开始日为原租约结束日次日。\n\n[Sources]\n- CCPS local source code: AdminRentalMandateWorkspace.vue; AdminTenancyWorkspace.vue; AdminRentCollectionWorkspace.vue; AdminFinanceWorkspace.vue\n- Customer renewal and rent-prepayment requirements supplied in conversation"}
+{"kind":"slide","id":"sl/nvp05m","slide":4,"title":"需求确认会议","textShapes":41}
+{"kind":"textbox","id":"sh/47yt83up","slide":4,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/jmpcfyt4","slide":4,"text":"当前买房主流程｜以系统中可操作内容为准","textPreview":"当前买房主流程｜以系统中可操作内容为准","textChars":19,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/ilgb6tcj","slide":4,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/hk7udoby","slide":4,"bbox":[1000,88,198,28]}
+{"kind":"textbox","id":"sh/wjet4jud","slide":4,"text":"当前系统 · 会上核验","textPreview":"当前系统 · 会上核验","textChars":11,"textLines":1,"bbox":[1015,93,168,20]}
+{"kind":"shape","id":"sh/vi5cbet8","slide":4,"bbox":[227,224,14,0.01]}
+{"kind":"shape","id":"sh/uhwb29cn","slide":4,"bbox":[430,224,14,0.01]}
+{"kind":"shape","id":"sh/1grupsbi","slide":4,"bbox":[633,224,14,0.01]}
+{"kind":"shape","id":"sh/gfitgnux","slide":4,"bbox":[836,224,14,0.01]}
+{"kind":"shape","id":"sh/qhk7214r","slide":4,"bbox":[1039,224,14,0.01]}
+{"kind":"shape","id":"sh/rit8b6lc","slide":4,"bbox":[42,176,181,98]}
+{"kind":"textbox","id":"sh/sj2p4bmh","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[56,188,38,24]}
+{"kind":"textbox","id":"sh/dkbqdw32","slide":4,"text":"项目 / 房产","textPreview":"项目 / 房产","textChars":7,"textLines":1,"bbox":[56,218,153,42]}
+{"kind":"textbox","id":"sh/id07yh4f","slide":4,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[42,298,181,24]}
+{"kind":"textbox","id":"sh/3e987m50","slide":4,"text":"建立项目、房产\n关联业主资料","textPreview":"建立项目、房产 | 关联业主资料","textChars":14,"textLines":2,"bbox":[42,327,181,78]}
+{"kind":"textbox","id":"sh/4f2p0rml","slide":4,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[42,422,181,24]}
+{"kind":"textbox","id":"sh/5gbq9wn6","slide":4,"text":"项目与房产档案","textPreview":"项目与房产档案","textChars":7,"textLines":1,"bbox":[42,451,181,74]}
+{"kind":"shape","id":"sh/294ral4z","slide":4,"bbox":[245,176,181,98]}
+{"kind":"textbox","id":"sh/nad8jql4","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[259,188,38,24]}
+{"kind":"textbox","id":"sh/ju54bilw","slide":4,"text":"购房合同","textPreview":"购房合同","textChars":4,"textLines":1,"bbox":[259,218,153,42]}
+{"kind":"textbox","id":"sh/ytwn2dkb","slide":4,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[245,298,181,24]}
+{"kind":"textbox","id":"sh/lw7md83m","slide":4,"text":"登记合同信息\n上传合同文件","textPreview":"登记合同信息 | 上传合同文件","textChars":13,"textLines":2,"bbox":[245,327,181,78]}
+{"kind":"textbox","id":"sh/kvy54n21","slide":4,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[245,422,181,24]}
+{"kind":"textbox","id":"sh/7yp4fils","slide":4,"text":"购房合同记录\n合同文件","textPreview":"购房合同记录 | 合同文件","textChars":11,"textLines":2,"bbox":[245,451,181,74]}
+{"kind":"shape","id":"sh/6xgn6dk7","slide":4,"bbox":[448,176,181,98]}
+{"kind":"textbox","id":"sh/tk7mhsjy","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[462,188,38,24]}
+{"kind":"textbox","id":"sh/8jy58n2d","slide":4,"text":"付款计划","textPreview":"付款计划","textChars":4,"textLines":1,"bbox":[462,218,153,42]}
+{"kind":"textbox","id":"sh/vmpoj21o","slide":4,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[448,298,181,24]}
+{"kind":"textbox","id":"sh/ulgnaxkj","slide":4,"text":"关联购房合同\n设置分期与到期日","textPreview":"关联购房合同 | 设置分期与到期日","textChars":15,"textLines":2,"bbox":[448,327,181,78]}
+{"kind":"textbox","id":"sh/sril07ih","slide":4,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[448,422,181,24]}
+{"kind":"textbox","id":"sh/dsrmtcz2","slide":4,"text":"付款计划\n分期账单","textPreview":"付款计划 | 分期账单","textChars":9,"textLines":2,"bbox":[448,451,181,74]}
+{"kind":"shape","id":"sh/qp03yx0b","slide":4,"bbox":[651,176,181,98]}
+{"kind":"textbox","id":"sh/rq94r2hw","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[665,188,38,24]}
+{"kind":"textbox","id":"sh/4nilwnil","slide":4,"text":"付款登记","textPreview":"付款登记","textChars":4,"textLines":1,"bbox":[665,218,153,42]}
+{"kind":"textbox","id":"sh/5ormpsz6","slide":4,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[651,298,181,24]}
+{"kind":"textbox","id":"sh/ilg3ud0f","slide":4,"text":"登记房款付款\n补充付款资料","textPreview":"登记房款付款 | 补充付款资料","textChars":13,"textLines":2,"bbox":[651,327,181,78]}
+{"kind":"textbox","id":"sh/3mp4nih0","slide":4,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[651,422,181,24]}
+{"kind":"textbox","id":"sh/gzylsni9","slide":4,"text":"付款记录\n付款凭证（如使用）","textPreview":"付款记录 | 付款凭证（如使用）","textChars":14,"textLines":2,"bbox":[651,451,181,74]}
+{"kind":"shape","id":"sh/hk7mlszu","slide":4,"bbox":[854,176,181,98]}
+{"kind":"textbox","id":"sh/l4nitofm","slide":4,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[868,188,38,24]}
+{"kind":"textbox","id":"sh/k3e10jy1","slide":4,"text":"财务确认","textPreview":"财务确认","textChars":4,"textLines":1,"bbox":[868,218,153,42]}
+{"kind":"textbox","id":"sh/j2l0rexg","slide":4,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[854,298,181,24]}
+{"kind":"textbox","id":"sh/y1cjy9gb","slide":4,"text":"审核付款\n确认入账","textPreview":"审核付款 | 确认入账","textChars":9,"textLines":2,"bbox":[854,327,181,78]}
+{"kind":"textbox","id":"sh/tsn2xofy","slide":4,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[854,422,181,24]}
+{"kind":"textbox","id":"sh/8re14jyd","slide":4,"text":"确认状态\n收据","textPreview":"确认状态 | 收据","textChars":7,"textLines":2,"bbox":[854,451,181,74]}
+{"kind":"shape","id":"sh/7q50vexs","slide":4,"bbox":[1057,176,181,98]}
+{"kind":"textbox","id":"sh/65wj2tg7","slide":4,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1071,188,38,24]}
+{"kind":"textbox","id":"sh/9w3il4fe","slide":4,"text":"交房资料","textPreview":"交房资料","textChars":4,"textLines":1,"bbox":[1071,218,153,42]}
+{"kind":"textbox","id":"sh/ova1szyt","slide":4,"text":"系统操作","textPreview":"系统操作","textChars":4,"textLines":1,"bbox":[1057,298,181,24]}
+{"kind":"textbox","id":"sh/e18fm5wr","slide":4,"text":"维护交房事项\n上传现场资料","textPreview":"维护交房事项 | 上传现场资料","textChars":13,"textLines":2,"bbox":[1057,327,181,78]}
+{"kind":"textbox","id":"sh/z2hgvadc","slide":4,"text":"资料 / 结果","textPreview":"资料 / 结果","textChars":7,"textLines":1,"bbox":[1057,422,181,24]}
+{"kind":"textbox","id":"sh/03qxovex","slide":4,"text":"交房清单\n照片 / 交房资料","textPreview":"交房清单 | 照片 / 交房资料","textChars":14,"textLines":2,"bbox":[1057,451,181,74]}
+{"kind":"shape","id":"sh/14jyx0vi","slide":4,"bbox":[42,586,1196,62]}
+{"kind":"textbox","id":"sh/m5szq5w3","slide":4,"text":"重点核验：合同与付款计划的先后关系、分期生成规则、财务确认权限、交房资料是否影响流程完成。","textPreview":"重点核验：合同与付款计划的先后关系、分期生成规则、财务确认权限、交房资料是否影响流程完成。","textChars":45,"textLines":1,"bbox":[62,604,1156,28]}
+{"kind":"textbox","id":"sh/n61gzad8","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/nvp05m","slide":4,"text":"这里只列出代码中可以核验的购房合同、付款计划、付款凭证、收据、交房清单和照片/资料，不扩展新的交付文件。\n\n[Sources]\n- CCPS local source code: AdminPropertyProcessWorkspace.vue; AdminBuildingPaymentWorkspace.vue; AdminPropertyDetailWorkspace.vue; AdminFinanceWorkspace.vue"}
+{"kind":"slide","id":"sl/lptuqg","slide":5,"title":"需求确认会议","textShapes":27}
+{"kind":"textbox","id":"sh/nmpsvmtc","slide":5,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/onytorux","slide":5,"text":"现状与需求差异｜会议逐项确认","textPreview":"现状与需求差异｜会议逐项确认","textChars":14,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/9o7axwbi","slide":5,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/ap0bq1s3","slide":5,"bbox":[42,168,184,52]}
+{"kind":"textbox","id":"sh/bq9sz6to","slide":5,"text":"议题","textPreview":"议题","textChars":2,"textLines":1,"bbox":[54,181,160,28]}
+{"kind":"shape","id":"sh/writsra9","slide":5,"bbox":[226,168,330,52]}
+{"kind":"textbox","id":"sh/xsra1wbu","slide":5,"text":"当前系统（会上核验）","textPreview":"当前系统（会上核验）","textChars":10,"textLines":1,"bbox":[238,181,306,28]}
+{"kind":"shape","id":"sh/yt0bu1sf","slide":5,"bbox":[556,168,352,52]}
+{"kind":"textbox","id":"sh/ju9s36tk","slide":5,"text":"客户期望 / 已提出方向","textPreview":"客户期望 / 已提出方向","textChars":12,"textLines":1,"bbox":[568,181,328,28]}
+{"kind":"shape","id":"sh/n69on6h4","slide":5,"bbox":[908,168,330,52]}
+{"kind":"textbox","id":"sh/m507u1gj","slide":5,"text":"本次会议需要输出","textPreview":"本次会议需要输出","textChars":8,"textLines":1,"bbox":[920,181,306,28]}
+{"kind":"shape","id":"sh/9sr6pwza","slide":5,"bbox":[42,220,184,83]}
+{"kind":"textbox","id":"sh/oripwbyp","slide":5,"text":"提前交租","textPreview":"提前交租","textChars":4,"textLines":1,"bbox":[54,232,160,60]}
+{"kind":"shape","id":"sh/z2pojmhs","slide":5,"bbox":[226,220,330,83]}
+{"kind":"textbox","id":"sh/e1gnqh0n","slide":5,"text":"按既有租金账单收款；提前交租分配规则需核验","textPreview":"按既有租金账单收款；提前交租分配规则需核验","textChars":21,"textLines":1,"bbox":[238,232,306,60]}
+{"kind":"shape","id":"sh/14r6lwzy","slide":5,"bbox":[556,220,352,83]}
+{"kind":"textbox","id":"sh/03ypsryd","slide":5,"text":"输入金额后自动换算整月 + 最后不足月，并生成对应租金账单","textPreview":"输入金额后自动换算整月 + 最后不足月，并生成对应租金账单","textChars":29,"textLines":1,"bbox":[568,232,328,60]}
+{"kind":"shape","id":"sh/jytovqhc","slide":5,"bbox":[908,220,330,83]}
+{"kind":"textbox","id":"sh/yxk72lgr","slide":5,"text":"分配顺序、提示方式、零头规则、避免未来重复账单","textPreview":"分配顺序、提示方式、零头规则、避免未来重复账单","textChars":23,"textLines":1,"bbox":[920,232,306,60]}
+{"kind":"shape","id":"sh/ut4rup0z","slide":5,"bbox":[42,303,184,83]}
+{"kind":"textbox","id":"sh/vudsnu1k","slide":5,"text":"成交 / 服务费","textPreview":"成交 / 服务费","textChars":8,"textLines":1,"bbox":[54,315,160,60]}
+{"kind":"shape","id":"sh/gv69wfi5","slide":5,"bbox":[226,303,330,83]}
+{"kind":"textbox","id":"sh/hwfapkja","slide":5,"text":"已有服务管理入口；出账触发与重复规则需核验","textPreview":"已有服务管理入口；出账触发与重复规则需核验","textChars":21,"textLines":1,"bbox":[238,315,306,60]}
+{"kind":"shape","id":"sh/ihoryp0v","slide":5,"bbox":[556,303,352,83]}
+{"kind":"textbox","id":"sh/3ixsru1g","slide":5,"text":"支持只收一次或指定多个月份重复收取，并自动生成账单","textPreview":"支持只收一次或指定多个月份重复收取，并自动生成账单","textChars":25,"textLines":1,"bbox":[568,315,328,60]}
+{"kind":"shape","id":"sh/4j690zi1","slide":5,"bbox":[908,303,330,83]}
+{"kind":"textbox","id":"sh/pkfat4jm","slide":5,"text":"收费方式、选择月份、出账时点、改动后的补差/冲销","textPreview":"收费方式、选择月份、出账时点、改动后的补差/冲销","textChars":24,"textLines":1,"bbox":[920,315,306,60]}
+{"kind":"shape","id":"sh/ylkrm50r","slide":5,"bbox":[42,386,184,83]}
+{"kind":"textbox","id":"sh/jmt8fa1c","slide":5,"text":"委托启用","textPreview":"委托启用","textChars":4,"textLines":1,"bbox":[54,398,160,60]}
+{"kind":"shape","id":"sh/1gju183u","slide":5,"bbox":[226,386,330,83]}
+{"kind":"textbox","id":"sh/0fads329","slide":5,"text":"正常路径为草稿→提交→审核→启用；异常状态可能直接拒绝","textPreview":"正常路径为草稿→提交→审核→启用；异常状态可能直接拒绝","textChars":27,"textLines":1,"bbox":[238,398,306,60]}
+{"kind":"shape","id":"sh/ze1czylo","slide":5,"bbox":[556,386,352,83]}
+{"kind":"textbox","id":"sh/ed8vqtk3","slide":5,"text":"不是待审核时，提示是否将草稿直接转为执行中委托","textPreview":"不是待审核时，提示是否将草稿直接转为执行中委托","textChars":23,"textLines":1,"bbox":[568,398,328,60]}
+{"kind":"shape","id":"sh/9kju583q","slide":5,"bbox":[908,386,330,83]}
+{"kind":"textbox","id":"sh/ojadw325","slide":5,"text":"允许转换的状态、二次确认、操作权限、日志","textPreview":"允许转换的状态、二次确认、操作权限、日志","textChars":20,"textLines":1,"bbox":[920,398,306,60]}
+{"kind":"shape","id":"sh/ni1c3yl0","slide":5,"bbox":[42,469,184,83]}
+{"kind":"textbox","id":"sh/mhsvudkf","slide":5,"text":"续租","textPreview":"续租","textChars":2,"textLines":1,"bbox":[54,481,160,60]}
+{"kind":"shape","id":"sh/pozuto3m","slide":5,"bbox":[226,469,330,83]}
+{"kind":"textbox","id":"sh/4nqtkj21","slide":5,"text":"以原房产和租客新建租约；入口和账单需验收","textPreview":"以原房产和租客新建租约；入口和账单需验收","textChars":20,"textLines":1,"bbox":[238,481,306,60]}
+{"kind":"shape","id":"sh/sfypobq1","slide":5,"bbox":[556,469,352,83]}
+{"kind":"textbox","id":"sh/tg76hgrm","slide":5,"text":"新租约开始日＝原租约结束日 + 1 天；原租约不修改","textPreview":"新租约开始日＝原租约结束日 + 1 天；原租约不修改","textChars":26,"textLines":1,"bbox":[568,481,328,60]}
+{"kind":"shape","id":"sh/6dg7ml8v","slide":5,"bbox":[908,469,330,83]}
+{"kind":"textbox","id":"sh/7epof69g","slide":5,"text":"可修改字段、合同生成、账单生成、与旧租约的关联","textPreview":"可修改字段、合同生成、账单生成、与旧租约的关联","textChars":23,"textLines":1,"bbox":[920,481,306,60]}
+{"kind":"shape","id":"sh/kry5kbqp","slide":5,"bbox":[42,552,184,83]}
+{"kind":"textbox","id":"sh/5c76dgra","slide":5,"text":"日常运营","textPreview":"日常运营","textChars":4,"textLines":1,"bbox":[54,564,160,60]}
+{"kind":"shape","id":"sh/ipwni18z","slide":5,"bbox":[226,552,330,83]}
+{"kind":"textbox","id":"sh/jqpob694","slide":5,"text":"功能已对接既有接口，但仍需按场景集中验收","textPreview":"功能已对接既有接口，但仍需按场景集中验收","textChars":20,"textLines":1,"bbox":[238,564,306,60]}
+{"kind":"shape","id":"sh/wne5grqt","slide":5,"bbox":[556,552,352,83]}
+{"kind":"textbox","id":"sh/xon69wre","slide":5,"text":"核心操作在运营中心可完成，错误提示清楚、状态同步一致","textPreview":"核心操作在运营中心可完成，错误提示清楚、状态同步一致","textChars":26,"textLines":1,"bbox":[568,564,328,60]}
+{"kind":"shape","id":"sh/zilojmt0","slide":5,"bbox":[908,552,330,83]}
+{"kind":"textbox","id":"sh/yhc7qhcf","slide":5,"text":"场景清单、接口口径、错误处理、验收负责人和优先级","textPreview":"场景清单、接口口径、错误处理、验收负责人和优先级","textChars":24,"textLines":1,"bbox":[920,564,306,60]}
+{"kind":"textbox","id":"sh/lknqlwb6","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/lptuqg","slide":5,"text":"这一页不要直接宣布‘已完成’。建议现场逐项演示，标记为符合、部分符合、不符合，并记录优先级。\n\n[Sources]\n- Customer requirements supplied in conversation: rent prepayment, recurring service charges, mandate activation, renewal, operations-center API alignment\n- CCPS local source code: the corresponding frontend workspaces and existing backend APIs"}
+{"kind":"slide","id":"sl/klew78","slide":6,"title":"需求确认会议","textShapes":14}
+{"kind":"textbox","id":"sh/y98r690j","slide":6,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/lcza14za","slide":6,"text":"流程何时算完成？｜附件与系统状态的关系","textPreview":"流程何时算完成？｜附件与系统状态的关系","textChars":19,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/0bq98zip","slide":6,"bbox":[42,132,1196,0.01]}
+{"kind":"textbox","id":"sh/bmh8vuh8","slide":6,"text":"这是开发方向的核心选择，会影响页面按钮、权限、提醒、报表和验收。","textPreview":"这是开发方向的核心选择，会影响页面按钮、权限、提醒、报表和验收。","textChars":32,"textLines":1,"bbox":[42,153,1156,34]}
+{"kind":"shape","id":"sh/qlor2p0n","slide":6,"bbox":[42,214,340,338]}
+{"kind":"textbox","id":"sh/dozqx4zy","slide":6,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,235,56,32]}
+{"kind":"textbox","id":"sh/cnq94zid","slide":6,"text":"A｜系统状态驱动","textPreview":"A｜系统状态驱动","textChars":8,"textLines":1,"bbox":[64,282,296,58]}
+{"kind":"textbox","id":"sh/3ix8rahw","slide":6,"text":"完成按钮决定阶段结束\n附件仅作补充资料\n\n优点：操作快、规则简单\n风险：资料可能事后缺失","textPreview":"完成按钮决定阶段结束 | 附件仅作补充资料 |  | 优点：操作快、规则简单 | 风险：资料可能事后缺失","textChars":44,"textLines":5,"bbox":[64,360,296,164]}
+{"kind":"shape","id":"sh/2horyp0b","slide":6,"bbox":[450,214,340,338]}
+{"kind":"textbox","id":"sh/4jm9wjup","slide":6,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[472,235,56,32]}
+{"kind":"textbox","id":"sh/54vq5oba","slide":6,"text":"B｜附件作为硬门槛","textPreview":"B｜附件作为硬门槛","textChars":9,"textLines":1,"bbox":[472,282,296,58]}
+{"kind":"textbox","id":"sh/ih47u9cj","slide":6,"text":"指定附件齐全才能完成\n缺文件时禁止进入下一阶段\n\n优点：资料完整\n风险：业务容易卡住","textPreview":"指定附件齐全才能完成 | 缺文件时禁止进入下一阶段 |  | 优点：资料完整 | 风险：业务容易卡住","textChars":42,"textLines":5,"bbox":[472,360,296,164]}
+{"kind":"shape","id":"sh/jid83et4","slide":6,"bbox":[858,214,340,338]}
+{"kind":"textbox","id":"sh/wfmpsjut","slide":6,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[880,235,56,32]}
+{"kind":"textbox","id":"sh/hgvq1oby","slide":6,"text":"C｜混合制（建议）","textPreview":"C｜混合制（建议）","textChars":9,"textLines":1,"bbox":[880,282,296,58]}
+{"kind":"textbox","id":"sh/udk7q9cn","slide":6,"text":"合同、付款等关键节点设必需资料\n一般运营阶段由系统状态推进\n\n兼顾业务效率和资料完整性\n每类业务可单独配置","textPreview":"合同、付款等关键节点设必需资料 | 一般运营阶段由系统状态推进 |  | 兼顾业务效率和资料完整性 | 每类业务可单独配置","textChars":53,"textLines":5,"bbox":[880,360,296,164]}
+{"kind":"shape","id":"sh/ved8zet8","slide":6,"bbox":[42,580,1156,58]}
+{"kind":"textbox","id":"sh/gb6943ux","slide":6,"text":"会上必须确认：哪些阶段需要哪些必需附件、谁可豁免、补传后是否影响已完成状态。","textPreview":"会上必须确认：哪些阶段需要哪些必需附件、谁可豁免、补传后是否影响已完成状态。","textChars":38,"textLines":1,"bbox":[62,597,1116,26]}
+{"kind":"textbox","id":"sh/1cfqd8bi","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/klew78","slide":6,"text":"建议采用关键节点混合制，但最终由客户确认。关键附件清单必须从现有系统和客户实际资料出发，不现场创造文件名称。\n\n[Sources]\n- System-design decision requested by the user: whether attachments define completion or are supplemental"}
+{"kind":"slide","id":"sl/k6f4qa","slide":7,"title":"需求确认会议","textShapes":19}
+{"kind":"textbox","id":"sh/dsb2xwbe","slide":7,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/qpkjm1sn","slide":7,"text":"除附件外，还需要一次确认的 8 项开发设定","textPreview":"除附件外，还需要一次确认的 8 项开发设定","textChars":21,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/rqtkvmt8","slide":7,"bbox":[42,132,1196,0.01]}
+{"kind":"textbox","id":"sh/4321kruh","slide":7,"text":"01 状态机","textPreview":"01 状态机","textChars":6,"textLines":1,"bbox":[42,188,270,38]}
+{"kind":"shape","id":"sh/5ob2twb2","slide":7,"bbox":[42,240,270,0.01]}
+{"kind":"textbox","id":"sh/i1kjihcr","slide":7,"text":"每个阶段允许从什么状态到什么状态？能否撤回、跳过、重开？","textPreview":"每个阶段允许从什么状态到什么状态？能否撤回、跳过、重开？","textChars":28,"textLines":1,"bbox":[42,264,270,100]}
+{"kind":"textbox","id":"sh/32tkrmtc","slide":7,"text":"02 角色权限","textPreview":"02 角色权限","textChars":7,"textLines":1,"bbox":[351,188,270,38]}
+{"kind":"shape","id":"sh/ozmlwba1","slide":7,"bbox":[351,240,270,0.01]}
+{"kind":"textbox","id":"sh/pkf25gbm","slide":7,"text":"谁能新增、审核、财务确认、修改已完成数据和下载资料？","textPreview":"谁能新增、审核、财务确认、修改已完成数据和下载资料？","textChars":26,"textLines":1,"bbox":[351,264,270,100]}
+{"kind":"textbox","id":"sh/9k3q5snm","slide":7,"text":"03 附件规则","textPreview":"03 附件规则","textChars":7,"textLines":1,"bbox":[660,188,270,38]}
+{"kind":"shape","id":"sh/8jupwn61","slide":7,"bbox":[660,240,270,0.01]}
+{"kind":"textbox","id":"sh/7il8325g","slide":7,"text":"必需/可选、格式大小、版本、替换、删除和豁免如何控制？","textPreview":"必需/可选、格式大小、版本、替换、删除和豁免如何控制？","textChars":27,"textLines":1,"bbox":[660,264,270,100]}
+{"kind":"textbox","id":"sh/mhc7uxob","slide":7,"text":"04 账单生成","textPreview":"04 账单生成","textChars":7,"textLines":1,"bbox":[969,188,270,38]}
+{"kind":"shape","id":"sh/lg3q1snq","slide":7,"bbox":[969,240,270,0.01]}
+{"kind":"textbox","id":"sh/kfapsn65","slide":7,"text":"何时生成、如何避免重复、修改业务数据后如何补差或冲销？","textPreview":"何时生成、如何避免重复、修改业务数据后如何补差或冲销？","textChars":27,"textLines":1,"bbox":[969,264,270,100]}
+{"kind":"textbox","id":"sh/ze18zi5k","slide":7,"text":"05 日期金额","textPreview":"05 日期金额","textChars":7,"textLines":1,"bbox":[42,402,270,38]}
+{"kind":"shape","id":"sh/yds7qdoz","slide":7,"bbox":[42,454,270,0.01]}
+{"kind":"textbox","id":"sh/5cnqdcnu","slide":7,"text":"跨月、最后不足月、舍入、时区、续租首日等统一采用什么规则？","textPreview":"跨月、最后不足月、舍入、时区、续租首日等统一采用什么规则？","textChars":29,"textLines":1,"bbox":[42,478,270,100]}
+{"kind":"textbox","id":"sh/4be94r69","slide":7,"text":"06 修改与审计","textPreview":"06 修改与审计","textChars":8,"textLines":1,"bbox":[351,402,270,38]}
+{"kind":"shape","id":"sh/4fmt0vul","slide":7,"bbox":[351,454,270,0.01]}
+{"kind":"textbox","id":"sh/pgva90v6","slide":7,"text":"已审核/已入账数据是否可改？需要原因、审批和操作日志吗？","textPreview":"已审核/已入账数据是否可改？需要原因、审批和操作日志吗？","textChars":28,"textLines":1,"bbox":[351,478,270,100]}
+{"kind":"textbox","id":"sh/2d4bylcf","slide":7,"text":"07 提醒通知","textPreview":"07 提醒通知","textChars":7,"textLines":1,"bbox":[660,402,270,38]}
+{"kind":"shape","id":"sh/3eds7qd0","slide":7,"bbox":[660,454,270,0.01]}
+{"kind":"textbox","id":"sh/gr29wbu9","slide":7,"text":"到期、欠款、待审核、资料缺失，通过什么渠道提醒？","textPreview":"到期、欠款、待审核、资料缺失，通过什么渠道提醒？","textChars":24,"textLines":1,"bbox":[660,478,270,100]}
+{"kind":"textbox","id":"sh/hsva5gvu","slide":7,"text":"08 验收数据","textPreview":"08 验收数据","textChars":7,"textLines":1,"bbox":[969,402,270,38]}
+{"kind":"shape","id":"sh/upkrulwj","slide":7,"bbox":[969,454,270,0.01]}
+{"kind":"textbox","id":"sh/fqts36d4","slide":7,"text":"用哪些测试账号、房产、合同、账单和边界场景完成验收？","textPreview":"用哪些测试账号、房产、合同、账单和边界场景完成验收？","textChars":26,"textLines":1,"bbox":[969,478,270,100]}
+{"kind":"textbox","id":"sh/sn29sbed","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/k6f4qa","slide":7,"text":"把每一项写入会议纪要；不能只确认页面长相，还要确认状态、权限、账单和异常处理口径。\n\n[Sources]\n- System-design decision checklist synthesized from CCPS current workflows and the user’s meeting objective"}
+{"kind":"slide","id":"sl/i349rw","slide":8,"title":"需求确认会议","textShapes":8}
+{"kind":"textbox","id":"sh/a9w3ap07","slide":8,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/xwn25kji","slide":8,"text":"账单规则专项｜提前交租与服务收费","textPreview":"账单规则专项｜提前交租与服务收费","textChars":16,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/cvelcfix","slide":8,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/zy5k7u1o","slide":8,"bbox":[42,170,566,350]}
+{"kind":"textbox","id":"sh/yxw3ep03","slide":8,"text":"提前交租＝只处理租金","textPreview":"提前交租＝只处理租金","textChars":10,"textLines":1,"bbox":[68,194,514,44]}
+{"kind":"textbox","id":"sh/l07294ju","slide":8,"text":"1  输入实收金额\n2  按租期和月租自动分配\n3  显示：覆盖几个月 + 最后一个月金额\n4  自动生成/匹配租金账单\n5  后续生成任务跳过已覆盖月份","textPreview":"1  输入实收金额 | 2  按租期和月租自动分配 | 3  显示：覆盖几个月 + 最后一个月金额 | 4  自动生成/匹配租金账单 | 5  后续生成任务跳过已覆盖月份","textChars":77,"textLines":5,"bbox":[68,262,514,205]}
+{"kind":"shape","id":"sh/kzelgzi9","slide":8,"bbox":[630,170,568,350]}
+{"kind":"textbox","id":"sh/72pkbu1k","slide":8,"text":"服务收费＝按服务规则出账","textPreview":"服务收费＝按服务规则出账","textChars":12,"textLines":1,"bbox":[656,194,516,44]}
+{"kind":"textbox","id":"sh/m1g3i90f","slide":8,"text":"1  每项服务设置金额\n2  选择只收一次或指定月份重复收取\n3  一次性收费也明确归属月份\n4  按选择生成对应服务账单\n5  修改规则时定义补差、冲销和历史保留","textPreview":"1  每项服务设置金额 | 2  选择只收一次或指定月份重复收取 | 3  一次性收费也明确归属月份 | 4  按选择生成对应服务账单 | 5  修改规则时定义补差、冲销和历史保留","textChars":82,"textLines":5,"bbox":[656,262,516,205]}
+{"kind":"shape","id":"sh/sfi9gbqp","slide":8,"bbox":[42,552,1156,86]}
+{"kind":"textbox","id":"sh/tgra9gra","slide":8,"text":"共同底线：同一租约 + 费用类型 + 账期必须有唯一识别，重复点击、定时任务和续租都不能重复出账。","textPreview":"共同底线：同一租约 + 费用类型 + 账期必须有唯一识别，重复点击、定时任务和续租都不能重复出账。","textChars":49,"textLines":1,"bbox":[66,576,1110,40]}
+{"kind":"textbox","id":"sh/6d0re18j","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/i349rw","slide":8,"text":"会上补充确认：分配从最早未结清月份还是指定月份开始；最后不足月如何舍入；已生成账单是否允许删除或只能冲销。\n\n[Sources]\n- Customer requirements supplied in conversation: rent-only prepayment allocation and one-time/recurring selected-month service charges"}
+{"kind":"slide","id":"sl/d3ut3k","slide":9,"title":"需求确认会议","textShapes":13}
+{"kind":"textbox","id":"sh/w7e1kzqp","slide":9,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/bm50bu94","slide":9,"text":"职责边界与验收｜谁负责什么","textPreview":"职责边界与验收｜谁负责什么","textChars":13,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/alwjip8z","slide":9,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/9kni94re","slide":9,"bbox":[42,180,340,360]}
+{"kind":"textbox","id":"sh/oje1gzqt","slide":9,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[66,204,60,35]}
+{"kind":"textbox","id":"sh/ni507u98","slide":9,"text":"系统负责","textPreview":"系统负责","textChars":4,"textLines":1,"bbox":[66,256,292,48]}
+{"kind":"textbox","id":"sh/mhwjep8n","slide":9,"text":"状态与权限控制\n账单生成与去重\n资料上传与关联\n异常提示与操作日志\n可验证的查询与报表","textPreview":"状态与权限控制 | 账单生成与去重 | 资料上传与关联 | 异常提示与操作日志 | 可验证的查询与报表","textChars":43,"textLines":5,"bbox":[66,330,292,176]}
+{"kind":"shape","id":"sh/1g3i5kr2","slide":9,"bbox":[450,180,340,360]}
+{"kind":"textbox","id":"sh/0fuhcfqh","slide":9,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[474,204,60,35]}
+{"kind":"textbox","id":"sh/ydgrax8n","slide":9,"text":"业务人员负责","textPreview":"业务人员负责","textChars":6,"textLines":1,"bbox":[474,256,292,48]}
+{"kind":"textbox","id":"sh/zeps32p8","slide":9,"text":"录入真实完整信息\n选择正确业务规则\n上传约定资料\n按权限完成审核确认\n发现异常及时提交","textPreview":"录入真实完整信息 | 选择正确业务规则 | 上传约定资料 | 按权限完成审核确认 | 发现异常及时提交","textChars":43,"textLines":5,"bbox":[474,330,292,176]}
+{"kind":"shape","id":"sh/kfytc7qt","slide":9,"bbox":[858,180,340,360]}
+{"kind":"textbox","id":"sh/lg7a5c7e","slide":9,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[882,204,60,35]}
+{"kind":"textbox","id":"sh/a9wr6x8b","slide":9,"text":"客户验收负责","textPreview":"客户验收负责","textChars":6,"textLines":1,"bbox":[882,256,292,48]}
+{"kind":"textbox","id":"sh/ba5szi9w","slide":9,"text":"提供实际业务场景\n确认规则与优先级\n在验收环境走完整流程\n确认数据与文件结果\n指定最终签收负责人","textPreview":"提供实际业务场景 | 确认规则与优先级 | 在验收环境走完整流程 | 确认数据与文件结果 | 指定最终签收负责人","textChars":48,"textLines":5,"bbox":[882,330,292,176]}
+{"kind":"shape","id":"sh/cbe98nqh","slide":9,"bbox":[42,570,1156,68]}
+{"kind":"textbox","id":"sh/xc7a1s72","slide":9,"text":"建议验收口径：一个真实案例从建立资料到财务确认/交房或续租完整走通，结果、状态、账单和已约定附件都一致。","textPreview":"建议验收口径：一个真实案例从建立资料到财务确认/交房或续租完整走通，结果、状态、账单和已约定附件都一致。","textChars":52,"textLines":1,"bbox":[64,590,1112,32]}
+{"kind":"textbox","id":"sh/2lwr2d8f","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/d3ut3k","slide":9,"text":"如果客户要求系统自动判断业务真实性，需要另外确认数据来源和责任；系统默认只对规则和录入结果负责。\n\n[Sources]\n- Acceptance-boundary proposal synthesized for the CCPS customer meeting"}
+{"kind":"slide","id":"sl/5a1rd9","slide":10,"title":"需求确认会议","textShapes":13}
+{"kind":"textbox","id":"sh/cnm1gbux","slide":10,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/bmdkn6tc","slide":10,"text":"服务器、发布与数据安全｜会议确认清单","textPreview":"服务器、发布与数据安全｜会议确认清单","textChars":18,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/al4je1cr","slide":10,"bbox":[42,132,1196,0.01]}
+{"kind":"textbox","id":"sh/pkv2lwb6","slide":10,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[42,176,62,38]}
+{"kind":"textbox","id":"sh/oj21cbul","slide":10,"text":"部署归属","textPreview":"部署归属","textChars":4,"textLines":1,"bbox":[42,230,340,48]}
+{"kind":"shape","id":"sh/nitkj6t0","slide":10,"bbox":[42,300,340,0.01]}
+{"kind":"textbox","id":"sh/2hkja1cf","slide":10,"text":"客户服务器还是供应方托管？\n生产、测试是否分环境？\n域名、SSL、网络白名单谁提供？\n管理员与数据库权限由谁保管？","textPreview":"客户服务器还是供应方托管？ | 生产、测试是否分环境？ | 域名、SSL、网络白名单谁提供？ | 管理员与数据库权限由谁保管？","textChars":57,"textLines":4,"bbox":[42,332,340,214]}
+{"kind":"textbox","id":"sh/9gf2x0ba","slide":10,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[450,176,62,38]}
+{"kind":"textbox","id":"sh/8f6lovup","slide":10,"text":"数据与备份","textPreview":"数据与备份","textChars":5,"textLines":1,"bbox":[450,230,340,48]}
+{"kind":"shape","id":"sh/ul8zqtsf","slide":10,"bbox":[450,300,340,0.01]}
+{"kind":"textbox","id":"sh/vmh0zyt0","slide":10,"text":"数据库和附件存储在哪里？\n备份频率与保留时长？\n谁定期验证备份可恢复？\n故障时允许丢失多久数据？","textPreview":"数据库和附件存储在哪里？ | 备份频率与保留时长？ | 谁定期验证备份可恢复？ | 故障时允许丢失多久数据？","textChars":48,"textLines":4,"bbox":[450,332,340,214]}
+{"kind":"textbox","id":"sh/g7qhs3al","slide":10,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[858,176,62,38]}
+{"kind":"textbox","id":"sh/h8zi1ob6","slide":10,"text":"发布与运维","textPreview":"发布与运维","textChars":5,"textLines":1,"bbox":[858,230,340,48]}
+{"kind":"shape","id":"sh/6hozm9sj","slide":10,"bbox":[858,300,340,0.01]}
+{"kind":"textbox","id":"sh/7ih0veto","slide":10,"text":"发布窗口与停机通知？\n日志、监控和告警由谁查看？\n紧急修复如何审批？\n版本回退和灾难恢复怎么执行？","textPreview":"发布窗口与停机通知？ | 日志、监控和告警由谁查看？ | 紧急修复如何审批？ | 版本回退和灾难恢复怎么执行？","textChars":49,"textLines":4,"bbox":[858,332,340,214]}
+{"kind":"shape","id":"sh/8jqhoja9","slide":10,"bbox":[42,582,1156,58]}
+{"kind":"textbox","id":"sh/tkzixobu","slide":10,"text":"最低输出：部署架构、账号权限表、备份恢复方案、发布流程、联系人与应急升级路径。","textPreview":"最低输出：部署架构、账号权限表、备份恢复方案、发布流程、联系人与应急升级路径。","textChars":39,"textLines":1,"bbox":[64,599,1112,28]}
+{"kind":"textbox","id":"sh/qdsjydsn","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/5a1rd9","slide":10,"text":"这一页全部是待确认，不假设客户已有服务器，也不假设由开发方长期托管。重点确认所有权、访问权和恢复责任。\n\n[Sources]\n- Infrastructure and delivery discussion requested by the user"}
+{"kind":"slide","id":"sl/8i8lhm","slide":11,"title":"需求确认会议","textShapes":13}
+{"kind":"textbox","id":"sh/u9k7yt8j","slide":11,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/hcvqt87u","slide":11,"text":"问题反馈闭环｜提交 → 定级 → 修复与发布","textPreview":"问题反馈闭环｜提交 → 定级 → 修复与发布","textChars":22,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/gbmp03q9","slide":11,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/3ed8vip0","slide":11,"bbox":[74,302,1110,0.01]}
+{"kind":"textbox","id":"sh/2d472d8f","slide":11,"text":"步骤 1","textPreview":"步骤 1","textChars":4,"textLines":1,"bbox":[74,244,180,26]}
+{"kind":"shape","id":"sh/p0vqx876","slide":11,"bbox":[74,294,18,18]}
+{"kind":"textbox","id":"sh/ofmp43ql","slide":11,"text":"统一提交","textPreview":"统一提交","textChars":4,"textLines":1,"bbox":[74,350,330,44]}
+{"kind":"textbox","id":"sh/jitojepw","slide":11,"text":"页面与操作步骤\n截图/视频与发生时间\n账号、房产或账单编号","textPreview":"页面与操作步骤 | 截图/视频与发生时间 | 账号、房产或账单编号","textChars":29,"textLines":3,"bbox":[74,420,330,136]}
+{"kind":"textbox","id":"sh/ih07q98b","slide":11,"text":"步骤 2","textPreview":"步骤 2","textChars":4,"textLines":1,"bbox":[456,244,180,26]}
+{"kind":"shape","id":"sh/gr6don2d","slide":11,"bbox":[456,294,18,18]}
+{"kind":"textbox","id":"sh/hsfuhsjy","slide":11,"text":"确认与定级","textPreview":"确认与定级","textChars":5,"textLines":1,"bbox":[456,350,330,44]}
+{"kind":"textbox","id":"sh/u5ovmxk7","slide":11,"text":"能否复现、影响范围\nP0 / P1 / P2 / P3\n负责人和预计处理时间","textPreview":"能否复现、影响范围 | P0 / P1 / P2 / P3 | 负责人和预计处理时间","textChars":38,"textLines":3,"bbox":[456,420,330,136]}
+{"kind":"textbox","id":"sh/vqxcf21s","slide":11,"text":"步骤 3","textPreview":"步骤 3","textChars":4,"textLines":1,"bbox":[838,244,180,26]}
+{"kind":"shape","id":"sh/4vqds729","slide":11,"bbox":[838,294,18,18]}
+{"kind":"textbox","id":"sh/5wzelcju","slide":11,"text":"验证后闭环","textPreview":"验证后闭环","textChars":5,"textLines":1,"bbox":[838,350,330,44]}
+{"kind":"textbox","id":"sh/itovqxkj","slide":11,"text":"测试环境验证\n客户确认结果\n记录版本、发布时间和结论","textPreview":"测试环境验证 | 客户确认结果 | 记录版本、发布时间和结论","textChars":26,"textLines":3,"bbox":[838,420,330,136]}
+{"kind":"shape","id":"sh/3uxcj214","slide":11,"bbox":[42,586,1156,54]}
+{"kind":"textbox","id":"sh/kzmdg325","slide":11,"text":"待确认：唯一反馈入口、问题等级、响应时限、紧急联系人、客户验收和关闭条件。","textPreview":"待确认：唯一反馈入口、问题等级、响应时限、紧急联系人、客户验收和关闭条件。","textChars":37,"textLines":1,"bbox":[62,601,1116,26]}
+{"kind":"textbox","id":"sh/l0vu98jq","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/8i8lhm","slide":11,"text":"会上确认唯一反馈入口，避免微信群、口头、电话同时存在却无人跟进。还需确认各等级响应时限和紧急联系人。\n\n[Sources]\n- Support-process proposal synthesized for the CCPS customer meeting"}
+{"kind":"slide","id":"sl/s8l3ni","slide":12,"title":"需求确认会议","textShapes":28}
+{"kind":"textbox","id":"sh/7qx8jyhk","slide":12,"text":"需求确认会议","textPreview":"需求确认会议","textChars":6,"textLines":1,"bbox":[42,27,300,28]}
+{"kind":"textbox","id":"sh/8r6pc3i5","slide":12,"text":"会议结束前必须形成的决定","textPreview":"会议结束前必须形成的决定","textChars":12,"textLines":1,"bbox":[42,57,1196,62]}
+{"kind":"shape","id":"sh/tsfql8zq","slide":12,"bbox":[42,132,1196,0.01]}
+{"kind":"shape","id":"sh/uto7ed0b","slide":12,"bbox":[42,174,42,42]}
+{"kind":"textbox","id":"sh/vux8nihw","slide":12,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[42,184,42,20]}
+{"kind":"textbox","id":"sh/gv69gnih","slide":12,"text":"租房与买房现状流程已核对","textPreview":"租房与买房现状流程已核对","textChars":12,"textLines":1,"bbox":[104,170,500,34]}
+{"kind":"textbox","id":"sh/hwfqpszm","slide":12,"text":"符合 / 部分符合 / 不符合","textPreview":"符合 / 部分符合 / 不符合","textChars":15,"textLines":1,"bbox":[104,213,500,32]}
+{"kind":"shape","id":"sh/ix8rix07","slide":12,"bbox":[42,276,42,42]}
+{"kind":"textbox","id":"sh/3ih8rihs","slide":12,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[42,286,42,20]}
+{"kind":"textbox","id":"sh/zihs3ydk","slide":12,"text":"差异清单与优先级已确认","textPreview":"差异清单与优先级已确认","textChars":11,"textLines":1,"bbox":[104,272,500,34]}
+{"kind":"textbox","id":"sh/eh8rutwz","slide":12,"text":"必须 / 应该 / 可延后","textPreview":"必须 / 应该 / 可延后","textChars":13,"textLines":1,"bbox":[104,315,500,32]}
+{"kind":"shape","id":"sh/1kza5ovq","slide":12,"bbox":[42,378,42,42]}
+{"kind":"textbox","id":"sh/0jq9w3e5","slide":12,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[42,388,42,20]}
+{"kind":"textbox","id":"sh/rehszedo","slide":12,"text":"流程完成与附件规则已确认","textPreview":"流程完成与附件规则已确认","textChars":12,"textLines":1,"bbox":[104,374,500,34]}
+{"kind":"textbox","id":"sh/qdorq9w3","slide":12,"text":"状态驱动 / 附件驱动 / 混合制","textPreview":"状态驱动 / 附件驱动 / 混合制","textChars":17,"textLines":1,"bbox":[104,417,500,32]}
+{"kind":"shape","id":"sh/dgza1ovu","slide":12,"bbox":[42,480,42,42]}
+{"kind":"textbox","id":"sh/cfq9sje9","slide":12,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[42,490,42,20]}
+{"kind":"textbox","id":"sh/ba1sbids","slide":12,"text":"角色权限与修改审计已确认","textPreview":"角色权限与修改审计已确认","textChars":12,"textLines":1,"bbox":[104,476,500,34]}
+{"kind":"textbox","id":"sh/a9sb2dw7","slide":12,"text":"负责人 + 可操作范围","textPreview":"负责人 + 可操作范围","textChars":11,"textLines":1,"bbox":[104,519,500,32]}
+{"kind":"shape","id":"sh/6hw3q1kr","slide":12,"bbox":[650,174,42,42]}
+{"kind":"textbox","id":"sh/7ip4j61c","slide":12,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[650,184,42,20]}
+{"kind":"textbox","id":"sh/sjylsb2x","slide":12,"text":"租金与服务费账单规则已确认","textPreview":"租金与服务费账单规则已确认","textChars":13,"textLines":1,"bbox":[712,170,500,34]}
+{"kind":"textbox","id":"sh/tk7mlgji","slide":12,"text":"生成、分配、去重、补差/冲销","textPreview":"生成、分配、去重、补差/冲销","textChars":14,"textLines":1,"bbox":[712,213,500,32]}
+{"kind":"shape","id":"sh/elg3ulkn","slide":12,"bbox":[650,276,42,42]}
+{"kind":"textbox","id":"sh/fmp4nq18","slide":12,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[650,286,42,20]}
+{"kind":"textbox","id":"sh/g7y5wv2t","slide":12,"text":"服务器和数据责任已确认","textPreview":"服务器和数据责任已确认","textChars":11,"textLines":1,"bbox":[712,272,500,34]}
+{"kind":"textbox","id":"sh/187mpgje","slide":12,"text":"环境、账号、备份、恢复","textPreview":"环境、账号、备份、恢复","textChars":11,"textLines":1,"bbox":[712,315,500,32]}
+{"kind":"shape","id":"sh/apc3ihkj","slide":12,"bbox":[650,378,42,42]}
+{"kind":"textbox","id":"sh/vql4bm14","slide":12,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[650,388,42,20]}
+{"kind":"textbox","id":"sh/d4b6hk3m","slide":12,"text":"发布与问题反馈机制已确认","textPreview":"发布与问题反馈机制已确认","textChars":12,"textLines":1,"bbox":[712,374,500,34]}
+{"kind":"textbox","id":"sh/c32pofm1","slide":12,"text":"渠道、分级、时限、联系人","textPreview":"渠道、分级、时限、联系人","textChars":12,"textLines":1,"bbox":[712,417,500,32]}
+{"kind":"shape","id":"sh/b2tofulg","slide":12,"bbox":[650,480,42,42]}
+{"kind":"textbox","id":"sh/q1k7mp4v","slide":12,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[650,490,42,20]}
+{"kind":"textbox","id":"sh/l8b6l43y","slide":12,"text":"验收案例与签收人已确认","textPreview":"验收案例与签收人已确认","textChars":11,"textLines":1,"bbox":[712,476,500,34]}
+{"kind":"textbox","id":"sh/072pszmd","slide":12,"text":"测试数据、日期、最终负责人","textPreview":"测试数据、日期、最终负责人","textChars":13,"textLines":1,"bbox":[712,519,500,32]}
+{"kind":"shape","id":"sh/z6tojuls","slide":12,"bbox":[42,602,1156,42]}
+{"kind":"textbox","id":"sh/y5k7qp47","slide":12,"text":"记录格式：决定事项 + 负责人 + 完成日期 + 验收证据。","textPreview":"记录格式：决定事项 + 负责人 + 完成日期 + 验收证据。","textChars":30,"textLines":1,"bbox":[62,612,1116,22]}
+{"kind":"textbox","id":"sh/1cr6903e","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1180,674,58,20]}
+{"kind":"notes","id":"nt/s8l3ni","slide":12,"text":"建议逐项点名确认，并把未决事项明确成会后任务，不用‘后面再看看’作为结论。\n\n[Sources]\n- Meeting decision checklist synthesized from slides 3–11"}
+{"kind":"slide","id":"sl/rtchbf","slide":13,"title":"会后输出","textShapes":3}
+{"kind":"textbox","id":"sh/50jqh8j6","slide":13,"text":"会后输出","textPreview":"会后输出","textChars":4,"textLines":1,"bbox":[42,42,240,54]}
+{"kind":"textbox","id":"sh/ixsrmt0v","slide":13,"text":"把分歧变成\n可执行约定","textPreview":"把分歧变成 | 可执行约定","textChars":11,"textLines":2,"bbox":[42,176,1050,300]}
+{"kind":"textbox","id":"sh/jy18fy10","slide":13,"text":"流程差异清单\n开发设定确认表\n服务器与支持方案","textPreview":"流程差异清单 | 开发设定确认表 | 服务器与支持方案","textChars":23,"textLines":3,"bbox":[42,526,460,120]}
+{"kind":"notes","id":"nt/rtchbf","slide":13,"text":"结束时确认会后文件由谁整理、谁确认，以及下一次检查时间。\n\n[Sources]\n- Closing summary derived from the meeting objectives in this deck"}
