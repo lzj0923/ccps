@@ -129,6 +129,14 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_property_expense", "confirmed", note);
             return;
         }
+        if ("security_deposit".equals(mapper.lockRecordType(financeRecordId))) {
+            if (mapper.confirmSecurityDeposit(financeRecordId, reviewerId) != 1
+                    || mapper.confirmSecurityDepositEntry(financeRecordId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit has already been reviewed");
+            }
+            mapper.insertAudit(reviewerId, financeRecordId, "confirm_security_deposit", "confirmed", note);
+            return;
+        }
         ReviewActionContext context = requirePendingReview(financeRecordId);
         if (context.getProofDocumentId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment proof is required before confirmation");
@@ -170,6 +178,14 @@ public class AdminFinanceReviewService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense has already been reviewed");
             }
             mapper.insertAudit(reviewerId, financeRecordId, "reject_property_expense", "rejected", reviewNote);
+            return;
+        }
+        if ("security_deposit".equals(mapper.lockRecordType(financeRecordId))) {
+            if (mapper.rejectSecurityDeposit(financeRecordId, reviewerId) != 1
+                    || mapper.rejectSecurityDepositEntry(financeRecordId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit has already been reviewed");
+            }
+            mapper.insertAudit(reviewerId, financeRecordId, "reject_security_deposit", "rejected", reviewNote);
             return;
         }
         ReviewActionContext context = requirePendingReview(financeRecordId);

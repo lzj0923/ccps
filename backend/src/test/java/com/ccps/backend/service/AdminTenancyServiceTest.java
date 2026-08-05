@@ -31,6 +31,7 @@ import com.ccps.backend.mapper.AdminTenancyMapper;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseContractContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseChangeContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewLease;
+import com.ccps.backend.mapper.AdminTenancyMapper.NewSecurityDeposit;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewContractDocument;
 import com.ccps.backend.mapper.AdminTenancyMapper.ContractFile;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentProofContext;
@@ -58,6 +59,7 @@ class AdminTenancyServiceTest {
         when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
             AdminTenancyMapper.NewLease lease = invocation.getArgument(0); lease.setId(47L); return 1;
         });
+        stubSecurityDepositWrites();
 
         service.createLease(new AdminLeaseCreateRequest(5L, 8L, LocalDate.parse("2026-07-01"),
                 LocalDate.parse("2027-06-30"), new BigDecimal("3000.00"), new BigDecimal("6000.00"), 5, "daily_prorated", 42L));
@@ -65,6 +67,12 @@ class AdminTenancyServiceTest {
         ArgumentCaptor<NewLease> captor = ArgumentCaptor.forClass(NewLease.class);
         verify(mapper).insertLease(captor.capture());
         assertThat(captor.getValue().getRentalMandateId()).isEqualTo(42L);
+        ArgumentCaptor<NewSecurityDeposit> depositCaptor = ArgumentCaptor.forClass(NewSecurityDeposit.class);
+        verify(mapper).insertSecurityDepositFinance(depositCaptor.capture());
+        assertThat(depositCaptor.getValue().getLeaseId()).isEqualTo(47L);
+        assertThat(depositCaptor.getValue().getAmount()).isEqualByComparingTo("6000.00");
+        verify(mapper).insertSecurityDepositEntry(org.mockito.ArgumentMatchers.any(NewSecurityDeposit.class));
+        verify(mapper).insertSecurityDepositCashflow(org.mockito.ArgumentMatchers.any(NewSecurityDeposit.class));
     }
 
     @Test void createsCurrentMonthInvoiceForActiveLease() {
@@ -75,6 +83,7 @@ class AdminTenancyServiceTest {
         when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
             AdminTenancyMapper.NewLease lease = invocation.getArgument(0); lease.setId(44L); return 1;
         });
+        stubSecurityDepositWrites();
 
         service.createLease(new AdminLeaseCreateRequest(5L, 8L, LocalDate.parse("2026-07-01"),
                 LocalDate.parse("2027-06-30"), new BigDecimal("3000.00"), new BigDecimal("6000.00"), 5));
@@ -359,6 +368,29 @@ class AdminTenancyServiceTest {
                 LocalDate.parse("2027-03-01"));
     }
 
+    @Test void editsLeaseTenantAndUnitWithOperationalValidation() {
+        LeaseChangeContext lease = activeLease();
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.countActiveTenant(9L)).thenReturn(1);
+        when(mapper.countOperatingUnit(10L)).thenReturn(1);
+        when(mapper.countActiveRentalMandate(10L, LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"))).thenReturn(1);
+        when(mapper.countOtherOverlappingLease(44L, 10L, LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"))).thenReturn(0);
+        when(mapper.updateLeasePartiesAndTerms(44L, 9L, 10L, LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"),
+                new BigDecimal("3200.00"), new BigDecimal("6400.00"), 5, "daily_prorated")).thenReturn(1);
+
+        service.updateLease(1L, 44L, new AdminLeaseUpdateRequest(LocalDate.parse("2026-08-01"),
+                LocalDate.parse("2027-06-30"), new BigDecimal("3200.00"), new BigDecimal("6400.00"), 5,
+                "daily_prorated", 9L, 10L));
+
+        verify(mapper).markUnitAvailableIfNoActiveLease(8L);
+        verify(mapper).activateRentalService(10L);
+        verify(mapper).markUnitRented(10L);
+        verify(mapper).insertLeasePartyUpdateAudit(1L, 44L, 5L, 8L,
+                LocalDate.parse("2026-01-01"), LocalDate.parse("2026-12-31"), new BigDecimal("3000.00"),
+                new BigDecimal("6000.00"), 5, 9L, 10L, LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"),
+                new BigDecimal("3200.00"), new BigDecimal("6400.00"), 5);
+    }
+
     @Test void transfersLeaseByClosingOldLeaseAndCreatingNewLease() {
         LeaseChangeContext lease = activeLease();
         when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
@@ -369,6 +401,7 @@ class AdminTenancyServiceTest {
         when(mapper.insertLease(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
             NewLease created = invocation.getArgument(0); created.setId(55L); return 1;
         });
+        stubSecurityDepositWrites();
 
         Long newLeaseId = service.transferLease(1L, 44L, new AdminLeaseTransferRequest(9L,
                 LocalDate.parse("2026-08-01"), LocalDate.parse("2027-06-30"),
@@ -412,6 +445,13 @@ class AdminTenancyServiceTest {
         lease.setMonthlyRent(new BigDecimal("3000.00")); lease.setDepositAmount(new BigDecimal("6000.00"));
         lease.setPaymentDay(5); lease.setStatus("active"); lease.setProjectName("測試建案"); lease.setUnitNo("A-01-01");
         return lease;
+    }
+
+    private void stubSecurityDepositWrites() {
+        when(mapper.insertSecurityDepositFinance(org.mockito.ArgumentMatchers.any(NewSecurityDeposit.class)))
+                .thenAnswer(invocation -> { NewSecurityDeposit deposit = invocation.getArgument(0); deposit.setFinanceRecordId(900L); return 1; });
+        when(mapper.insertSecurityDepositEntry(org.mockito.ArgumentMatchers.any(NewSecurityDeposit.class))).thenReturn(1);
+        when(mapper.insertSecurityDepositCashflow(org.mockito.ArgumentMatchers.any(NewSecurityDeposit.class))).thenReturn(1);
     }
 
 }

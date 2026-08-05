@@ -46,6 +46,7 @@ public interface AdminFinanceReviewMapper {
             FROM finance_records fr
             JOIN cashflow_entries ce ON ce.finance_record_id = fr.id
             JOIN owners o ON o.id = fr.owner_id
+            LEFT JOIN tenants t ON t.id = fr.tenant_id
             JOIN units u ON u.id = fr.unit_id
             JOIN projects p ON p.id = u.project_id
             LEFT JOIN users confirmer ON confirmer.id = fr.confirmed_by
@@ -194,9 +195,9 @@ public interface AdminFinanceReviewMapper {
     List<String> findReserveProjects();
 
     @Select({"<script>",
-            "SELECT fr.id,fr.transaction_no,fr.record_type,p.name AS project_name,u.unit_no,o.full_name AS payer_name,fr.amount,fr.currency,fr.transaction_date,fr.payment_method,fr.payment_status,fr.confirmation_status,fr.sync_status,CASE WHEN fr.record_type='reserve_refund' THEN '業主預備金返還' ELSE ce.category END AS receipt_no,ce.description AS milestone,confirmer.display_name AS confirmed_by_name,fr.confirmed_at,fr.created_at AS submitted_at",
-            EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund')",
-            "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ',fr.transaction_no,p.name,u.unit_no,o.full_name,ce.category,ce.description) LIKE CONCAT('%',#{keyword},'%')</if>",
+            "SELECT fr.id,fr.transaction_no,fr.record_type,p.name AS project_name,u.unit_no,COALESCE(t.full_name,o.full_name) AS payer_name,fr.amount,fr.currency,fr.transaction_date,fr.payment_method,fr.payment_status,fr.confirmation_status,fr.sync_status,CASE WHEN fr.record_type='reserve_refund' THEN '業主預備金返還' ELSE ce.category END AS receipt_no,ce.description AS milestone,confirmer.display_name AS confirmed_by_name,fr.confirmed_at,fr.created_at AS submitted_at",
+            EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund','security_deposit')",
+            "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ',fr.transaction_no,p.name,u.unit_no,o.full_name,t.full_name,ce.category,ce.description) LIKE CONCAT('%',#{keyword},'%')</if>",
             "<if test=\"projectName != null and projectName != ''\">AND p.name=#{projectName}</if>",
             "<if test=\"confirmationStatus == 'history'\">AND fr.confirmation_status&lt;&gt;'pending'</if>",
             "<if test=\"confirmationStatus != null and confirmationStatus != '' and confirmationStatus != 'history'\">AND fr.confirmation_status=#{confirmationStatus}</if>",
@@ -206,8 +207,8 @@ public interface AdminFinanceReviewMapper {
             "</where>","ORDER BY CASE fr.confirmation_status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,fr.created_at DESC,fr.id DESC LIMIT #{limit} OFFSET #{offset}","</script>"})
     List<FinanceReviewRow> findExpensePage(@Param("keyword") String keyword,@Param("projectName") String projectName,@Param("confirmationStatus") String confirmationStatus,@Param("syncStatus") String syncStatus,@Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate,@Param("limit") int limit,@Param("offset") int offset);
 
-    @Select({"<script>","SELECT COUNT(*)",EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund')",
-            "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ',fr.transaction_no,p.name,u.unit_no,o.full_name,ce.category,ce.description) LIKE CONCAT('%',#{keyword},'%')</if>",
+    @Select({"<script>","SELECT COUNT(*)",EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund','security_deposit')",
+            "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ',fr.transaction_no,p.name,u.unit_no,o.full_name,t.full_name,ce.category,ce.description) LIKE CONCAT('%',#{keyword},'%')</if>",
             "<if test=\"projectName != null and projectName != ''\">AND p.name=#{projectName}</if>",
             "<if test=\"confirmationStatus == 'history'\">AND fr.confirmation_status&lt;&gt;'pending'</if>",
             "<if test=\"confirmationStatus != null and confirmationStatus != '' and confirmationStatus != 'history'\">AND fr.confirmation_status=#{confirmationStatus}</if>",
@@ -215,10 +216,10 @@ public interface AdminFinanceReviewMapper {
             "<if test=\"startDate != null\">AND fr.transaction_date&gt;=#{startDate}</if>","<if test=\"endDate != null\">AND fr.transaction_date&lt;=#{endDate}</if>","</where>","</script>"})
     Long countExpensePage(@Param("keyword") String keyword,@Param("projectName") String projectName,@Param("confirmationStatus") String confirmationStatus,@Param("syncStatus") String syncStatus,@Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate);
 
-    @Select("SELECT SUM(confirmation_status='pending') pending_count,SUM(confirmation_status='confirmed') confirmed_count,SUM(confirmation_status='rejected') rejected_count,SUM(confirmation_status='confirmed' AND sync_status IN ('not_synced','pending','failed')) pending_sync_count,COALESCE(SUM(CASE WHEN confirmation_status='pending' THEN amount ELSE 0 END),0) pending_amount,COALESCE(SUM(CASE WHEN confirmation_status='confirmed' AND YEAR(confirmed_at)=YEAR(CURRENT_DATE) AND MONTH(confirmed_at)=MONTH(CURRENT_DATE) THEN amount ELSE 0 END),0) confirmed_month_amount FROM finance_records WHERE record_type IN ('property_expense','reserve_refund')")
+    @Select("SELECT SUM(confirmation_status='pending') pending_count,SUM(confirmation_status='confirmed') confirmed_count,SUM(confirmation_status='rejected') rejected_count,SUM(confirmation_status='confirmed' AND sync_status IN ('not_synced','pending','failed')) pending_sync_count,COALESCE(SUM(CASE WHEN confirmation_status='pending' THEN amount ELSE 0 END),0) pending_amount,COALESCE(SUM(CASE WHEN confirmation_status='confirmed' AND YEAR(confirmed_at)=YEAR(CURRENT_DATE) AND MONTH(confirmed_at)=MONTH(CURRENT_DATE) THEN amount ELSE 0 END),0) confirmed_month_amount FROM finance_records WHERE record_type IN ('property_expense','reserve_refund','security_deposit')")
     FinanceSummaryRow findExpenseSummary();
 
-    @Select("SELECT DISTINCT p.name FROM finance_records fr JOIN units u ON u.id=fr.unit_id JOIN projects p ON p.id=u.project_id WHERE fr.record_type IN ('property_expense','reserve_refund') ORDER BY p.name")
+    @Select("SELECT DISTINCT p.name FROM finance_records fr JOIN units u ON u.id=fr.unit_id JOIN projects p ON p.id=u.project_id WHERE fr.record_type IN ('property_expense','reserve_refund','security_deposit') ORDER BY p.name")
     List<String> findExpenseProjects();
 
     @Select("SELECT record_type FROM finance_records WHERE id=#{financeRecordId} FOR UPDATE")
@@ -253,6 +254,18 @@ public interface AdminFinanceReviewMapper {
 
     @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='property_expense' AND confirmation_status='pending'")
     int rejectExpense(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Update("UPDATE finance_records SET confirmation_status='confirmed',payment_status='paid',sync_status='pending',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='security_deposit' AND confirmation_status='pending'")
+    int confirmSecurityDeposit(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Update("UPDATE security_deposit_entries SET status='confirmed' WHERE finance_record_id=#{financeRecordId} AND status='pending'")
+    int confirmSecurityDepositEntry(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='security_deposit' AND confirmation_status='pending'")
+    int rejectSecurityDeposit(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Update("UPDATE security_deposit_entries SET status='rejected' WHERE finance_record_id=#{financeRecordId} AND status='pending'")
+    int rejectSecurityDepositEntry(@Param("financeRecordId") Long financeRecordId);
 
     @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='reserve_refund' AND confirmation_status='pending'")
     int rejectReserveRefund(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);

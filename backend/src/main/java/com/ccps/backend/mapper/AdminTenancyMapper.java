@@ -384,6 +384,67 @@ public interface AdminTenancyMapper {
     @Insert("INSERT INTO rent_payments (rent_invoice_id,finance_record_id) VALUES (#{invoiceId},#{financeRecordId})")
     int linkRentPayment(@Param("invoiceId") Long invoiceId,@Param("financeRecordId") Long financeRecordId);
 
+    @Insert("""
+            INSERT INTO finance_records
+              (transaction_no,record_type,unit_id,owner_id,tenant_id,amount,currency,transaction_date,
+               payment_method,payment_status,confirmation_status,sync_status,created_by)
+            VALUES
+              (#{transactionNo},'security_deposit',#{unitId},
+               (SELECT ou.owner_id FROM owner_units ou WHERE ou.unit_id=#{unitId} AND ou.status='active'
+                ORDER BY ou.is_primary DESC,ou.id LIMIT 1),
+               #{tenantId},#{amount},'MYR',#{transactionDate},'internal_accrual','unpaid','pending','not_synced',NULL)
+            """)
+    @Options(useGeneratedKeys=true,keyProperty="financeRecordId")
+    int insertSecurityDepositFinance(NewSecurityDeposit record);
+
+    @Insert("INSERT INTO security_deposit_entries (lease_id,finance_record_id,amount,status) VALUES (#{leaseId},#{financeRecordId},#{amount},'pending')")
+    int insertSecurityDepositEntry(NewSecurityDeposit record);
+
+    @Insert("""
+            INSERT INTO cashflow_entries
+              (finance_record_id,unit_id,lease_id,owner_id,tenant_id,direction,category,description,occurred_on,attachment_status)
+            VALUES
+              (#{financeRecordId},#{unitId},#{leaseId},
+               (SELECT ou.owner_id FROM owner_units ou WHERE ou.unit_id=#{unitId} AND ou.status='active'
+                ORDER BY ou.is_primary DESC,ou.id LIMIT 1),
+               #{tenantId},'income','deposit',#{description},#{transactionDate},'not_required')
+            """)
+    int insertSecurityDepositCashflow(NewSecurityDeposit record);
+
+    @Update("""
+            UPDATE finance_records fr
+            JOIN security_deposit_entries sde ON sde.finance_record_id=fr.id
+            SET fr.amount=#{amount},fr.unit_id=#{unitId},fr.tenant_id=#{tenantId},
+                fr.owner_id=(SELECT ou.owner_id FROM owner_units ou WHERE ou.unit_id=#{unitId} AND ou.status='active'
+                             ORDER BY ou.is_primary DESC,ou.id LIMIT 1),
+                fr.transaction_date=#{transactionDate}
+            WHERE sde.lease_id=#{leaseId} AND sde.status='pending' AND fr.confirmation_status='pending'
+            """)
+    int updatePendingSecurityDepositFinance(@Param("leaseId") Long leaseId,@Param("unitId") Long unitId,
+            @Param("tenantId") Long tenantId,@Param("amount") BigDecimal amount,@Param("transactionDate") LocalDate transactionDate);
+
+    @Update("""
+            UPDATE cashflow_entries ce
+            JOIN security_deposit_entries sde ON sde.finance_record_id=ce.finance_record_id
+            SET ce.unit_id=#{unitId},ce.lease_id=#{leaseId},ce.tenant_id=#{tenantId},ce.owner_id=(SELECT ou.owner_id FROM owner_units ou WHERE ou.unit_id=#{unitId} AND ou.status='active'
+                                                   ORDER BY ou.is_primary DESC,ou.id LIMIT 1),
+                ce.description=#{description},ce.occurred_on=#{transactionDate}
+            WHERE sde.lease_id=#{leaseId} AND sde.status='pending'
+            """)
+    int updatePendingSecurityDepositCashflow(@Param("leaseId") Long leaseId,@Param("unitId") Long unitId,
+            @Param("tenantId") Long tenantId,@Param("description") String description,@Param("transactionDate") LocalDate transactionDate);
+
+    @Update("""
+            UPDATE finance_records fr
+            JOIN security_deposit_entries sde ON sde.finance_record_id=fr.id
+            SET fr.payment_status='voided',fr.confirmation_status='rejected',fr.sync_status='not_synced'
+            WHERE sde.lease_id=#{leaseId} AND sde.status='pending' AND fr.confirmation_status='pending'
+            """)
+    int voidPendingSecurityDeposit(@Param("leaseId") Long leaseId);
+
+    @Update("UPDATE security_deposit_entries SET status='rejected' WHERE lease_id=#{leaseId} AND status='pending'")
+    int rejectPendingSecurityDepositEntry(@Param("leaseId") Long leaseId);
+
     @Insert("INSERT INTO cashflow_entries (finance_record_id,unit_id,owner_id,tenant_id,direction,category,description,occurred_on,attachment_status) VALUES (#{financeRecordId},#{unitId},#{ownerId},#{tenantId},'income','rent',#{description},#{occurredOn},'missing')")
     int insertRentCashflow(@Param("financeRecordId") Long financeRecordId,@Param("unitId") Long unitId,@Param("ownerId") Long ownerId,@Param("tenantId") Long tenantId,@Param("description") String description,@Param("occurredOn") LocalDate occurredOn);
 
@@ -694,6 +755,16 @@ public interface AdminTenancyMapper {
             @Param("rentCalculationMethod") String rentCalculationMethod);
 
     @Update("""
+            UPDATE leases SET tenant_id=#{tenantId},unit_id=#{unitId},start_date=#{startDate},end_date=#{endDate},monthly_rent=#{monthlyRent},
+              deposit_amount=#{depositAmount},payment_day=#{paymentDay},rent_calculation_method=#{rentCalculationMethod}
+            WHERE id=#{leaseId} AND status='active'
+            """)
+    int updateLeasePartiesAndTerms(@Param("leaseId") Long leaseId,@Param("tenantId") Long tenantId,
+            @Param("unitId") Long unitId,@Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate,
+            @Param("monthlyRent") BigDecimal monthlyRent,@Param("depositAmount") BigDecimal depositAmount,
+            @Param("paymentDay") int paymentDay,@Param("rentCalculationMethod") String rentCalculationMethod);
+
+    @Update("""
             UPDATE rent_invoices SET amount_due=CASE WHEN #{rentCalculationMethod}='daily_prorated'
                 THEN ROUND(#{monthlyRent} / DAY(LAST_DAY(billing_month)) *
                   GREATEST(DATEDIFF(LEAST(LAST_DAY(billing_month), #{endDate}),
@@ -758,6 +829,20 @@ public interface AdminTenancyMapper {
     int insertLeaseUpdateAudit(@Param("actorId") Long actorId,@Param("leaseId") Long leaseId,
             @Param("oldStart") LocalDate oldStart,@Param("oldEnd") LocalDate oldEnd,@Param("oldRent") BigDecimal oldRent,
             @Param("oldDeposit") BigDecimal oldDeposit,@Param("oldPaymentDay") int oldPaymentDay,
+            @Param("newStart") LocalDate newStart,@Param("newEnd") LocalDate newEnd,@Param("newRent") BigDecimal newRent,
+            @Param("newDeposit") BigDecimal newDeposit,@Param("newPaymentDay") int newPaymentDay);
+
+    @Insert("""
+            INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data)
+            VALUES (#{actorId},'update_lease','lease',#{leaseId},
+              JSON_OBJECT('tenantId',#{oldTenantId},'unitId',#{oldUnitId},'startDate',#{oldStart},'endDate',#{oldEnd},'monthlyRent',#{oldRent},'depositAmount',#{oldDeposit},'paymentDay',#{oldPaymentDay}),
+              JSON_OBJECT('tenantId',#{newTenantId},'unitId',#{newUnitId},'startDate',#{newStart},'endDate',#{newEnd},'monthlyRent',#{newRent},'depositAmount',#{newDeposit},'paymentDay',#{newPaymentDay}))
+            """)
+    int insertLeasePartyUpdateAudit(@Param("actorId") Long actorId,@Param("leaseId") Long leaseId,
+            @Param("oldTenantId") Long oldTenantId,@Param("oldUnitId") Long oldUnitId,
+            @Param("oldStart") LocalDate oldStart,@Param("oldEnd") LocalDate oldEnd,@Param("oldRent") BigDecimal oldRent,
+            @Param("oldDeposit") BigDecimal oldDeposit,@Param("oldPaymentDay") int oldPaymentDay,
+            @Param("newTenantId") Long newTenantId,@Param("newUnitId") Long newUnitId,
             @Param("newStart") LocalDate newStart,@Param("newEnd") LocalDate newEnd,@Param("newRent") BigDecimal newRent,
             @Param("newDeposit") BigDecimal newDeposit,@Param("newPaymentDay") int newPaymentDay);
 
@@ -993,6 +1078,13 @@ public interface AdminTenancyMapper {
         public Long getId(){return id;} public void setId(Long v){id=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public Long getRentalMandateId(){return rentalMandateId;} public void setRentalMandateId(Long v){rentalMandateId=v;}
         public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;} public LocalDate getStartDate(){return startDate;} public void setStartDate(LocalDate v){startDate=v;} public LocalDate getEndDate(){return endDate;} public void setEndDate(LocalDate v){endDate=v;}
         public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public BigDecimal getDepositAmount(){return depositAmount;} public void setDepositAmount(BigDecimal v){depositAmount=v;} public Integer getPaymentDay(){return paymentDay;} public void setPaymentDay(Integer v){paymentDay=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;}}
+    class NewSecurityDeposit {
+        private Long leaseId,financeRecordId,unitId,tenantId; private String transactionNo,description; private BigDecimal amount; private LocalDate transactionDate;
+        public Long getLeaseId(){return leaseId;} public void setLeaseId(Long v){leaseId=v;} public Long getFinanceRecordId(){return financeRecordId;} public void setFinanceRecordId(Long v){financeRecordId=v;}
+        public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;}
+        public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;} public String getDescription(){return description;} public void setDescription(String v){description=v;}
+        public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;} public LocalDate getTransactionDate(){return transactionDate;} public void setTransactionDate(LocalDate v){transactionDate=v;}
+    }
     class ReminderContext { private Long invoiceId,tenantId; private String tenantName,projectName,unitNo; private BigDecimal amountDue,amountPaid; private LocalDate dueDate;
         public Long getInvoiceId(){return invoiceId;} public void setInvoiceId(Long v){invoiceId=v;} public Long getTenantId(){return tenantId;} public void setTenantId(Long v){tenantId=v;} public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public BigDecimal getAmountDue(){return amountDue;} public void setAmountDue(BigDecimal v){amountDue=v;} public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;} public LocalDate getDueDate(){return dueDate;} public void setDueDate(LocalDate v){dueDate=v;}}
     class LeaseContractContext { private Long leaseId, contractDocumentId; private String leaseNo;

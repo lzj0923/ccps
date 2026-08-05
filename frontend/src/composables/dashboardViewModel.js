@@ -1,13 +1,27 @@
 import { adminKpis } from '../data/dashboardData';
 import { moneyText, toNumber } from '../utils/dashboardFormatters';
 
+const ADMIN_NAV_GROUPS = [
+  { id: 'assets', labelKey: 'navigation.assets', moduleIds: ['adminOwners', 'adminProperties', 'adminData'] },
+  { id: 'rental', labelKey: 'navigation.rental', moduleIds: ['adminProcess', 'adminTenantDirectory', 'adminTenants', 'adminRentalMandates'] },
+  { id: 'finance', labelKey: 'navigation.finance', moduleIds: ['adminMaintenance', 'adminFinance', 'adminReserve'] },
+  { id: 'operations', labelKey: 'navigation.operations', moduleIds: ['adminAlerts', 'adminReports'] },
+  { id: 'system', labelKey: 'navigation.system', moduleIds: ['adminAudit'] }
+];
+
 export default {
   computed: {
     currentModule() { return this.modules.find(module => module.id === this.currentId); },
     ownerModules() { return this.modules.filter(module => module.shell === "owner-shell").sort((a, b) => Number(a.code) - Number(b.code)); },
+    adminNavGroups() {
+      const modulesById = new Map(this.modules.map(module => [module.id, module]));
+      return ADMIN_NAV_GROUPS.map(group => ({
+        ...group,
+        modules: group.moduleIds.map(id => modulesById.get(id)).filter(module => module?.shell === 'admin-shell')
+      })).filter(group => group.modules.length);
+    },
     adminModules() {
-      const workflowOrder = ['adminProcess', 'adminData', 'adminOwners', 'adminProperties', 'adminRentalMandates', 'adminTenantDirectory', 'adminTenants', 'adminFinance', 'adminMaintenance', 'adminReserve', 'adminAlerts', 'adminReports', 'adminAudit'];
-      return this.modules.filter(module => module.shell === "admin-shell").sort((a, b) => workflowOrder.indexOf(a.id) - workflowOrder.indexOf(b.id));
+      return this.adminNavGroups.flatMap(group => group.modules);
     },
     currentHeaders() { return this.headers[this.currentId]; },
     currentRows() { return this.rows[this.currentId]; },

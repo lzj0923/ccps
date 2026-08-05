@@ -13,9 +13,9 @@
       <div v-else-if="errorMessage" class="admin-owner-state error"><strong>{{ $t('legacy.t_53afb862b922') }}</strong><span>{{ errorMessage }}</span><button @click="loadData">{{ $t('legacy.t_0c9157b5bfac') }}</button></div>
       <div v-else class="table-wrap maintenance-table-wrap">
         <table v-if="activeTab === 'expense'">
-          <thead><tr><th>{{ $t('legacy.t_b6fed9af8313') }}</th><th>{{ $t('legacy.t_114246450ff0') }}</th><th>{{ $t('legacy.t_0cf468db12ee') }}</th><th>{{ $t('legacy.t_9b6c1b038aa5') }}</th><th>{{ $t('legacy.t_380086757011') }}</th><th>{{ $t('legacy.t_5c0ec3674a79') }}</th><th>{{ $t('legacy.t_607b3e1024c4') }}</th><th>{{ $t('legacy.t_99f6fe6c41ad') }}</th></tr></thead>
+          <thead><tr><th>{{ $t('legacy.t_b6fed9af8313') }}</th><th>{{ $t('legacy.t_114246450ff0') }}</th><th>{{ $t('legacy.t_0cf468db12ee') }}</th><th>{{ $t('legacy.t_9b6c1b038aa5') }}</th><th>{{ $t('legacy.t_380086757011') }}</th><th>{{ $t('legacy.t_5c0ec3674a79') }}</th><th>{{ $t('legacy.t_607b3e1024c4') }}</th><th>{{ $t('legacy.t_99f6fe6c41ad') }}</th><th>{{ $t('legacy.t_f3ea6d345e2a') }}</th></tr></thead>
           <tbody>
-            <tr v-if="!filteredRows.length"><td colspan="8" class="admin-owner-empty">{{ $t('legacy.t_3818efa5c5aa') }}</td></tr>
+            <tr v-if="!filteredRows.length"><td colspan="9" class="admin-owner-empty">{{ $t('legacy.t_3818efa5c5aa') }}</td></tr>
             <tr v-for="row in pagedRows()" :key="`expense-${row.id}`" :class="{ selected: selectedKey === rowKey(row) }" @click="selectRow(row)">
               <td>{{ row.occurredOn || '—' }}</td>
               <td><strong>{{ row.projectName }}</strong><small>{{ row.unitNo }}</small></td>
@@ -25,6 +25,7 @@
               <td :class="{ 'money-gold': Number(row.reserveDeductedAmount) > 0 }">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(row.reserveDeductedAmount) }}</td>
               <td><span class="tag" :class="statusClass(paymentLabel(row.paymentStatus))">{{ paymentLabel(row.paymentStatus) }}</span></td>
               <td>{{ Number(row.attachmentCount || 0) }} {{ $t('legacy.t_aa9f1ad4f91c') }}</td>
+              <td><button type="button" class="maintenance-detail-btn" @click.stop="selectRow(row)">{{ $t('legacy.t_0596bf73ba05') }}</button></td>
             </tr>
           </tbody>
         </table>
@@ -42,15 +43,17 @@
               <td><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(row.amount) }}</strong></td>
               <td><span class="tag" :class="statusClass(maintenanceStatusLabel(row.status))">{{ maintenanceStatusLabel(row.status) }}</span></td>
               <td>{{ Number(row.attachmentCount || 0) }} {{ $t('legacy.t_aa9f1ad4f91c') }}</td>
-              <td><button v-if="!['completed','cancelled'].includes(row.status)" type="button" class="maintenance-handle-btn" @click.stop="openHandling(row)">{{ $t('legacy.t_fda275e0bcc3') }}</button><span v-else>—</span></td>
+              <td class="maintenance-row-actions"><button type="button" class="maintenance-detail-btn" @click.stop="selectRow(row)">{{ $t('legacy.t_0596bf73ba05') }}</button><button v-if="!['completed','cancelled'].includes(row.status)" type="button" class="maintenance-handle-btn" @click.stop="openHandling(row)">{{ $t('legacy.t_fda275e0bcc3') }}</button><span v-else>—</span></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div class="pager"><span>{{ $t('legacy.t_3b6ef811b85a') }} {{ filteredRows.length }} {{ $t('legacy.t_86761b63a7bd') }}</span><div class="admin-building-pager"><button :disabled="listPage <= 1" @click="goListPage(listPage - 1)">&lt;</button><button v-for="page in listPages()" :key="page" :class="{ active: page === listPage }" @click="goListPage(page)">{{ page }}</button><button :disabled="listPage >= totalListPages()" @click="goListPage(listPage + 1)">&gt;</button><select v-model.number="listPageSize"><option :value="10">{{ $t('legacy.t_fc6da0e815a1') }}</option><option :value="20">{{ $t('legacy.t_93d673672fa5') }}</option><option :value="50">{{ $t('legacy.t_529930b886d2') }}</option></select></div></div>
+      <div class="pager"><span>{{ $t('legacy.t_3b6ef811b85a') }} {{ filteredRows.length }} {{ $t('legacy.t_86761b63a7bd') }}</span><div class="admin-building-pager"><button :disabled="listPage <= 1" @click="goListPage(listPage - 1)">&lt;</button><button v-for="page in listPages()" :key="page" :class="{ active: page === listPage }" @click="goListPage(page)">{{ page }}</button><button :disabled="listPage >= totalListPages()" @click="goListPage(listPage + 1)">&gt;</button><select v-model.number="listPageSize"><option :value="5">{{ $t('building.recordsPerPage', { count: 5 }) }}</option><option :value="10">{{ $t('building.recordsPerPage', { count: 10 }) }}</option><option :value="20">{{ $t('building.recordsPerPage', { count: 20 }) }}</option><option :value="50">{{ $t('building.recordsPerPage', { count: 50 }) }}</option></select></div></div>
     </div>
 
+    <div v-if="maintenanceDetailOpen && selectedRow" class="maintenance-detail-modal" role="dialog" aria-modal="true" @click.self="closeMaintenanceDetail">
     <aside class="panel detail-panel maintenance-detail-panel">
+      <div class="maintenance-detail-modal-head"><strong>{{ $t('legacy.t_0596bf73ba05') }}</strong><button type="button" class="maintenance-detail-close" :aria-label="$t('ui.close')" @click="closeMaintenanceDetail">×</button></div>
       <div v-if="selectedRow" class="detail-card">
         <div class="profile">
           <div class="big-avatar">{{ activeTab === 'expense' ? $t('legacy.t_18d2086d6a02') : $t('legacy.t_ea97fb39f031') }}</div>
@@ -79,6 +82,7 @@
       </div>
       <div v-else class="admin-owner-empty">{{ $t('legacy.t_956595e88a11') }}</div>
     </aside>
+    </div>
 
     <dialog ref="expenseCreateDialog" class="modal maintenance-create-dialog">
       <form method="dialog" @submit.prevent="submitExpense">
@@ -156,7 +160,7 @@ const CATEGORY_MAP = { utilities: '水電費', management: '管理費', cleaning
 export default {
   inject: ['page'],
   data() {
-    return { activeTab: 'expense', listPage: 1, listPageSize: 10, response: { summary: {}, properties: [], expenses: [], maintenance: [] }, loading: false, errorMessage: '', selectedKey: '', maintenanceDetail: null, requestSerial: 0, options: { units: [], vendors: [] }, optionsLoading: false, expenseForm: this.emptyExpenseForm(), expenseSaving: false, expenseCreateError: '', maintenanceCreateForm: this.emptyMaintenanceForm(), maintenanceCreateSaving: false, maintenanceCreateError: '', handlingRow: null, handlingInfo: {}, handlingForm: { actualAmount: 0, settlementMethod: 'reserve', completionNote: '' }, handlingFiles: { before: [], after: [], invoice: [] }, handlingLoading: false, handlingSaving: false, handlingError: '' };
+    return { activeTab: 'expense', listPage: 1, listPageSize: 5, maintenanceDetailOpen: false, response: { summary: {}, properties: [], expenses: [], maintenance: [] }, loading: false, errorMessage: '', selectedKey: '', maintenanceDetail: null, requestSerial: 0, options: { units: [], vendors: [] }, optionsLoading: false, expenseForm: this.emptyExpenseForm(), expenseSaving: false, expenseCreateError: '', maintenanceCreateForm: this.emptyMaintenanceForm(), maintenanceCreateSaving: false, maintenanceCreateError: '', handlingRow: null, handlingInfo: {}, handlingForm: { actualAmount: 0, settlementMethod: 'reserve', completionNote: '' }, handlingFiles: { before: [], after: [], invoice: [] }, handlingLoading: false, handlingSaving: false, handlingError: '' };
   },
   computed: {
     rows() { return this.activeTab === 'expense' ? this.response.expenses || [] : this.response.maintenance || []; },
@@ -271,9 +275,10 @@ export default {
         { label: this.$t('legacy.t_c1b0ddc685b1'), value: `RM ${this.money(summary.reserveDeductedAmount)}`, delta: `${summary.reserveDebitCount || 0} ${this.$t('legacy.t_0b0c218f4c5d')}`, trend: 'up' }
       ];
     },
-    selectTab(tab) { this.activeTab = tab; this.listPage = 1; this.page.statusFilter = '全部狀態'; this.maintenanceDetail = null; this.selectedKey = ''; this.ensureSelection(); },
+    selectTab(tab) { this.activeTab = tab; this.listPage = 1; this.page.statusFilter = '全部狀態'; this.maintenanceDetail = null; this.selectedKey = ''; this.maintenanceDetailOpen = false; this.ensureSelection(); },
     ensureSelection() { this.$nextTick(() => { const row = this.pagedRows()[0]; this.selectedKey = row ? this.rowKey(row) : ''; if (row) this.loadDetail(row); else this.maintenanceDetail = null; }); },
-    selectRow(row) { this.selectedKey = this.rowKey(row); this.loadDetail(row); },
+    selectRow(row) { this.selectedKey = this.rowKey(row); this.maintenanceDetailOpen = true; this.loadDetail(row); },
+    closeMaintenanceDetail() { this.maintenanceDetailOpen = false; },
     rowKey(row) { return `${this.activeTab}-${row.id}`; },
     async loadDetail(row) { const id = this.activeTab === 'maintenance' ? row.id : row.workOrderId; if (!id) { this.maintenanceDetail = null; return; } try { this.maintenanceDetail = await fetchAdminMaintenanceDetail(id); } catch { this.maintenanceDetail = null; } },
     async openHandling(row) {
@@ -361,5 +366,42 @@ export default {
 .handling-reserve-summary div { display: grid; gap: 5px; padding-right: 8px; border-right: 1px solid #e1e7ef; }.handling-reserve-summary div:last-child { border-right: 0; }.handling-reserve-summary span { color: #748196; font-size: 9px; }.handling-reserve-summary strong { color: #102447; font-size: 13px; }.handling-reserve-summary .shortage strong,.handling-warning { color: #dc3f3f; }
 .handling-photo-grid { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }.handling-photo-field { display: grid; gap: 7px; padding: 12px; border: 1px dashed #bdc9d8; border-radius: 8px; background: #fbfcfe; }.handling-photo-field span { font-size: 11px; font-weight: 900; }.handling-photo-field b { color: #dc3f3f; }.handling-photo-field small { color: #7b8798; font-size: 9px; }.handling-photo-field input { height: auto; padding: 7px; font-size: 10px; }
 .handling-note { grid-column: 1 / -1; }.handling-warning { font-size: 9px; font-weight: 700; }
+.admin-maintenance-workspace { grid-template-columns: minmax(0,1fr) !important; align-items: start; }
+.maintenance-list-panel { min-height: 0; }
+.maintenance-list-panel .panel-head { min-height: 70px; height: auto; padding: 14px 18px; }
+.maintenance-list-panel .panel-head h2 { font-size: 19px; }
+.maintenance-list-panel .panel-head span { font-size: 14px; }
+.maintenance-tabs button { height: 34px; padding-inline: 16px; font-size: 13px; }
+.maintenance-table-wrap { min-height: 0 !important; background: #fff; }
+.maintenance-table-wrap table { font-size: 14px; }
+.maintenance-table-wrap th { height: 44px; padding: 0 11px; font-size: 13px; color: #36546a; background: #f6fafb; }
+.maintenance-table-wrap td { height: 54px; padding: 7px 11px; font-size: 13px; line-height: 1.4; }
+.maintenance-table-wrap td strong { font-size: 14px; }
+.maintenance-table-wrap td small { font-size: 12px; }
+.maintenance-description { max-width: 260px; }
+.maintenance-category { padding: 5px 9px; font-size: 12px; }
+.maintenance-table-wrap .tag { font-size: 13px; }
+.maintenance-table-wrap th:last-child,.maintenance-table-wrap td:last-child { width: 116px; text-align: center; white-space: nowrap; }
+.maintenance-row-actions { white-space: nowrap; }
+.maintenance-detail-btn { height: 34px; padding: 0 13px; border: 1px solid #a9d4d7; border-radius: 7px; background: #f1fbfb; color: #076976; font-size: 13px; font-weight: 900; cursor: pointer; }
+.maintenance-detail-btn:hover { border-color: #0b8f96; background: #e2f5f5; }
+.maintenance-handle-btn { height: 34px; padding-inline: 13px; font-size: 13px; }
+.maintenance-list-panel .pager { height: 62px; padding-inline: 18px; font-size: 14px; }
+.maintenance-list-panel .pager select { width: 120px; min-width: 120px; height: 38px; padding: 0 10px; font-size: 14px; }
+.maintenance-detail-modal { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 24px; background: rgba(6,35,48,.44); backdrop-filter: blur(3px); }
+.maintenance-detail-modal .maintenance-detail-panel { width: min(640px,calc(100vw - 48px)); max-height: calc(100vh - 40px); min-height: 0; overflow: auto; padding: 22px 24px 20px; border: 1px solid #d7e2eb; border-radius: 14px; box-shadow: 0 24px 70px rgba(4,28,40,.28); background: #fff; }
+.maintenance-detail-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e5edf2; color: #0d1b3e; font-size: 17px; }
+.maintenance-detail-close { width: 34px; height: 34px; border: 1px solid #d7e2eb; border-radius: 8px; background: #fff; color: #526679; font-size: 22px; line-height: 1; cursor: pointer; }
+.maintenance-detail-close:hover { background: #eef7f8; border-color: #0b8f96; color: #075e68; }
+.maintenance-detail-modal .detail-card { padding: 0; }
+.maintenance-detail-modal .profile { gap: 16px; padding-bottom: 18px; }
+.maintenance-detail-modal .profile h3 { font-size: 21px; }
+.maintenance-detail-modal .profile p { font-size: 14px; }
+.maintenance-detail-modal .detail-section { padding: 18px 0 17px; }
+.maintenance-detail-modal .detail-section h4 { margin-bottom: 14px; font-size: 16px; }
+.maintenance-detail-modal .detail-section .kv { grid-template-columns: 120px minmax(0,1fr); margin: 11px 0; font-size: 14px; line-height: 1.5; }
+.maintenance-detail-modal .detail-section .kv b { max-width: none; font-size: 14px; }
+.maintenance-detail-modal .maintenance-detail-copy { margin-bottom: 14px; font-size: 14px; line-height: 1.7; }
 @media (max-width: 820px) { .maintenance-tabs button { padding-inline: 9px; }.maintenance-create-body { grid-template-columns: 1fr; }.maintenance-create-body .wide { grid-column: auto; }.create-unit-summary { grid-template-columns: 1fr; }.create-unit-summary span { border-right: 0; } }
+@media (max-width: 820px) { .maintenance-detail-modal { padding: 14px; }.maintenance-detail-modal .maintenance-detail-panel { width: min(100%,calc(100vw - 28px)); padding: 18px 16px; }.maintenance-table-wrap { overflow-x: auto; }.maintenance-table-wrap table { min-width: 980px; } }
 </style>

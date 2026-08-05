@@ -42,6 +42,7 @@ DROP TABLE IF EXISTS property_maintenance_records;
 DROP TABLE IF EXISTS maintenance_status_history;
 DROP TABLE IF EXISTS maintenance_work_orders;
 DROP TABLE IF EXISTS cashflow_entries;
+DROP TABLE IF EXISTS security_deposit_entries;
 DROP TABLE IF EXISTS rent_payments;
 DROP TABLE IF EXISTS rent_invoices;
 DROP TABLE IF EXISTS leases;
@@ -364,7 +365,7 @@ CREATE TABLE sync_batches (
 CREATE TABLE finance_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   transaction_no VARCHAR(60) NOT NULL,
-  record_type VARCHAR(40) NOT NULL COMMENT 'property_payment / rent_payment / cashflow / reserve_topup / reserve_debit',
+  record_type VARCHAR(40) NOT NULL COMMENT 'property_payment / rent_payment / security_deposit / cashflow / reserve_topup / reserve_debit',
   unit_id BIGINT UNSIGNED NULL,
   owner_id BIGINT UNSIGNED NULL,
   tenant_id BIGINT UNSIGNED NULL,
@@ -551,6 +552,23 @@ CREATE TABLE leases (
   CONSTRAINT chk_leases_payment_day CHECK (payment_day BETWEEN 1 AND 31)
 ) ENGINE=InnoDB;
 
+CREATE TABLE security_deposit_entries (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  lease_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NOT NULL,
+  amount DECIMAL(18,2) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_security_deposit_lease (lease_id),
+  UNIQUE KEY uk_security_deposit_finance (finance_record_id),
+  KEY idx_security_deposit_status (status, created_at),
+  CONSTRAINT fk_security_deposit_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
+  CONSTRAINT fk_security_deposit_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT chk_security_deposit_amount CHECK (amount > 0)
+) ENGINE=InnoDB;
+
 ALTER TABLE property_contract_records
   ADD CONSTRAINT fk_property_contract_records_lease
   FOREIGN KEY (lease_id) REFERENCES leases (id);
@@ -618,7 +636,7 @@ CREATE TABLE cashflow_entries (
   tenant_id BIGINT UNSIGNED NULL,
   vendor_id BIGINT UNSIGNED NULL,
   direction VARCHAR(10) NOT NULL COMMENT 'income / expense',
-  category VARCHAR(60) NOT NULL COMMENT 'rent / maintenance / utilities / management / other',
+  category VARCHAR(60) NOT NULL COMMENT 'rent / maintenance / utilities / management / deposit / other',
   description VARCHAR(500) NOT NULL,
   occurred_on DATE NOT NULL,
   reserve_account_id BIGINT UNSIGNED NULL,

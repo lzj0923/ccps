@@ -2,13 +2,31 @@
 .admin-shell .sidebar{background:#172337;box-shadow:8px 0 24px rgba(15,30,52,.14)}
 .admin-shell .brand{background:#172337;border-bottom:1px solid rgba(255,255,255,.1)}
 .admin-shell .crest{border-color:rgba(255,255,255,.48);color:#e0c17d}
-.admin-shell .nav{padding:12px 10px;gap:5px}
+.admin-shell .nav{padding:14px 10px 10px;gap:7px}
+.admin-shell .nav-group{display:grid;gap:2px}
+.admin-shell .nav-group-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:40px;padding:6px 9px;border:1px solid transparent;border-radius:8px;background:transparent;color:#c2d9de;font-size:14px;font-weight:800;letter-spacing:0;text-align:left;line-height:1.25}
+.admin-shell .nav-group-toggle:hover{background:rgba(255,255,255,.07);color:#fff}
+.admin-shell .nav-group.has-active > .nav-group-toggle{border-color:rgba(76,209,207,.2);background:rgba(11,143,150,.15);color:#f1fffd}
+.admin-shell .nav-group-title,.admin-shell .nav-group-meta{display:flex;align-items:center}
+.admin-shell .nav-group-title{gap:8px}
+.admin-shell .nav-group-icon{display:grid;place-items:center;width:25px;height:25px;border:1px solid rgba(170,212,218,.26);border-radius:7px;color:#b2d4d9;background:rgba(255,255,255,.06)}
+.admin-shell .nav-group.has-active .nav-group-icon{border-color:rgba(76,209,207,.44);color:#71e6e0;background:rgba(11,143,150,.2)}
+.admin-shell .nav-group-meta{gap:6px;color:#a6c3ca;font-size:10px;font-weight:700}
+.admin-shell .nav-group.has-active .nav-group-meta{color:#b6eeea}
+.admin-shell .nav-group-chevron{transition:transform .18s ease}
+.admin-shell .nav-group-chevron.expanded{transform:rotate(180deg)}
+.admin-shell .nav-group-items{display:grid;gap:3px;margin:1px 0 3px 10px;padding:2px 0 2px 9px;border-left:1px solid rgba(143,184,192,.17)}
+.admin-shell .nav-group-items button{min-height:39px;margin-left:0;padding:5px 10px;border-radius:7px}
 .admin-shell .nav button{min-height:45px;padding:8px 12px;border-left:2px solid transparent;border-radius:6px;color:#cbd5e1;gap:11px;font-size:12px;transition:background .18s,border-color .18s,color .18s}
+.admin-shell .nav > .nav-group > .nav-group-toggle{height:auto;min-height:40px;padding:6px 9px;border-left:0;color:#c2d9de;font-size:14px;gap:0}
+.admin-shell .nav .nav-group-items button{height:auto;min-height:39px;margin-left:0;padding:5px 10px;border-radius:7px;color:#d6e7ea;font-size:12px;font-weight:600}
 .admin-shell .nav button:hover{background:rgba(255,255,255,.07);color:#fff}
 .admin-shell .nav button .ico{width:30px;height:30px;flex-basis:30px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.045);color:#9fb0c4}
 .admin-shell .nav button .ico svg{width:18px;height:18px;stroke-linecap:round;stroke-linejoin:round}
 .admin-shell .nav button.active{border-left-color:#d0aa68;background:rgba(208,170,104,.13);color:#f3dfb4;box-shadow:none}
 .admin-shell .nav button.active .ico{border-color:rgba(208,170,104,.45);background:#2a3445;color:#e0bd7b}
+.admin-shell .nav .nav-group-items button.active{border-left-color:#4bd6d4;background:linear-gradient(90deg,rgba(11,143,150,.34),rgba(11,143,150,.12));color:#fff;box-shadow:inset 3px 0 #4bd6d4,0 5px 14px rgba(0,0,0,.1)}
+.admin-shell .nav .nav-group-items button.active .ico{border-color:rgba(76,209,207,.5);background:rgba(11,143,150,.24);color:#75e1dc}
 .admin-shell .project-card{background:#172337}
 .admin-shell .portal-switch{border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:#cbd5e1}
 .admin-shell .portal-switch:hover{background:rgba(255,255,255,.1);color:#fff}
@@ -33,6 +51,8 @@
   .admin-shell .brand{height:72px;min-height:72px;padding:10px 18px}
   .admin-shell .nav{flex:0 0 auto;padding:12px 10px;gap:4px;overflow:visible}
   .admin-shell .nav button{height:43px;min-height:43px;padding:6px 12px;gap:11px}
+  .admin-shell .nav > .nav-group > .nav-group-toggle{height:auto;min-height:40px;padding:6px 9px;gap:0;font-size:14px}
+  .admin-shell .nav .nav-group-items button{height:39px;min-height:39px;padding:5px 10px;font-size:12px}
   .admin-shell .nav button .ico{width:30px;height:30px;flex-basis:30px}
   .admin-shell .nav button .ico svg{width:18px;height:18px}
   .admin-shell .portal-switch{height:38px;min-height:38px;flex-shrink:0;margin:6px 12px 8px}

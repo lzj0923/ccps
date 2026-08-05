@@ -1,4 +1,6 @@
 .admin-shell .sidebar,.admin-shell .brand,.admin-shell .project-card{background:#063f52}
+.admin-shell .sidebar{background:linear-gradient(180deg,#073f4e 0%,#062d3a 100%);border-right:1px solid rgba(143,203,207,.14);box-shadow:10px 0 26px rgba(2,25,34,.2)}
+.admin-shell .brand{background:rgba(5,40,51,.72)}
 .admin-shell{height:100vh;min-height:0;overflow:hidden}
 .admin-shell .main{height:100vh;min-height:0;overflow-y:auto;overflow-x:hidden}
 .admin-shell .admin-page{min-height:0}
@@ -14,26 +16,74 @@
 .admin-shell .pager button.active{background:#e8ad0b;border-color:#e8ad0b}
 .admin-shell .edit-property-row-action{font-size:15px;color:#0b7f88;border-color:#a8d6d8;background:#f0fbfb}
 .admin-shell .edit-property-row-action:hover{background:#d9f3f3;border-color:#0b8f96;color:#075e68}
-.admin-shell .property-list-workspace{font-size:12px}
-.admin-shell .property-list-workspace th{font-size:12px!important;padding:10px 9px!important;line-height:1.35}
-.admin-shell .property-list-workspace td{font-size:12px!important;padding:10px 9px!important;line-height:1.35}
-.admin-shell .property-list-workspace td strong{font-size:13px}
-.admin-shell .property-list-workspace td small{font-size:10px!important;line-height:1.35}
-.admin-shell .property-list-workspace .tag{font-size:11px!important;padding:4px 8px!important}
-.admin-shell .property-list-workspace .owners-pager{font-size:12px}
-.admin-shell .property-list-workspace .owners-pager button,.admin-shell .property-list-workspace .owners-pager select{font-size:12px!important}
-.admin-shell .property-list-workspace{width:100%;min-width:0;overflow:hidden}
+.admin-shell .admin-owner-workspace{margin:12px 28px 0;font-size:14px}
+.admin-shell .admin-owner-workspace:not(.property-list-workspace){grid-template-columns:minmax(0,1fr)}
+.admin-shell .admin-owner-workspace:not(.property-list-workspace){align-content:start;grid-auto-rows:max-content}
+.admin-shell .admin-owner-workspace .owners-table-panel{align-self:start;height:max-content;border:1px solid #d7e4e9;border-radius:12px;box-shadow:0 8px 24px rgba(15,43,58,.08)}
+.admin-shell .admin-owner-workspace .owners-panel-head{min-height:64px;height:auto;padding:13px 18px 11px;background:linear-gradient(180deg,#ffffff 0%,#fbfdfd 100%)}
+.admin-shell .admin-owner-workspace .owners-panel-head>div{display:grid;gap:7px}
+.admin-shell .admin-owner-workspace .owners-workspace-tabs{gap:14px}
+.admin-shell .admin-owner-workspace .owners-workspace-tabs button{padding:0 3px 8px;color:#557184;font-size:15px;font-weight:900}
+.admin-shell .admin-owner-workspace .owners-workspace-tabs button.active{border-bottom-width:2px;color:#006f79}
+.admin-shell .admin-owner-workspace .owners-panel-head h2{font-size:18px}
+.admin-shell .admin-owner-workspace .owners-panel-head span{font-size:14px}
+.admin-shell .admin-owner-workspace .owners-table-wrap{min-height:0!important;background:#fff}
+.admin-shell .admin-owner-workspace .owners-table-wrap table{font-size:14px}
+.admin-shell .admin-owner-workspace .owners-table-wrap th{height:40px;background:#f6fafb;color:#36546a;font-weight:900;letter-spacing:.01em}
+.admin-shell .admin-owner-workspace .owners-table-wrap td{height:46px;font-size:14px!important;line-height:1.4;color:#163a55}
+.admin-shell .admin-owner-workspace .owners-table-wrap td small{font-size:12px!important;line-height:1.35}
+.admin-shell .admin-owner-workspace .owners-table-wrap .avatar{width:28px;height:28px;font-size:12px}
+.admin-shell .admin-owner-workspace .owners-table-wrap .tag{font-size:13px!important;padding:5px 9px!important}
+.admin-shell .admin-owner-workspace .owners-table-wrap tr{transition:background .16s ease}
+.admin-shell .admin-owner-workspace .owners-table-wrap tbody tr:hover td{background:#f4fbfb}
+.admin-shell .admin-owner-workspace .owners-table-wrap tbody tr.selected td{background:#fff8e8}
+.admin-shell .admin-owner-workspace .owners-table-wrap tbody tr.selected td:first-child{box-shadow:inset 3px 0 #e2a50b}
+.admin-shell .admin-owner-workspace .owners-table-wrap .row-actions{width:32px;height:32px;border-radius:8px;color:#176376;background:#f8fcfc;border-color:#cfe2e5}
+.admin-shell .admin-owner-workspace .owners-table-wrap th:last-child,.admin-shell .admin-owner-workspace .owners-table-wrap td:last-child{width:86px;padding-left:8px;padding-right:8px;text-align:center}
+.admin-shell .admin-owner-workspace .owners-table-wrap .owner-row-arrow{width:64px;height:34px;font-size:13px!important;font-weight:800;white-space:nowrap}
+.admin-shell .admin-owner-workspace .owners-pager{font-size:14px}
+.admin-shell .admin-owner-workspace .owners-pager{height:58px;border-top:1px solid #e3edf0;padding:0 16px;background:#fbfdfd;color:#587082}
+.admin-shell .admin-owner-workspace .owners-pager button,.admin-shell .admin-owner-workspace .owners-pager select{font-size:14px!important}
+.admin-shell .admin-owner-workspace .owners-pager select{height:36px;width:116px;min-width:116px;padding:0 26px 0 12px;border-color:#cfe0e4;background:#fff;color:#24445a;box-sizing:border-box}
+.admin-shell .property-list-workspace{font-size:14px}
+.admin-shell .property-list-workspace th{font-size:14px!important;padding:10px 9px!important;line-height:1.35}
+.admin-shell .property-list-workspace td{font-size:14px!important;padding:10px 9px!important;line-height:1.35}
+.admin-shell .property-list-workspace td strong{font-size:15px}
+.admin-shell .property-list-workspace td small{font-size:12px!important;line-height:1.35}
+.admin-shell .property-list-workspace .tag{font-size:13px!important;padding:5px 9px!important}
+.admin-shell .property-list-workspace .owners-pager{font-size:14px}
+.admin-shell .property-list-workspace .owners-pager button,.admin-shell .property-list-workspace .owners-pager select{font-size:14px!important}
+.admin-shell .admin-owner-detail-modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px;background:rgba(6,35,48,.44);backdrop-filter:blur(3px)}
+.admin-shell .admin-owner-detail-modal .admin-owner-detail{width:min(680px,calc(100vw - 48px));max-height:calc(100vh - 40px);padding:22px 24px 20px;overflow:auto;border:1px solid #d7e2eb;border-radius:14px;box-shadow:0 24px 70px rgba(4,28,40,.28);background:#fff}
+.admin-shell .admin-owner-detail-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px;padding-bottom:14px;border-bottom:1px solid #e5edf2;color:#0d1b3e;font-size:17px}
+.admin-shell .admin-owner-detail-close{width:32px;height:32px;border:1px solid #d7e2eb;border-radius:8px;background:#fff;color:#526679;font-size:22px;line-height:1;cursor:pointer}
+.admin-shell .admin-owner-detail-close:hover{background:#eef7f8;border-color:#0b8f96;color:#075e68}
+.admin-shell .admin-owner-detail-modal .owners-profile{gap:16px;padding-bottom:18px}
+.admin-shell .admin-owner-detail-modal .owners-profile h3{font-size:23px}
+.admin-shell .admin-owner-detail-modal .owners-profile p{font-size:14px;max-width:none}
+.admin-shell .admin-owner-detail-modal .owners-section{padding:18px 0 17px}
+.admin-shell .admin-owner-detail-modal .owners-section h4{margin-bottom:14px;font-size:16px}
+.admin-shell .admin-owner-detail-modal .owners-section .kv{grid-template-columns:120px minmax(0,1fr);font-size:14px;line-height:1.5;margin:11px 0}
+.admin-shell .admin-owner-detail-modal .owners-section .kv b{font-size:14px;max-width:none}
+.admin-shell .admin-owner-detail-modal .admin-owner-property-card{margin:12px 0;padding:14px;border-radius:9px}
+.admin-shell .admin-owner-detail-modal .owner-property-heading strong{font-size:16px}
+.admin-shell .admin-owner-detail-modal .owner-property-heading small,.admin-shell .admin-owner-detail-modal .owner-property-meta,.admin-shell .admin-owner-detail-modal .owner-property-services small{font-size:12px}
+.admin-shell .admin-owner-detail-modal .owner-property-meta{gap:8px 12px;margin:12px 0}
+.admin-shell .admin-owner-detail-modal .owner-property-meta b{font-size:14px}
+.admin-shell .admin-owner-detail-modal .owner-property-actions{gap:10px}
+.admin-shell .admin-owner-detail-modal .owner-property-actions button{height:34px;font-size:13px}
+.admin-shell .property-list-workspace{width:auto;min-width:0;overflow:hidden}
 .admin-shell .property-list-workspace .owners-table-panel{min-width:0;width:100%;overflow:hidden}
 .admin-shell .property-list-workspace .owners-table-wrap{width:100%;overflow-x:auto}
 .admin-shell .main{width:calc(100vw - 224px);max-width:calc(100vw - 224px);overflow-x:hidden}
-.admin-shell .property-list-workspace .owners-table-wrap td{padding-top:7px!important;padding-bottom:7px!important;line-height:1.2}
+.admin-shell .property-list-workspace .owners-table-wrap td{padding-top:9px!important;padding-bottom:9px!important;line-height:1.3}
 .admin-shell .property-list-workspace .owners-table-wrap td{height:auto!important}
-.admin-shell .property-list-workspace .owners-table-wrap th{padding-top:7px!important;padding-bottom:7px!important}
-.admin-shell .property-list-workspace .owners-pager{height:44px!important;padding-top:6px!important;padding-bottom:6px!important}
+.admin-shell .property-list-workspace .owners-table-wrap th{padding-top:9px!important;padding-bottom:9px!important}
+.admin-shell .property-list-workspace .owners-pager{height:52px!important;padding-top:6px!important;padding-bottom:6px!important}
 .admin-shell .property-list-workspace .owners-table-wrap{overflow-x:hidden}
 .admin-shell .property-list-workspace table{width:100%;table-layout:fixed}
 .admin-shell .property-list-workspace th,.admin-shell .property-list-workspace td{overflow:hidden;text-overflow:ellipsis}
-@media(max-width:900px){.admin-shell .main{width:calc(100vw - 190px);max-width:calc(100vw - 190px)}.admin-shell .property-list-workspace table{table-layout:auto}.admin-shell .property-list-workspace .owners-table-wrap{overflow-x:auto}}
+@media(max-width:900px){.admin-shell .main{width:calc(100vw - 190px);max-width:calc(100vw - 190px)}.admin-shell .admin-owner-workspace{margin-left:14px;margin-right:14px}.admin-shell .property-list-workspace table{table-layout:auto}.admin-shell .property-list-workspace .owners-table-wrap{overflow-x:auto}}
 .admin-shell .maintenance-table-wrap,.admin-shell .tenancy-table-wrap,.admin-shell .finance-review-table-wrap,.admin-shell .reminder-table-wrap,.admin-shell .ops-table,.admin-shell .reserve-table-wrap,.admin-shell .report-table{max-height:calc(100vh - 285px);overflow:auto}
 .admin-shell .maintenance-table-wrap table,.admin-shell .tenancy-table-wrap table,.admin-shell .finance-review-table-wrap table,.admin-shell .reminder-table-wrap table,.admin-shell .ops-table table,.admin-shell .reserve-table-wrap table,.admin-shell .report-table table{min-width:0;max-width:100%}
 .admin-shell .admin-tenancy-workspace{width:100%;max-width:100%;min-width:0;height:calc(100vh - 190px);min-height:0;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(280px,32%)!important}

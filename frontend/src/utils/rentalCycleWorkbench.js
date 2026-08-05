@@ -35,9 +35,6 @@ const stage = (key, status, ownerRole, missingItems, primaryAction, blockingReas
   blockingReasonKey,
 });
 
-const isOperating = property => String(property?.assetStage || '').toUpperCase() === 'OPERATING'
-  || hasValue(property?.actualHandoverDate);
-
 const isSigned = record => statusOf(record?.status) === 'signed'
   || statusOf(record?.status) === 'completed'
   || hasValue(record?.signedDate);
@@ -88,23 +85,10 @@ const reportBelongsToLease = (report, leaseId, type) => {
 export function buildRentalWorkbench({ property = {}, mandates = [], workspace = {}, documents = [], invoices = [], payments = {} } = {}) {
   const currentMandate = selectCurrentRentalMandate({ property, mandates });
   const mandateDocuments = currentMandate ? scopedDocuments(documents, currentMandate.id) : [];
-  const propertyProfileReady = Boolean(workspace?.profile) && asArray(workspace?.photos).length > 0
-    && asArray(workspace?.handoverChecklist).length > 0;
   const currentHandoverReports = currentMandate
     ? asArray(workspace?.handovers).filter(report => reportBelongsToMandate(report, currentMandate))
     : [];
   const handoverReportReady = !currentMandate || currentHandoverReports.length > 0;
-  const preparationMissingItems = !isOperating(property)
-    ? ['property_handover']
-    : [
-      !workspace?.profile ? 'property_profile' : null,
-      !asArray(workspace?.photos).length ? 'photos' : null,
-      !asArray(workspace?.handoverChecklist).length ? 'handover_checklist' : null,
-      currentMandate && !handoverReportReady ? 'handover_report' : null,
-    ].filter(Boolean);
-  const profileReady = preparationMissingItems.length === 0;
-  const operating = isOperating(property);
-  const preparationReady = operating && profileReady;
 
   const authorizationDraft = mandateDocuments.some(document =>
     ['authorization_draft', 'authorization'].includes(document?.relationType));
@@ -164,20 +148,6 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
     : { leaseId: null, endDate: null, tenantName: null, status: currentLease ? 'active' : 'not_started', reason: null, missingItems: [] };
 
   const stages = [
-    stage(
-      'preparation',
-      !operating ? 'blocked' : preparationReady ? 'completed' : 'in_progress',
-      'business',
-      preparationMissingItems,
-      !operating
-        ? action('complete_handover', { type: 'property', tab: 'summary' })
-        : !profileReady
-          ? action('complete_property_data', { type: 'property', tab: 'basic' })
-        : preparationReady
-          ? action('complete_property_data', { type: 'property', tab: 'basic' })
-          : action('create_mandate', { type: 'rentalMandate', action: 'create' }),
-      !operating ? 'property_not_operating' : currentMandate && propertyProfileReady && !handoverReportReady ? 'handover_report_required' : null,
-    ),
     stage(
       'mandateAuthorization',
       !currentMandate ? 'pending'

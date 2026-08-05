@@ -80,6 +80,7 @@ backend/
 既有資料庫升級支出維修模組前，先執行 `database/migrate_expense_maintenance.sql`。附件預設存放於 `uploads/maintenance-attachments`，正式環境可用 `MAINTENANCE_ATTACHMENT_STORAGE` 指定持久化目錄。
 
 既有資料庫升級預備金充值模組前，先執行 `database/migrate_reserve.sql`。充值憑證預設存放於 `uploads/reserve-topups`，正式環境可用 `RESERVE_TOPUP_STORAGE` 指定持久化目錄。
+既有資料庫升級租客押金財務確認模組前，先執行 `database/migrate_security_deposits.sql`。
 
 文件資料模塊直接使用 `documents` 與 `document_links` 表，文件檔案預設從 `uploads` 及其 `payment-proofs`、`maintenance-attachments`、`reserve-topups`、`documents` 子目錄讀取；正式環境可用 `DOCUMENT_STORAGE_ROOT` 指定檔案根目錄。文件列表與下載 API 會依登入業主的 owner、unit、finance、work_order 關聯做權限篩選。
 

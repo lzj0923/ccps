@@ -11,7 +11,6 @@ const belongsToCurrentRental = (file, { mandateId, leaseId }) => {
 };
 
 const belongsToStage = (file, stageKey) => {
-  if (stageKey === 'preparation') return file.kind === 'handover';
   if (stageKey === 'mandateAuthorization') return file.kind === 'mandate';
   if (stageKey === 'leasingSigning') return ['contract', 'leaseContract'].includes(file.kind);
   if (stageKey === 'moveInCollection') return file.kind === 'handover';

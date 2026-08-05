@@ -16,6 +16,8 @@ class AdminTenancyMapperSqlTest {
         assertScriptParses("findPage");
         assertScriptParses("countPage");
         assertInsertScriptParses("insertInvoice");
+        assertInsertScriptParses("insertSecurityDepositFinance");
+        assertInsertScriptParses("insertSecurityDepositCashflow");
     }
 
     @Test

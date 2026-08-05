@@ -60,7 +60,7 @@ export default {
       catch (e) { this.actionError = e.message || '處理失敗'; } finally { this.saving = false; }
     },
     metrics(s) { return [{ label: '待確認費用', value: `${Number(s.pendingCount || 0)} 筆`, delta: `RM ${this.money(s.pendingAmount)}`, trend: Number(s.pendingCount) ? 'down' : 'up' }, { label: '已確認費用', value: `${Number(s.confirmedCount || 0)} 筆`, delta: '保留歷史金額', trend: 'up' }, { label: '已退回費用', value: `${Number(s.rejectedCount || 0)} 筆`, delta: '等待調整', trend: '' }, { label: '待同步 SQL', value: `${Number(s.pendingSyncCount || 0)} 筆`, delta: '會計同步', trend: '' }, { label: '本月確認費用', value: `RM ${this.money(s.confirmedMonthAmount)}`, delta: '本月完成', trend: 'up' }]; },
-    categoryLabel(v) { return ({ management: '管理費', service_fee: '服務費', insurance: '保險', tax: '稅費' })[v] || v || '其他費用'; },
+    categoryLabel(v) { return ({ management: '管理費', service_fee: '服務費', insurance: '保險', tax: '稅費', deposit: '租客押金' })[v] || v || '其他費用'; },
     statusLabel(v) { return ({ pending: '待確認', confirmed: '已確認', rejected: '已退回' })[v] || v; },
     statusClass(v) { return v === 'confirmed' ? 'green' : v === 'rejected' ? 'red' : 'orange'; },
     money(v) { return Number(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }

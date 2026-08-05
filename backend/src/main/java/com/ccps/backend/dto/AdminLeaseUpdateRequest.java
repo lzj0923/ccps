@@ -15,9 +15,11 @@ public record AdminLeaseUpdateRequest(
         @NotNull @DecimalMin("0.01") BigDecimal monthlyRent,
         @NotNull @DecimalMin("0.00") BigDecimal depositAmount,
         @Min(1) @Max(31) int paymentDay,
-        @Pattern(regexp = "daily_prorated") String rentCalculationMethod) {
+        @Pattern(regexp = "daily_prorated") String rentCalculationMethod,
+        Long tenantId,
+        Long unitId) {
     public AdminLeaseUpdateRequest(LocalDate startDate, LocalDate endDate, BigDecimal monthlyRent,
             BigDecimal depositAmount, int paymentDay) {
-        this(startDate, endDate, monthlyRent, depositAmount, paymentDay, "daily_prorated");
+        this(startDate, endDate, monthlyRent, depositAmount, paymentDay, "daily_prorated", null, null);
     }
 }

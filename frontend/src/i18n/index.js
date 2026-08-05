@@ -25,6 +25,15 @@ export const supportedLocales = [
   { code: 'en', label: 'English' }
 ];
 
+const navigationLabels = {
+  assets: ['资产与项目', '資產與項目', 'Assets & Projects'],
+  rental: ['租赁运营', '租賃營運', 'Rental Operations'],
+  finance: ['财务与费用', '財務與費用', 'Finance & Expenses'],
+  operations: ['运营工具', '營運工具', 'Operations Tools'],
+  system: ['系统管理', '系統管理', 'System Management']
+};
+const navigationMessages = (index) => Object.fromEntries(Object.entries(navigationLabels).map(([key, labels]) => [key, labels[index]]));
+
 const modules = {
   myProperties: ['我的房产', '我的房產', 'My Properties'], ownerPayment: ['房款进度', '房款進度', 'Payment Progress'], rentIncome: ['租金收入', '租金收入', 'Rental Income'], ownerExpenses: ['收支维修', '收支維修', 'Income & Maintenance'], ownerReserve: ['预备金', '預備金', 'Reserve Fund'], ownerNotice: ['通知中心', '通知中心', 'Notifications'], ownerDocuments: ['文件资料', '文件資料', 'Documents'],
   adminOwners: ['业主管理', '業主管理', 'Owner Management'], adminProperties: ['房产管理', '房產管理', 'Property Management'], adminProcess: ['租赁智控台', '租賃智控台', 'Rental Control Hub'], adminTenantDirectory: ['租客管理', '租客管理', 'Tenant Management'], adminTenants: ['租客与租金', '租客與租金', 'Tenants & Rent'], adminMaintenance: ['收支与维修', '收支與維修', 'Income & Maintenance'], adminRentalMandates: ['出租委托', '出租委託', 'Rental Mandates'], adminFinance: ['财务确认', '財務確認', 'Finance Confirmation'], adminData: ['建筑与房款', '建築與房款', 'Buildings & Payments'], adminReserve: ['预备金', '預備金', 'Reserve Fund'], adminAlerts: ['自动提醒', '自動提醒', 'Automated Reminders'], adminReports: ['报表与导出', '報表與導出', 'Reports & Export'], adminAudit: ['操作审计', '操作審計', 'Audit Log']
@@ -119,6 +128,10 @@ const tenancyLabels = {
   advanceRentMonths: ['预计覆盖 {months} 个月租金。', '預計覆蓋 {months} 個月租金。', 'Estimated coverage: {months} months of rent.'],
   advanceRentPartial: ['最后一个月将收取 RM {amount}，该月账单金额为 RM {due}，仍欠 RM {remaining}。', '最後一個月將收取 RM {amount}，該月帳單金額為 RM {due}，仍欠 RM {remaining}。', 'The last month will receive RM {amount} of RM {due}; RM {remaining} will remain outstanding.'],
   advanceRentExceedsLease: ['金额超过本租约剩余租金，不能生成租期外账单。', '金額超過本租約剩餘租金，不能生成租期外帳單。', 'The amount exceeds the remaining rent in this lease; invoices outside the lease will not be created.'],
+  editLeaseHint: ['可更换租客或出租单位，并调整租约条件。', '可更換租客或出租單位，並調整租約條件。', 'Change the tenant or rental unit, and adjust lease terms.'],
+  currentUnit: ['当前单位', '目前單位', 'Current unit'],
+  editLeaseScopeTitle: ['修改范围', '修改範圍', 'Edit scope'],
+  editLeaseScopeHint: ['更换租客或单位会保留当前租约编号；系统会重新校验启用状态、委托期限和租期冲突。', '更換租客或單位會保留目前租約編號；系統會重新驗證啟用狀態、委託期限和租期衝突。', 'Changing the tenant or unit keeps the lease number; active status, mandate coverage, and date conflicts are checked again.'],
   countValue: ['{count} 筆', '{count} 筆', '{count} records']
 };
 const tenancyMessages = (index) => Object.fromEntries(Object.entries(tenancyLabels).map(([key, labels]) => [key, labels[index]]));
@@ -496,7 +509,6 @@ const processCenterWorkbenchLabels = {
     pending: ['待处理', '待處理', 'Pending'],
   },
   stages: {
-    preparation: ['出租准备', '出租準備', 'Rental preparation'],
     mandateAuthorization: ['委托与授权', '委託與授權', 'Mandate & authorization'],
     leasingSigning: ['招租与签约', '招租與簽約', 'Leasing & signing'],
     moveInCollection: ['入住交接', '入住交接', 'Move-in handover'],
@@ -506,6 +518,32 @@ const processCenterWorkbenchLabels = {
     finance: ['财务', '財務', 'Finance'],
     admin: ['行政', '行政', 'Administration'],
   },
+  operationsWorkOrderVendor: ['维修供应商（可选）', '維修供應商（可選）', 'Vendor (optional)'],
+  operationsWorkOrderNoVendor: ['不指定供应商', '不指定供應商', 'No vendor'],
+  operationsChargeRequiresInvoice: ['请先生成当前月份租金账单，再添加附加费用。', '請先建立目前月份租金帳單，再新增附加費用。', 'Create the current month rent invoice before adding charges.'],
+  operationsMissingProperty: ['当前房产缺少业主或单位关联，无法操作。', '目前房產缺少業主或單位關聯，無法操作。', 'The property is missing its owner or unit link.'],
+  operationsMissingLease: ['当前房产没有启用中的租约，不能进入日常运营。', '目前房產沒有啟用中的租約，不能進入日常營運。', 'There is no active lease for this property.'],
+  operationsReceiptPositiveAmount: ['收款金额必须大于 0。', '收款金額必須大於 0。', 'The receipt amount must be greater than 0.'],
+  operationsReceiptExceedsOutstanding: ['收款金额不能超过未收金额 RM {amount}。', '收款金額不能超過未收金額 RM {amount}。', 'The receipt cannot exceed the outstanding amount of RM {amount}.'],
+  operationsMaintenancePhotosRequired: ['维修前与维修后照片各至少需要一张。', '維修前與維修後照片各至少需要一張。', 'At least one before and one after photo are required.'],
+  operationsMaintenanceReserveInsufficient: ['预备金不足，请改用直接支付。', '預備金不足，請改用直接支付。', 'The reserve fund is insufficient. Use direct payment.'],
+  operationsRenewalTitle: ['办理续租', '辦理續租', 'Create renewal lease'],
+  operationsRenewalButton: ['办理续租', '辦理續租', 'Renew lease'],
+  operationsRenewalSubmit: ['创建续租租约', '建立續租租約', 'Create renewal lease'],
+  operationsRenewalHint: ['系统会使用当前房产和租客，重新创建一份新租约，原租约记录不会被覆盖。', '系統會使用目前房產和租客，重新建立一份新租約，原租約記錄不會被覆蓋。', 'A new lease will be created for the current property and tenant. The old lease remains unchanged.'],
+  operationsRenewalStartDate: ['新租约开始日期', '新租約開始日期', 'New lease start date'],
+  operationsRenewalEndDate: ['新租约结束日期', '新租約結束日期', 'New lease end date'],
+  operationsRenewalMonthlyRent: ['月租（RM）', '月租（RM）', 'Monthly rent (RM)'],
+  operationsRenewalDeposit: ['押金（RM）', '押金（RM）', 'Deposit (RM)'],
+  operationsRenewalPaymentDay: ['付款日', '付款日', 'Payment day'],
+  operationsRenewalCalculationMethod: ['租金计算方式', '租金計算方式', 'Rent calculation method'],
+  operationsRenewalContract: ['新租约文件（可选）', '新租約文件（可選）', 'New lease document (optional)'],
+  operationsRenewalContractHint: ['支持 PDF、JPG、PNG，最大 10MB。', '支援 PDF、JPG、PNG，最大 10MB。', 'PDF, JPG, or PNG up to 10MB.'],
+  operationsRenewalContractInvalid: ['文件格式不支持或超过 10MB。', '檔案格式不支援或超過 10MB。', 'Unsupported file type or file exceeds 10MB.'],
+  operationsRenewalMissingContext: ['当前租约缺少房产、租客或出租委托信息，无法创建续租。', '目前租約缺少房產、租客或出租委託資訊，無法建立續租。', 'The current lease is missing property, tenant, or mandate information.'],
+  operationsRenewalInvalidDates: ['新租约结束日期必须晚于开始日期。', '新租約結束日期必須晚於開始日期。', 'The new lease end date must be after its start date.'],
+  operationsRenewalCreated: ['续租新租约已创建。', '續租新租約已建立。', 'The renewal lease has been created.'],
+  operationsRenewalCreatedButContractFailed: ['续租新租约已创建，但文件上传失败：{message}', '續租新租約已建立，但檔案上傳失敗：{message}', 'The renewal lease was created, but the document upload failed: {message}'],
   missingItems: {
     property_handover: ['房产尚未完成交房', '房產尚未完成交房', 'Property handover is not complete'],
     property_profile: ['房产基本资料', '房產基本資料', 'Property profile'],
@@ -535,7 +573,6 @@ const processCenterWorkbenchLabels = {
     create_mandate: ['建立本次出租委托', '建立本次出租委託', 'Create rental mandate'],
     complete_handover: ['完善交房资料', '完善交房資料', 'Complete handover'],
     complete_property_data: ['完善房产资料', '完善房產資料', 'Complete property data'],
-    recomplete_property_data: ['重新完成', '重新完成', 'Complete again'],
     generate_authorization: ['生成授权委托书', '生成授權委託書', 'Generate authorization'],
     view_signing_status: ['查看签署状态', '查看簽署狀態', 'View signing status'],
     review_mandate: ['审核并启用委托', '審核並啟用委託', 'Review and activate mandate'],
@@ -549,7 +586,6 @@ const processCenterWorkbenchLabels = {
     close_lease: ['结束租约', '結束租約', 'Close lease'],
     complete_move_out_handover: ['完成退租交接报告', '完成退租交接報告', 'Complete move-out handover report'],
     openOperationsCenter: ['前往运营中心', '前往營運中心', 'Open operations center'],
-    manage_services: ['管理成交服务', '管理成交服務', 'Manage transaction services'],
     view: ['查看详情', '查看詳情', 'View details'],
   },
 };
@@ -595,19 +631,19 @@ const messages = {
     language: { label: '语言', zhCN: '简体中文', zhTW: '繁體中文', en: 'English' },
     common: { searchPlaceholder: '搜索业主 / 单位 / 租客 / 文件', searchApplied: '已套用搜索', notifications: '通知', account: '我的账号', accountMenu: '账号菜单', enterAdmin: '进入后台管理', logout: '退出登录', loggingOut: '正在退出…', backToOwner: '返回业主端', welcomeOwner: '欢迎回来，尊贵的业主', ownerProperties: '我的房产', paymentBreadcrumb: '我的房产　>　房款进度　>　房款进度详情' },
     login: { adminConsole: 'CCPS / 管理控制台', adminHeadline: '掌握全局，', adminHeadlineEmphasis: '安心管理。', adminDescription: '安全存取房产组合、财务审核、维修流程与系统运营资料。', allSystemsNormal: '所有系统运行正常', secureSession: '安全工作阶段', operationModules: '运营模块', auditVisibility: '审计可见性', protectedWorkspace: '受保护工作区', adminAccess: '管理员访问', adminSignIn: '管理员登录', ownerSignIn: '业主登录', welcomeBack: '欢迎回来', ownerSubtitle: '登录您的房产管理工作台以继续', signInToAdmin: '登录管理中心以继续工作', username: '账号或电子邮件', password: '密码', usernamePlaceholder: '请输入管理员账号或电子邮件', passwordPlaceholder: '请输入登录密码', show: '显示', hide: '隐藏', remember: '记住登录状态', forgot: '忘记密码？', forgotNotice: '请联系系统管理员重设密码。', signIn: '登录管理中心', signingIn: '登录中…', demo: '测试账号', secureWorkspace: '安全管理工作区', required: '请输入账号与密码', failed: '登录失败，请稍后再试。' },
-    modules: moduleMessages(0), ui: uiMessages(0), building: buildingMessages(0), properties: propertyMessages(0), tenancy: tenancyMessages(0), tenantDirectory: tenantDirectoryMessages(0), reserve: reserveMessages(0), sync: syncMessages(0), finance: financeMessages(0), propertyDetail: propertyDetailMessages(0), propertyProcess: propertyProcessMessages(0), processCenter: processCenterMessages(0), reports: reportMessages(0), legacy: { ...legacyMessages['zh-CN'], ...legacyOverrides['zh-CN'] }
+    navigation: navigationMessages(0), modules: moduleMessages(0), ui: uiMessages(0), building: buildingMessages(0), properties: propertyMessages(0), tenancy: tenancyMessages(0), tenantDirectory: tenantDirectoryMessages(0), reserve: reserveMessages(0), sync: syncMessages(0), finance: financeMessages(0), propertyDetail: propertyDetailMessages(0), propertyProcess: propertyProcessMessages(0), processCenter: processCenterMessages(0), reports: reportMessages(0), legacy: { ...legacyMessages['zh-CN'], ...legacyOverrides['zh-CN'] }
   },
   'zh-TW': {
     language: { label: '語言', zhCN: '简体中文', zhTW: '繁體中文', en: 'English' },
     common: { searchPlaceholder: '搜尋業主 / 單位 / 租客 / 文件', searchApplied: '已套用搜尋', notifications: '通知', account: '我的帳號', accountMenu: '帳號選單', enterAdmin: '進入後臺管理', logout: '退出登入', loggingOut: '正在退出…', backToOwner: '返回業主端', welcomeOwner: '歡迎回來，尊貴的業主', ownerProperties: '我的房產', paymentBreadcrumb: '我的房產　>　房款進度　>　房款進度詳情' },
     login: { adminConsole: 'CCPS / 管理控制台', adminHeadline: '掌握全局，', adminHeadlineEmphasis: '安心管理。', adminDescription: '安全存取房產組合、財務審核、維修流程與系統營運資料。', allSystemsNormal: '所有系統運作正常', secureSession: '安全工作階段', operationModules: '營運模組', auditVisibility: '稽核可見性', protectedWorkspace: '受保護工作區', adminAccess: '管理員存取', adminSignIn: '管理員登入', ownerSignIn: '業主登入', welcomeBack: '歡迎回來', ownerSubtitle: '登入您的房產管理工作區以繼續', signInToAdmin: '登入管理中心以繼續工作', username: '帳號或電子郵件', password: '密碼', usernamePlaceholder: '請輸入管理員帳號或電子郵件', passwordPlaceholder: '請輸入登入密碼', show: '顯示', hide: '隱藏', remember: '記住登入狀態', forgot: '忘記密碼？', forgotNotice: '請聯絡系統管理員重設密碼。', signIn: '登入管理中心', signingIn: '登入中…', demo: '測試帳號', secureWorkspace: '安全管理工作區', required: '請輸入帳號與密碼', failed: '登入失敗，請稍後再試。' },
-    modules: moduleMessages(1), ui: uiMessages(1), building: buildingMessages(1), properties: propertyMessages(1), tenancy: tenancyMessages(1), tenantDirectory: tenantDirectoryMessages(1), reserve: reserveMessages(1), sync: syncMessages(1), finance: financeMessages(1), propertyDetail: propertyDetailMessages(1), propertyProcess: propertyProcessMessages(1), processCenter: processCenterMessages(1), reports: reportMessages(1), legacy: { ...legacyMessages['zh-TW'], ...legacyOverrides['zh-TW'] }
+    navigation: navigationMessages(1), modules: moduleMessages(1), ui: uiMessages(1), building: buildingMessages(1), properties: propertyMessages(1), tenancy: tenancyMessages(1), tenantDirectory: tenantDirectoryMessages(1), reserve: reserveMessages(1), sync: syncMessages(1), finance: financeMessages(1), propertyDetail: propertyDetailMessages(1), propertyProcess: propertyProcessMessages(1), processCenter: processCenterMessages(1), reports: reportMessages(1), legacy: { ...legacyMessages['zh-TW'], ...legacyOverrides['zh-TW'] }
   },
   en: {
     language: { label: 'Language', zhCN: '简体中文', zhTW: '繁體中文', en: 'English' },
     common: { searchPlaceholder: 'Search owner / unit / tenant / document', searchApplied: 'Search applied', notifications: 'Notifications', account: 'My account', accountMenu: 'Account menu', enterAdmin: 'Open admin portal', logout: 'Sign out', loggingOut: 'Signing out…', backToOwner: 'Back to owner portal', welcomeOwner: 'Welcome back', ownerProperties: 'My Properties', paymentBreadcrumb: 'My Properties  >  Payment Progress  >  Details' },
     login: { adminConsole: 'CCPS / ADMIN CONSOLE', adminHeadline: 'See the whole picture,', adminHeadlineEmphasis: 'manage with confidence.', adminDescription: 'Secure access to your property portfolio, finance review, maintenance workflows, and operational data.', allSystemsNormal: 'All systems operational', secureSession: 'Secure session', operationModules: 'Operational modules', auditVisibility: 'Audit visibility', protectedWorkspace: 'Protected workspace', adminAccess: 'ADMIN ACCESS', adminSignIn: 'Admin sign in', ownerSignIn: 'Owner sign in', welcomeBack: 'Welcome back', ownerSubtitle: 'Sign in to your property management workspace to continue', signInToAdmin: 'Sign in to continue to the administration centre', username: 'Username or email', password: 'Password', usernamePlaceholder: 'Enter administrator username or email', passwordPlaceholder: 'Enter your password', show: 'Show', hide: 'Hide', remember: 'Remember me', forgot: 'Forgot password?', forgotNotice: 'Please contact your system administrator to reset your password.', signIn: 'Sign in', signingIn: 'Signing in…', demo: 'Demo account', secureWorkspace: 'Secure management workspace', required: 'Username and password are required', failed: 'Login failed. Please try again.' },
-    modules: moduleMessages(2), ui: uiMessages(2), building: buildingMessages(2), properties: propertyMessages(2), tenancy: tenancyMessages(2), tenantDirectory: tenantDirectoryMessages(2), reserve: reserveMessages(2), sync: syncMessages(2), finance: financeMessages(2), propertyDetail: propertyDetailMessages(2), propertyProcess: propertyProcessMessages(2), processCenter: processCenterMessages(2), reports: reportMessages(2), legacy: { ...legacyMessages.en, ...legacyOverrides.en }
+    navigation: navigationMessages(2), modules: moduleMessages(2), ui: uiMessages(2), building: buildingMessages(2), properties: propertyMessages(2), tenancy: tenancyMessages(2), tenantDirectory: tenantDirectoryMessages(2), reserve: reserveMessages(2), sync: syncMessages(2), finance: financeMessages(2), propertyDetail: propertyDetailMessages(2), propertyProcess: propertyProcessMessages(2), processCenter: processCenterMessages(2), reports: reportMessages(2), legacy: { ...legacyMessages.en, ...legacyOverrides.en }
   }
 };
 

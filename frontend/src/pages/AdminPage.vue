@@ -7,7 +7,6 @@
     <AdminPropertyDetailWorkspace v-else-if="propertyDetailId" :property-id="propertyDetailId" />
     <AdminOwnersWorkspace v-else-if="currentId === 'adminOwners'" />
     <AdminOwnersWorkspace v-else-if="currentId === 'adminProperties'" mode="properties" />
-    <AdminContractWorkspace v-else-if="currentId === 'adminContracts'" />
     <AdminFinanceWorkspace v-else-if="currentId === 'adminFinance'" />
     <AdminTenantDirectoryWorkspace v-else-if="currentId === 'adminTenantDirectory'" />
     <AdminTenancyWorkspace v-else-if="currentId === 'adminTenants'" />
@@ -28,7 +27,6 @@ import ModuleToolbar from '../components/ModuleToolbar.vue';
 import DataWorkspace from '../components/DataWorkspace.vue';
 import AdminOwnersWorkspace from '../components/AdminOwnersWorkspace.vue';
 import AdminPropertyDetailWorkspace from '../components/AdminPropertyDetailWorkspace.vue';
-import AdminContractWorkspace from '../components/AdminContractWorkspace.vue';
 import AdminFinanceWorkspace from '../components/AdminFinanceWorkspace.vue';
 import AdminTenancyWorkspace from '../components/AdminTenancyWorkspace.vue';
 import AdminTenantDirectoryWorkspace from '../components/AdminTenantDirectoryWorkspace.vue';
@@ -42,7 +40,7 @@ import AdminPropertyProcessWorkspace from '../components/AdminPropertyProcessWor
 export default {
   mixins: [pageBridge],
   data() { return { routePath: window.location.pathname }; },
-  components: { PageHeader, MetricsGrid, ModuleToolbar, DataWorkspace, AdminOwnersWorkspace, AdminPropertyDetailWorkspace, AdminPropertyProcessWorkspace, AdminContractWorkspace, AdminFinanceWorkspace, AdminTenantDirectoryWorkspace, AdminTenancyWorkspace, AdminRentalMandateWorkspace, AdminMaintenanceWorkspace, AdminReserveWorkspace, AdminReminderWorkspace, AdminAuditWorkspace },
+  components: { PageHeader, MetricsGrid, ModuleToolbar, DataWorkspace, AdminOwnersWorkspace, AdminPropertyDetailWorkspace, AdminPropertyProcessWorkspace, AdminFinanceWorkspace, AdminTenantDirectoryWorkspace, AdminTenancyWorkspace, AdminRentalMandateWorkspace, AdminMaintenanceWorkspace, AdminReserveWorkspace, AdminReminderWorkspace, AdminAuditWorkspace },
   computed: { propertyDetailId() { const match = this.routePath.match(/^\/admin\/properties\/([^/]+)$/); return match ? match[1] : ''; } },
   mounted() { window.addEventListener('app-route-change', this.syncPropertyPath); window.addEventListener('popstate', this.syncPropertyPath); },
   beforeUnmount() { window.removeEventListener('app-route-change', this.syncPropertyPath); window.removeEventListener('popstate', this.syncPropertyPath); },

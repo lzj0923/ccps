@@ -12,6 +12,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Objects;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
@@ -51,6 +52,7 @@ import com.ccps.backend.mapper.AdminTenancyMapper.LeaseContractContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseChangeContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseInvoiceRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewLease;
+import com.ccps.backend.mapper.AdminTenancyMapper.NewSecurityDeposit;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewContractDocument;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewTenant;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentFinanceRow;
@@ -385,6 +387,7 @@ public class AdminTenancyService {
         lease.setStartDate(request.startDate()); lease.setEndDate(request.endDate()); lease.setMonthlyRent(request.monthlyRent());
         lease.setDepositAmount(request.depositAmount()); lease.setPaymentDay(request.paymentDay()); lease.setRentCalculationMethod(rentCalculationMethod);
         if (mapper.insertLease(lease) != 1 || lease.getId() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create lease");
+        createSecurityDeposit(lease);
         mapper.activateRentalService(request.unitId()); mapper.markUnitRented(request.unitId());
         LocalDate currentMonth = LocalDate.now(clock).withDayOfMonth(1);
         LocalDate lastBillingMonth = request.endDate().withDayOfMonth(1).isBefore(currentMonth)
@@ -435,14 +438,37 @@ public class AdminTenancyService {
         if (request.endDate().isBefore(LocalDate.now(clock))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active lease end date cannot be in the past");
         }
-        requireAgencyContract(current.getUnitId(), request.startDate(), request.endDate());
-        if (mapper.countOtherOverlappingLease(leaseId, current.getUnitId(), request.startDate(), request.endDate()) > 0) {
+        Long tenantId = request.tenantId() != null ? request.tenantId() : current.getTenantId();
+        Long unitId = request.unitId() != null ? request.unitId() : current.getUnitId();
+        boolean partiesChanged = !Objects.equals(current.getTenantId(), tenantId)
+                || !Objects.equals(current.getUnitId(), unitId);
+        if (request.tenantId() != null && mapper.countActiveTenant(tenantId) != 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active tenant not found");
+        }
+        if (request.unitId() != null && mapper.countOperatingUnit(unitId) != 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Operating unit not found");
+        }
+        requireAgencyContract(unitId, request.startDate(), request.endDate());
+        if (mapper.countOtherOverlappingLease(leaseId, unitId, request.startDate(), request.endDate()) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unit has another overlapping active lease");
         }
         String rentCalculationMethod = rentCalculationMethod(request.rentCalculationMethod());
-        if (mapper.updateLeaseTerms(leaseId, request.startDate(), request.endDate(), request.monthlyRent(),
-                request.depositAmount(), request.paymentDay(), rentCalculationMethod) != 1) {
+        int updated = partiesChanged
+                ? mapper.updateLeasePartiesAndTerms(leaseId, tenantId, unitId, request.startDate(), request.endDate(),
+                        request.monthlyRent(), request.depositAmount(), request.paymentDay(), rentCalculationMethod)
+                : mapper.updateLeaseTerms(leaseId, request.startDate(), request.endDate(), request.monthlyRent(),
+                        request.depositAmount(), request.paymentDay(), rentCalculationMethod);
+        if (updated != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Lease state changed; reload and try again");
+        }
+        if (current.getDepositAmount() == null || current.getDepositAmount().compareTo(request.depositAmount()) != 0
+                || partiesChanged || !Objects.equals(current.getStartDate(), request.startDate())) {
+            syncPendingSecurityDeposit(leaseId, tenantId, unitId, request.depositAmount(), request.startDate(), current.getLeaseNo());
+        }
+        if (!Objects.equals(current.getUnitId(), unitId)) {
+            mapper.markUnitAvailableIfNoActiveLease(current.getUnitId());
+            mapper.activateRentalService(unitId);
+            mapper.markUnitRented(unitId);
         }
         LocalDate startMonth = request.startDate().withDayOfMonth(1);
         LocalDate endMonth = request.endDate().withDayOfMonth(1);
@@ -465,9 +491,16 @@ public class AdminTenancyService {
             mapper.insertInvoice(leaseId, month, due,
                     rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod));
         }
-        mapper.insertLeaseUpdateAudit(actorId, leaseId, current.getStartDate(), current.getEndDate(),
-                current.getMonthlyRent(), current.getDepositAmount(), current.getPaymentDay(), request.startDate(),
-                request.endDate(), request.monthlyRent(), request.depositAmount(), request.paymentDay());
+        if (partiesChanged) {
+            mapper.insertLeasePartyUpdateAudit(actorId, leaseId, current.getTenantId(), current.getUnitId(),
+                    current.getStartDate(), current.getEndDate(), current.getMonthlyRent(), current.getDepositAmount(),
+                    current.getPaymentDay(), tenantId, unitId, request.startDate(), request.endDate(), request.monthlyRent(),
+                    request.depositAmount(), request.paymentDay());
+        } else {
+            mapper.insertLeaseUpdateAudit(actorId, leaseId, current.getStartDate(), current.getEndDate(),
+                    current.getMonthlyRent(), current.getDepositAmount(), current.getPaymentDay(), request.startDate(),
+                    request.endDate(), request.monthlyRent(), request.depositAmount(), request.paymentDay());
+        }
     }
 
     @Transactional
@@ -534,6 +567,7 @@ public class AdminTenancyService {
         if (mapper.insertLease(transferred) != 1 || transferred.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create transferred lease");
         }
+        createSecurityDeposit(transferred);
         LocalDate firstBillingMonth = request.transferDate().getDayOfMonth() == 1
                 ? request.transferDate().withDayOfMonth(1) : request.transferDate().plusMonths(1).withDayOfMonth(1);
         if (!today.isBefore(request.transferDate()) && !today.isAfter(request.endDate())
@@ -864,6 +898,34 @@ public class AdminTenancyService {
                 zero(row.getAmountDue()), zero(row.getAmountPaid()), zero(row.getAmountUnpaid()), row.getRentStatus());
     }
     private String normalize(String v) { return v == null || v.trim().isEmpty() ? null : v.trim(); }
+    private void createSecurityDeposit(NewLease lease) {
+        BigDecimal amount = zero(lease.getDepositAmount());
+        if (amount.signum() <= 0) return;
+        NewSecurityDeposit deposit = new NewSecurityDeposit();
+        deposit.setLeaseId(lease.getId()); deposit.setUnitId(lease.getUnitId()); deposit.setTenantId(lease.getTenantId());
+        deposit.setAmount(amount); deposit.setTransactionDate(lease.getStartDate());
+        deposit.setTransactionNo("DEPOSIT-" + lease.getLeaseNo());
+        deposit.setDescription("租客押金 · " + lease.getLeaseNo());
+        if (mapper.insertSecurityDepositFinance(deposit) != 1 || deposit.getFinanceRecordId() == null
+                || mapper.insertSecurityDepositEntry(deposit) != 1
+                || mapper.insertSecurityDepositCashflow(deposit) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create security deposit finance record");
+        }
+    }
+    private void syncPendingSecurityDeposit(Long leaseId, Long tenantId, Long unitId, BigDecimal amount,
+            LocalDate transactionDate, String leaseNo) {
+        BigDecimal normalizedAmount = zero(amount);
+        if (normalizedAmount.signum() <= 0) {
+            mapper.voidPendingSecurityDeposit(leaseId);
+            mapper.rejectPendingSecurityDepositEntry(leaseId);
+            return;
+        }
+        int updated = mapper.updatePendingSecurityDepositFinance(leaseId, unitId, tenantId, normalizedAmount, transactionDate);
+        if (updated == 1 && mapper.updatePendingSecurityDepositCashflow(leaseId, unitId, tenantId,
+                "租客押金 · " + (leaseNo == null ? "租约 " + leaseId : leaseNo), transactionDate) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to synchronize security deposit finance record");
+        }
+    }
     private String rentCalculationMethod(String value) {
         String normalized = normalize(value);
         if (normalized == null) return "daily_prorated";

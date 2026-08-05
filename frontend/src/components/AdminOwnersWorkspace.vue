@@ -16,13 +16,13 @@
                 <td><span class="tag" :class="rentalStatusClass(property.rentalStatus)">{{ rentalStatusLabel(property.rentalStatus) }}</span></td>
                 <td>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.purchasePrice) }}</td><td>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.paidAmount) }}</td>
                 <td :class="{ 'money-red': Number(property.remainingAmount || 0) > 0 }">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.remainingAmount) }}</td>
-                <td><button class="row-actions owner-row-arrow" type="button" :title="$t('properties.enterManagement')" @click.stop="selectProperty(property)">›</button></td>
+                <td><button class="row-actions owner-row-arrow" type="button" :title="$t('properties.enterManagement')" @click.stop="selectProperty(property)">{{ $t('legacy.t_0596bf73ba05') }}</button></td>
               </tr>
               <tr v-if="!loading && !filteredProperties.length"><td colspan="10" class="admin-owner-empty">{{ $t('properties.noMatchingProperties') }}</td></tr>
             </tbody>
           </table>
         </div>
-        <div class="owners-pager"><span>{{ $t('ui.records', { count: propertyTotalRows }) }}</span><div class="admin-building-pager"><button :disabled="propertyPageNumber <= 1 || loading" @click="goPropertyPage(propertyPageNumber - 1)">&lt;</button><button v-for="n in propertyVisiblePages" :key="n" :class="{ active: n === propertyPageNumber }" :disabled="loading" @click="goPropertyPage(n)">{{ n }}</button><button :disabled="propertyPageNumber >= propertyTotalPages || loading" @click="goPropertyPage(propertyPageNumber + 1)">&gt;</button><select v-model.number="propertyPageSize" :disabled="loading"><option :value="10">{{ $t('legacy.t_ad0de84d7aed') }} {{ $t('ui.page') }}</option><option :value="20">{{ $t('legacy.t_30e8cfcd07e7') }} {{ $t('ui.page') }}</option><option :value="50">{{ $t('legacy.t_7e9ed2f18c8f') }} {{ $t('ui.page') }}</option></select></div></div>
+        <div class="owners-pager"><span>{{ $t('ui.records', { count: propertyTotalRows }) }}</span><div class="admin-building-pager"><button :disabled="propertyPageNumber <= 1 || loading" @click="goPropertyPage(propertyPageNumber - 1)">&lt;</button><button v-for="n in propertyVisiblePages" :key="n" :class="{ active: n === propertyPageNumber }" :disabled="loading" @click="goPropertyPage(n)">{{ n }}</button><button :disabled="propertyPageNumber >= propertyTotalPages || loading" @click="goPropertyPage(propertyPageNumber + 1)">&gt;</button><select v-model.number="propertyPageSize" :disabled="loading"><option :value="5">{{ $t('building.recordsPerPage', { count: 5 }) }}</option><option :value="10">{{ $t('building.recordsPerPage', { count: 10 }) }}</option><option :value="20">{{ $t('building.recordsPerPage', { count: 20 }) }}</option><option :value="50">{{ $t('building.recordsPerPage', { count: 50 }) }}</option></select></div></div>
       </div>
       <aside v-if="!isPropertyMode" class="panel owners-detail admin-owner-detail">
         <template v-if="selectedProperty">
@@ -67,17 +67,22 @@
               <td>{{ owner.email || '—' }}</td>
               <td><span class="owner-property-count">{{ $t('ui.properties', { count: owner.properties.length }) }}</span></td>
               <td><span class="tag" :class="owner.status === 'active' ? 'green' : 'gray'">{{ owner.status === 'active' ? $t('ui.enabled') : $t('ui.disabled') }}</span></td>
-              <td><button class="row-actions owner-row-arrow" type="button" :title="$t('ui.viewProperties')" @click.stop="selectOwner(owner)">›</button></td>
+              <td><button class="row-actions owner-row-arrow" type="button" :title="$t('ui.viewProperties')" @click.stop="selectOwner(owner)">{{ $t('legacy.t_0596bf73ba05') }}</button></td>
             </tr>
             <tr v-if="!loading && !filteredOwners.length"><td colspan="7" class="admin-owner-empty">{{ $t('ui.noMatchingOwners') }}</td></tr>
           </tbody>
         </table>
       </div>
-      <div class="owners-pager"><span>{{ $t('ui.records', { count: filteredOwners.length }) }}</span><div class="admin-building-pager"><button :disabled="ownerPageNumber <= 1" @click="goOwnerPage(ownerPageNumber - 1)">&lt;</button><button v-for="n in ownerVisiblePages" :key="n" :class="{ active: n === ownerPageNumber }" @click="goOwnerPage(n)">{{ n }}</button><button :disabled="ownerPageNumber >= ownerTotalPages" @click="goOwnerPage(ownerPageNumber + 1)">&gt;</button><select v-model.number="ownerPageSize"><option :value="10">{{ $t('legacy.t_ad0de84d7aed') }} {{ $t('ui.page') }}</option><option :value="20">{{ $t('legacy.t_30e8cfcd07e7') }} {{ $t('ui.page') }}</option><option :value="50">{{ $t('legacy.t_7e9ed2f18c8f') }} {{ $t('ui.page') }}</option></select></div></div>
+      <div class="owners-pager"><span>{{ $t('ui.records', { count: filteredOwners.length }) }}</span><div class="admin-building-pager"><button :disabled="ownerPageNumber <= 1" @click="goOwnerPage(ownerPageNumber - 1)">&lt;</button><button v-for="n in ownerVisiblePages" :key="n" :class="{ active: n === ownerPageNumber }" @click="goOwnerPage(n)">{{ n }}</button><button :disabled="ownerPageNumber >= ownerTotalPages" @click="goOwnerPage(ownerPageNumber + 1)">&gt;</button><select v-model.number="ownerPageSize"><option :value="5">{{ $t('building.recordsPerPage', { count: 5 }) }}</option><option :value="10">{{ $t('building.recordsPerPage', { count: 10 }) }}</option><option :value="20">{{ $t('building.recordsPerPage', { count: 20 }) }}</option><option :value="50">{{ $t('building.recordsPerPage', { count: 50 }) }}</option></select></div></div>
     </div>
 
-    <aside class="panel owners-detail admin-owner-detail">
-      <template v-if="selectedOwner">
+    <div v-if="ownerDetailOpen && selectedOwner" class="admin-owner-detail-modal" role="dialog" aria-modal="true" @click.self="closeOwnerDetail">
+      <section class="panel owners-detail admin-owner-detail">
+        <div class="admin-owner-detail-modal-head">
+          <strong>{{ $t('ui.ownerDetails') }}</strong>
+          <button type="button" class="admin-owner-detail-close" :aria-label="$t('ui.close')" @click="closeOwnerDetail">×</button>
+        </div>
+        <template v-if="selectedOwner">
         <div class="owners-profile">
           <div class="big-avatar">{{ initials(selectedOwner.fullName) }}</div>
           <div><h3>{{ selectedOwner.fullName }}</h3><p>{{ selectedOwner.phone || $t('legacy.t_d04e9f9fe05a') }} {{ $t('legacy.t_b808d4c7ee51') }}</p></div>
@@ -128,9 +133,9 @@
           <div class="kv"><span>{{ $t('legacy.t_96f608c16cef') }}</span><b class="money-red">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(ownerPending) }}</b></div>
           <div class="progress"><i :style="{ width: ownerProgress + '%' }"></i></div>
         </section>
-      </template>
-      <div v-else class="admin-owner-empty">{{ $t('legacy.t_cece6defc75c') }}</div>
-    </aside>
+        </template>
+      </section>
+    </div>
     </template>
 
     <dialog ref="ownerDialog" class="modal admin-owner-dialog">
@@ -276,8 +281,8 @@ export default {
     return {
       workspaceTab: 'owners',
       owners: [], propertyRows: [], loading: false, errorMessage: '', selectedOwnerId: null, selectedPropertyKey: null,
-      propertyPageNumber: 1, propertyPageSize: 10, propertyTotalRows: 0, propertyTotalPages: 1, propertyRequestSerial: 0,
-      ownerPageNumber: 1, ownerPageSize: 10,
+      propertyPageNumber: 1, propertyPageSize: 5, propertyTotalRows: 0, propertyTotalPages: 1, propertyRequestSerial: 0,
+      ownerPageNumber: 1, ownerPageSize: 5, ownerDetailOpen: false,
       ownerSaving: false, ownerFormError: '', ownerEditingId: null,
       ownerForm: { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' },
       propertyProjects: [], propertyCreateStep: 1, propertyOwnerSearch: '', propertyOwnerId: null,
@@ -466,7 +471,8 @@ export default {
     goPropertyPage(page) { if (page < 1 || page > this.propertyTotalPages || page === this.propertyPageNumber) return; this.propertyPageNumber = page; this.loadProperties(); },
     resetOwnerPage() { this.ownerPageNumber = 1; this.$nextTick(() => { this.selectedOwnerId = this.pagedOwners[0]?.id || null; }); },
     goOwnerPage(page) { if (page < 1 || page > this.ownerTotalPages || page === this.ownerPageNumber) return; this.ownerPageNumber = page; this.$nextTick(() => { this.selectedOwnerId = this.pagedOwners[0]?.id || null; }); },
-    selectOwner(owner) { this.selectedOwnerId = owner.id; },
+    selectOwner(owner) { this.selectedOwnerId = owner.id; this.ownerDetailOpen = true; },
+    closeOwnerDetail() { this.ownerDetailOpen = false; },
     selectProperty(property) { this.selectedPropertyKey = property.rowKey; this.selectedOwnerId = property.ownerId; if (this.isPropertyMode && property?.unitId) navigate(`/admin/properties/${property.unitId}`); },
     openCreateOwner() {
       this.ownerEditingId = null;

@@ -107,6 +107,20 @@ class AdminFinanceReviewServiceTest {
         verify(mapper).insertAudit(99L, 15L, "confirm_reserve_refund", "confirmed", "已完成匯款");
     }
 
+    @Test
+    void confirmsSecurityDepositWithoutTreatingItAsRentInstallment() {
+        when(mapper.lockRecordType(16L)).thenReturn("security_deposit");
+        when(mapper.confirmSecurityDeposit(16L, 99L)).thenReturn(1);
+        when(mapper.confirmSecurityDepositEntry(16L)).thenReturn(1);
+
+        service.confirm(99L, 16L, "已核对租客押金");
+
+        verify(mapper).confirmSecurityDeposit(16L, 99L);
+        verify(mapper).confirmSecurityDepositEntry(16L);
+        verify(mapper).insertAudit(99L, 16L, "confirm_security_deposit", "confirmed", "已核对租客押金");
+        verify(mapper, never()).lockReview(16L);
+    }
+
     private ReviewActionContext context(String status, String due, String paid, String financeAmount, String allocated) {
         ReviewActionContext context = new ReviewActionContext();
         context.setFinanceRecordId(11L);
