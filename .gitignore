@@ -6,6 +6,7 @@ dist/
 target/
 logs/
 uploads/
+backend/backups/
 .env.local
 /.env
 backend/config/

@@ -10,7 +10,7 @@ import { AlertTriangle, BarChart3, BellRing, Building2, CalendarClock, CheckCirc
 const metricIconSets = {
   adminOwners: [UsersRound, House, Building2, ReceiptText, AlertTriangle],
   adminProperties: [House, CheckCircle2, CalendarClock, ReceiptText],
-  adminData: [Landmark, CheckCircle2, ReceiptText, CalendarClock, CheckCircle2, CalendarClock, CircleDollarSign, CalendarClock],
+  adminData: [Landmark, CheckCircle2, ReceiptText, CheckCircle2, CalendarClock, CircleDollarSign, CalendarClock],
   adminTenants: [UsersRound, WalletCards, CheckCircle2, AlertTriangle, ReceiptText, TrendingDown, FileCheck2],
   adminFinance: [ClipboardCheck, CheckCircle2, ReceiptText, AlertTriangle, CircleDollarSign, Database, Gauge],
   adminMaintenance: [TrendingUp, TrendingDown, Wrench, Droplets, ClipboardCheck, Clock3, WalletCards],

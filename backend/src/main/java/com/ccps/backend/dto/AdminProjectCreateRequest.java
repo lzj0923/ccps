@@ -8,6 +8,7 @@ public record AdminProjectCreateRequest(
         @NotBlank @Size(max = 40) String projectCode,
         @NotBlank @Size(max = 160) String name,
         @Size(max = 255) String address,
+        @Size(max = 100) String state,
         @Size(max = 100) String city,
         @NotBlank @Pattern(regexp = "[A-Z]{2}") String countryCode,
         @NotBlank @Pattern(regexp = "active|inactive") String status) {

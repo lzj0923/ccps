@@ -19,7 +19,7 @@ public interface ElectronicSignatureMapper {
     DocumentRow findLeaseDocument(@Param("leaseId") Long leaseId);
 
     @Select("""
-            SELECT d.id,d.original_name,d.storage_key,d.mime_type,d.file_size,d.checksum_sha256
+            SELECT d.id,d.original_name,d.storage_key,d.mime_type,d.file_size,d.checksum_sha256,dl.relation_type
             FROM documents d JOIN document_links dl ON dl.document_id=d.id
             WHERE dl.entity_type='rental_mandate' AND dl.entity_id=#{mandateId} AND d.id=#{documentId}
               AND d.status NOT IN ('superseded','voided')
@@ -44,6 +44,32 @@ public interface ElectronicSignatureMapper {
     @Select("SELECT COUNT(*) FROM electronic_signature_requests WHERE entity_type=#{entityType} AND entity_id=#{entityId} AND status='pending'")
     int countPendingRequests(@Param("entityType") String entityType, @Param("entityId") Long entityId);
 
+    @Select("""
+            SELECT COUNT(*) FROM electronic_signature_requests
+            WHERE COALESCE(root_document_id,source_document_id)=#{rootDocumentId}
+              AND signer_role=#{signerRole} AND status='signed'
+            """)
+    int countSignedRole(@Param("rootDocumentId") Long rootDocumentId, @Param("signerRole") String signerRole);
+
+    @Select("""
+            SELECT COUNT(*) FROM electronic_signature_requests
+            WHERE COALESCE(root_document_id,source_document_id)=#{rootDocumentId} AND status='pending'
+            """)
+    int countPendingRequestsForRoot(@Param("rootDocumentId") Long rootDocumentId);
+
+    @Select("""
+            SELECT d.id,d.original_name,d.storage_key,d.mime_type,d.file_size,d.checksum_sha256,
+                   sr.document_kind AS relation_type
+            FROM electronic_signature_requests sr
+            JOIN documents d ON d.id=sr.signed_document_id
+            WHERE COALESCE(sr.root_document_id,sr.source_document_id)=#{rootDocumentId}
+              AND sr.signing_order=#{signingOrder} AND sr.status='signed'
+              AND d.status NOT IN ('voided','superseded')
+            ORDER BY sr.id DESC LIMIT 1
+            """)
+    DocumentRow findSignedStepDocument(@Param("rootDocumentId") Long rootDocumentId,
+            @Param("signingOrder") int signingOrder);
+
     @Update("""
             UPDATE electronic_signature_requests
             SET status='cancelled', updated_at=CURRENT_TIMESTAMP
@@ -53,16 +79,19 @@ public interface ElectronicSignatureMapper {
 
     @Insert("""
             INSERT INTO electronic_signature_requests
-              (source_document_id,entity_type,entity_id,signer_name,signer_email,access_token_hash,
+              (source_document_id,root_document_id,entity_type,entity_id,document_kind,signer_role,signing_order,
+               signer_name,signer_email,access_token_hash,
                verification_code_hash,verification_expires_at,status,expires_at,requested_by,source_checksum_sha256)
-            VALUES (#{sourceDocumentId},#{entityType},#{entityId},#{signerName},#{signerEmail},#{accessTokenHash},
+            VALUES (#{sourceDocumentId},#{rootDocumentId},#{entityType},#{entityId},#{documentKind},#{signerRole},#{signingOrder},
+                    #{signerName},#{signerEmail},#{accessTokenHash},
                     #{verificationCodeHash},#{verificationExpiresAt},'pending',#{expiresAt},#{requestedBy},#{sourceChecksumSha256})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertRequest(NewRequest row);
 
     @Select("""
-            SELECT sr.id,sr.source_document_id,sr.entity_type,sr.entity_id,sr.signer_name,sr.signer_email,
+            SELECT sr.id,sr.source_document_id,sr.root_document_id,sr.entity_type,sr.entity_id,sr.document_kind,
+                   sr.signer_role,sr.signing_order,sr.signer_name,sr.signer_email,
                    sr.verification_code_hash,sr.verification_expires_at,sr.status,sr.expires_at,sr.signed_at,
                    sr.signed_document_id,d.original_name,d.storage_key,d.mime_type,d.checksum_sha256,
                    signed.original_name AS signed_original_name,signed.storage_key AS signed_storage_key,
@@ -99,20 +128,20 @@ public interface ElectronicSignatureMapper {
 
     @Insert("""
             INSERT INTO document_links(document_id,entity_type,entity_id,relation_type)
-            VALUES(#{documentId},'rental_mandate',#{mandateId},'signed_contract')
+            VALUES(#{documentId},'rental_mandate',#{mandateId},#{relationType})
             """)
-    int insertSignedMandateAuthorizationLink(@Param("documentId") Long documentId,
-            @Param("mandateId") Long mandateId);
+    int insertSignedMandateDocumentLink(@Param("documentId") Long documentId,
+            @Param("mandateId") Long mandateId, @Param("relationType") String relationType);
 
     @Update("""
             UPDATE documents d
             JOIN electronic_signature_requests sr ON sr.signed_document_id=d.id
             SET d.status='voided'
-            WHERE sr.entity_type=#{entityType} AND sr.entity_id=#{entityId}
+            WHERE COALESCE(sr.root_document_id,sr.source_document_id)=#{rootDocumentId}
               AND sr.status='signed' AND d.id<>#{newDocumentId}
               AND d.status NOT IN ('voided','superseded')
             """)
-    int supersedePreviousSignedDocuments(@Param("entityType") String entityType, @Param("entityId") Long entityId,
+    int supersedePreviousSignedDocuments(@Param("rootDocumentId") Long rootDocumentId,
             @Param("newDocumentId") Long newDocumentId);
 
     @Update("""
@@ -141,26 +170,31 @@ public interface ElectronicSignatureMapper {
             @Param("entityId") Long entityId, @Param("requestId") Long requestId, @Param("signerName") String signerName);
 
     class DocumentRow {
-        private Long id, fileSize; private String originalName, storageKey, mimeType, checksumSha256;
+        private Long id, fileSize; private String originalName, storageKey, mimeType, checksumSha256, relationType;
         public Long getId() { return id; } public void setId(Long value) { id = value; }
         public Long getFileSize() { return fileSize; } public void setFileSize(Long value) { fileSize = value; }
         public String getOriginalName() { return originalName; } public void setOriginalName(String value) { originalName = value; }
         public String getStorageKey() { return storageKey; } public void setStorageKey(String value) { storageKey = value; }
         public String getMimeType() { return mimeType; } public void setMimeType(String value) { mimeType = value; }
         public String getChecksumSha256() { return checksumSha256; } public void setChecksumSha256(String value) { checksumSha256 = value; }
+        public String getRelationType() { return relationType; } public void setRelationType(String value) { relationType = value; }
     }
     class NewRequest {
-        private Long id, sourceDocumentId, entityId, requestedBy; private String entityType, signerName, signerEmail, accessTokenHash, verificationCodeHash, sourceChecksumSha256;
+        private Long id, sourceDocumentId, rootDocumentId, entityId, requestedBy; private Integer signingOrder;
+        private String entityType, documentKind, signerRole, signerName, signerEmail, accessTokenHash, verificationCodeHash, sourceChecksumSha256;
         private LocalDateTime verificationExpiresAt, expiresAt;
         public Long getId(){return id;} public void setId(Long value){id=value;} public Long getSourceDocumentId(){return sourceDocumentId;} public void setSourceDocumentId(Long value){sourceDocumentId=value;} public Long getEntityId(){return entityId;} public void setEntityId(Long value){entityId=value;} public Long getRequestedBy(){return requestedBy;} public void setRequestedBy(Long value){requestedBy=value;} public String getEntityType(){return entityType;} public void setEntityType(String value){entityType=value;} public String getSignerName(){return signerName;} public void setSignerName(String value){signerName=value;} public String getSignerEmail(){return signerEmail;} public void setSignerEmail(String value){signerEmail=value;} public String getAccessTokenHash(){return accessTokenHash;} public void setAccessTokenHash(String value){accessTokenHash=value;} public String getVerificationCodeHash(){return verificationCodeHash;} public void setVerificationCodeHash(String value){verificationCodeHash=value;} public String getSourceChecksumSha256(){return sourceChecksumSha256;} public void setSourceChecksumSha256(String value){sourceChecksumSha256=value;} public LocalDateTime getVerificationExpiresAt(){return verificationExpiresAt;} public void setVerificationExpiresAt(LocalDateTime value){verificationExpiresAt=value;} public LocalDateTime getExpiresAt(){return expiresAt;} public void setExpiresAt(LocalDateTime value){expiresAt=value;}
+        public Long getRootDocumentId(){return rootDocumentId;} public void setRootDocumentId(Long value){rootDocumentId=value;} public Integer getSigningOrder(){return signingOrder;} public void setSigningOrder(Integer value){signingOrder=value;} public String getDocumentKind(){return documentKind;} public void setDocumentKind(String value){documentKind=value;} public String getSignerRole(){return signerRole;} public void setSignerRole(String value){signerRole=value;}
     }
     class NewDocument {
         private Long id, fileSize, uploadedBy; private String documentNo, originalName, storageKey, checksumSha256;
         public Long getId(){return id;} public void setId(Long value){id=value;} public Long getFileSize(){return fileSize;} public void setFileSize(Long value){fileSize=value;} public Long getUploadedBy(){return uploadedBy;} public void setUploadedBy(Long value){uploadedBy=value;} public String getDocumentNo(){return documentNo;} public void setDocumentNo(String value){documentNo=value;} public String getOriginalName(){return originalName;} public void setOriginalName(String value){originalName=value;} public String getStorageKey(){return storageKey;} public void setStorageKey(String value){storageKey=value;} public String getChecksumSha256(){return checksumSha256;} public void setChecksumSha256(String value){checksumSha256=value;}
     }
     class RequestRow {
-        private Long id, sourceDocumentId, entityId, signedDocumentId; private String entityType, signerName, signerEmail, verificationCodeHash, status, originalName, storageKey, mimeType, checksumSha256, signedOriginalName, signedStorageKey, signedDocumentStatus;
+        private Long id, sourceDocumentId, rootDocumentId, entityId, signedDocumentId; private Integer signingOrder;
+        private String entityType, documentKind, signerRole, signerName, signerEmail, verificationCodeHash, status, originalName, storageKey, mimeType, checksumSha256, signedOriginalName, signedStorageKey, signedDocumentStatus;
         private LocalDateTime verificationExpiresAt, expiresAt, signedAt;
         public Long getId(){return id;} public void setId(Long value){id=value;} public Long getSourceDocumentId(){return sourceDocumentId;} public void setSourceDocumentId(Long value){sourceDocumentId=value;} public Long getEntityId(){return entityId;} public void setEntityId(Long value){entityId=value;} public Long getSignedDocumentId(){return signedDocumentId;} public void setSignedDocumentId(Long value){signedDocumentId=value;} public String getEntityType(){return entityType;} public void setEntityType(String value){entityType=value;} public String getSignerName(){return signerName;} public void setSignerName(String value){signerName=value;} public String getSignerEmail(){return signerEmail;} public void setSignerEmail(String value){signerEmail=value;} public String getVerificationCodeHash(){return verificationCodeHash;} public void setVerificationCodeHash(String value){verificationCodeHash=value;} public String getStatus(){return status;} public void setStatus(String value){status=value;} public String getOriginalName(){return originalName;} public void setOriginalName(String value){originalName=value;} public String getStorageKey(){return storageKey;} public void setStorageKey(String value){storageKey=value;} public String getMimeType(){return mimeType;} public void setMimeType(String value){mimeType=value;} public String getChecksumSha256(){return checksumSha256;} public void setChecksumSha256(String value){checksumSha256=value;} public String getSignedOriginalName(){return signedOriginalName;} public void setSignedOriginalName(String value){signedOriginalName=value;} public String getSignedStorageKey(){return signedStorageKey;} public void setSignedStorageKey(String value){signedStorageKey=value;} public String getSignedDocumentStatus(){return signedDocumentStatus;} public void setSignedDocumentStatus(String value){signedDocumentStatus=value;} public LocalDateTime getVerificationExpiresAt(){return verificationExpiresAt;} public void setVerificationExpiresAt(LocalDateTime value){verificationExpiresAt=value;} public LocalDateTime getExpiresAt(){return expiresAt;} public void setExpiresAt(LocalDateTime value){expiresAt=value;} public LocalDateTime getSignedAt(){return signedAt;} public void setSignedAt(LocalDateTime value){signedAt=value;}
+        public Long getRootDocumentId(){return rootDocumentId;} public void setRootDocumentId(Long value){rootDocumentId=value;} public Integer getSigningOrder(){return signingOrder;} public void setSigningOrder(Integer value){signingOrder=value;} public String getDocumentKind(){return documentKind;} public void setDocumentKind(String value){documentKind=value;} public String getSignerRole(){return signerRole;} public void setSignerRole(String value){signerRole=value;}
     }
 }

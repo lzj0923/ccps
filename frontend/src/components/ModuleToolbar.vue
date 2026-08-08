@@ -6,7 +6,7 @@
       <option v-for="(project, index) in projectOptions" :key="projectOptionKey(project, index)" :value="project">{{ optionLabel(project) }}</option>
     </select>
     <select v-if="showStatusFilter" v-model="statusFilter"><option v-for="status in statusOptions" :key="status" :value="status">{{ optionLabel(status) }}</option></select>
-    <button class="primary-btn" @click="triggerPrimaryAction">{{ toolbarPrimaryAction }}</button><button v-if="showSecondaryAction" class="primary-btn muted" @click="triggerSecondaryAction">{{ toolbarSecondaryAction }}</button><button v-if="showReserveRefundAction" class="primary-btn muted" @click="triggerReserveRefundAction">{{ $t('ui.ownerReserveRefund') }}</button><button class="ghost-btn" @click="exportCsv">{{ $t('ui.export') }}</button>
+    <button class="primary-btn" @click="triggerPrimaryAction">{{ toolbarPrimaryAction }}</button><button v-if="showBuildingPropertyAction" class="primary-btn muted" @click="triggerBuildingPropertyAction">{{ $t('building.addPreHandoverProperty') }}</button><button v-if="showSecondaryAction" class="primary-btn muted" @click="triggerSecondaryAction">{{ toolbarSecondaryAction }}</button><button v-if="showReserveRefundAction" class="primary-btn muted" @click="triggerReserveRefundAction">{{ $t('ui.ownerReserveRefund') }}</button><button class="ghost-btn" @click="exportCsv">{{ $t('ui.export') }}</button>
   </section>
 </template>
 
@@ -20,6 +20,7 @@ export default {
     toolbarPrimaryAction() { if (this.currentId === 'adminAlerts') return this.$t('ui.addReminderRule'); if (this.currentId === 'adminFinance') return this.$t('ui.reload'); if (this.currentId === 'adminProperties') return this.$t('properties.addProperty'); if (this.currentId === 'adminOwners') return this.$t('ui.addOwner'); if (this.currentId === 'adminData') return this.$t('building.createProject'); if (this.currentId === 'adminTenants') return this.$t('ui.addTenant'); if (this.currentId === 'adminMaintenance') return this.$t('ui.addExpense'); if (this.currentId === 'adminReserve') return this.$t('ui.addReserveTopup'); if (this.currentId === 'adminReports') return this.$t('ui.addReport'); return this.embeddedAccounts ? this.$t('ui.addAccount') : this.currentModule.primaryAction; },
     toolbarSecondaryAction() { if (this.currentId === 'adminAlerts') return this.$t('ui.runAllRules'); if (this.currentId === 'adminData') return this.$t('building.createPaymentPlan'); if (this.currentId === 'adminReports') return this.$t('ui.reload'); if (this.currentId === 'adminFinance') return this.$t('finance.batchConfirm'); if (this.currentId === 'adminTenants') return this.$t('ui.addLease'); if (this.currentId === 'adminMaintenance') return this.$t('ui.addMaintenance'); if (this.currentId === 'adminReserve') return this.$t('ui.addReserveDebit'); return this.embeddedAccounts ? this.$t('ui.accountHelp') : this.currentModule.secondaryAction; },
     showSecondaryAction() { return !['adminOwners', 'adminProperties'].includes(this.currentId) && !(this.currentId === 'adminFinance' && (this.page.adminFinanceMode === 'rent' || this.page.adminFinanceViewMode === 'history')); },
+    showBuildingPropertyAction() { return this.currentId === 'adminData'; },
     showReserveRefundAction() { return this.currentId === 'adminReserve'; },
     showStatusFilter() { return !(this.currentId === 'adminFinance' && this.page.adminFinanceViewMode !== 'history' && this.page.adminFinanceMode !== 'rent'); },
     projectOptions() {
@@ -57,6 +58,7 @@ export default {
     }
   },
   methods: {
+    triggerBuildingPropertyAction() { this.page.adminBuildingPropertyCreateNonce += 1; },
     projectOptionKey(project, index) {
       if (!project || typeof project !== 'object') return project;
       return project.id ?? project.projectId ?? project.value ?? project.name ?? project.projectName ?? index;

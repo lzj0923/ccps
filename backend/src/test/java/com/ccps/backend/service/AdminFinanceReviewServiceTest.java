@@ -108,6 +108,38 @@ class AdminFinanceReviewServiceTest {
     }
 
     @Test
+    void blocksDirectPaymentConfirmationAfterOwnerTerminatesMandate() {
+        when(mapper.lockRecordType(18L)).thenReturn("property_expense");
+        when(mapper.countDirectPaymentBlockedByTerminatedMandate(18L)).thenReturn(1);
+
+        assertThatThrownBy(() -> service.confirm(99L, 18L, "确认代付款"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("业主已解约");
+
+        verify(mapper, never()).confirmExpense(18L, 99L);
+    }
+
+    @Test
+    void allowsDepositRefundToMakeOwnerReserveNegative() {
+        ReserveRefundContext refund = new ReserveRefundContext();
+        refund.setReserveAccountId(71L); refund.setAmount(new BigDecimal("1200.00"));
+        refund.setCurrentBalance(new BigDecimal("800.00")); refund.setOwnerId(8L);
+        refund.setUserId(18L); refund.setProjectName("Pavilion Square"); refund.setUnitNo("A-01");
+        when(mapper.lockRecordType(15L)).thenReturn("reserve_refund");
+        when(mapper.lockReserveRefund(15L)).thenReturn(refund);
+        when(mapper.confirmReserveRefund(15L, 99L)).thenReturn(1);
+        when(mapper.debitReserveBalance(71L, new BigDecimal("1200.00"))).thenReturn(1);
+        when(mapper.insertReserveRefundTransaction(71L, 15L, new BigDecimal("1200.00"),
+                new BigDecimal("-400.00"), 99L)).thenReturn(1);
+
+        service.confirm(99L, 15L, "确认返还");
+
+        verify(mapper).debitReserveBalance(71L, new BigDecimal("1200.00"));
+        verify(mapper).insertReserveRefundTransaction(71L, 15L, new BigDecimal("1200.00"),
+                new BigDecimal("-400.00"), 99L);
+    }
+
+    @Test
     void confirmsSecurityDepositWithoutTreatingItAsRentInstallment() {
         when(mapper.lockRecordType(16L)).thenReturn("security_deposit");
         when(mapper.confirmSecurityDeposit(16L, 99L)).thenReturn(1);

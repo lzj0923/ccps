@@ -25,21 +25,76 @@ export const supportedLocales = [
   { code: 'en', label: 'English' }
 ];
 
-const navigationLabels = {
-  assets: ['资产与项目', '資產與項目', 'Assets & Projects'],
-  rental: ['租赁运营', '租賃營運', 'Rental Operations'],
-  finance: ['财务与费用', '財務與費用', 'Finance & Expenses'],
-  operations: ['运营工具', '營運工具', 'Operations Tools'],
-  system: ['系统管理', '系統管理', 'System Management']
-};
-const navigationMessages = (index) => Object.fromEntries(Object.entries(navigationLabels).map(([key, labels]) => [key, labels[index]]));
-
 const modules = {
-  myProperties: ['我的房产', '我的房產', 'My Properties'], ownerPayment: ['房款进度', '房款進度', 'Payment Progress'], rentIncome: ['租金收入', '租金收入', 'Rental Income'], ownerExpenses: ['收支维修', '收支維修', 'Income & Maintenance'], ownerReserve: ['预备金', '預備金', 'Reserve Fund'], ownerNotice: ['通知中心', '通知中心', 'Notifications'], ownerDocuments: ['文件资料', '文件資料', 'Documents'],
-  adminOwners: ['业主管理', '業主管理', 'Owner Management'], adminProperties: ['房产管理', '房產管理', 'Property Management'], adminProcess: ['租赁智控台', '租賃智控台', 'Rental Control Hub'], adminTenantDirectory: ['租客管理', '租客管理', 'Tenant Management'], adminTenants: ['租客与租金', '租客與租金', 'Tenants & Rent'], adminMaintenance: ['收支与维修', '收支與維修', 'Income & Maintenance'], adminRentalMandates: ['出租委托', '出租委託', 'Rental Mandates'], adminFinance: ['财务确认', '財務確認', 'Finance Confirmation'], adminData: ['建筑与房款', '建築與房款', 'Buildings & Payments'], adminReserve: ['预备金', '預備金', 'Reserve Fund'], adminAlerts: ['自动提醒', '自動提醒', 'Automated Reminders'], adminReports: ['报表与导出', '報表與導出', 'Reports & Export'], adminAudit: ['操作审计', '操作審計', 'Audit Log']
+  myProperties: ['我的房产', '我的房產', 'My Properties'], ownerPayment: ['房款进度', '房款進度', 'Payment Progress'], ownerFinance: ['财务中心', '財務中心', 'Finance Centre'], rentIncome: ['租金收入', '租金收入', 'Rental Income'], ownerExpenses: ['收支维修', '收支維修', 'Income & Maintenance'], ownerReserve: ['预备金', '預備金', 'Reserve Fund'], ownerNotice: ['通知中心', '通知中心', 'Notifications'], ownerDocuments: ['文件资料', '文件資料', 'Documents'],
+  adminSmartDashboard: ['智慧大屏', '智慧大屏', 'Smart Dashboard'], adminDashboard: ['管理总览', '管理總覽', 'Management Dashboard'], adminProjects: ['建案管理', '建案管理', 'Project Management'], adminOwners: ['业主管理', '業主管理', 'Owner Management'], adminProperties: ['房产管理', '房產管理', 'Property Management'], adminProcess: ['租房流程', '租房流程', 'Rental Workflow'], adminRentalSigning: ['附件签约', '附件簽約', 'Files & Signing'], adminDeposits: ['押金管理', '押金管理', 'Deposit Management'], adminTenants: ['租客与租金', '租客與租金', 'Tenants & Rent'], adminMaintenance: ['收支与维修', '收支維修', 'Income & Maintenance'], adminRentalMandates: ['出租委托', '出租委託', 'Rental Mandates'], adminFinance: ['财务确认', '財務確認', 'Finance Confirmation'], adminData: ['建筑与房款', '建築與房款', 'Buildings & Payments'], adminReserve: ['预备金', '預備金', 'Reserve Fund'], adminAlerts: ['自动提醒', '自動提醒', 'Automated Reminders'], adminSync: ['SQL Account同步', 'SQL Account同步', 'SQL Account Sync'], adminReports: ['报表与导出', '報表與導出', 'Reports & Export'], adminAudit: ['操作审计', '操作審計', 'Audit Log'], adminSystemBackup: ['备份与恢复', '備份與恢復', 'Backup & Restore']
 };
 
 const moduleMessages = (index) => Object.fromEntries(Object.entries(modules).map(([id, labels]) => [id, { name: labels[index], title: labels[index], hint: '' }]));
+const projectManagementLabels = {
+  eyebrow: ['资产主档', '資產主檔', 'ASSET MASTER DATA'],
+  title: ['建案管理', '建案管理', 'Project Management'],
+  subtitle: ['统一维护建案资料，供房产、房款与租赁流程使用。', '統一維護建案資料，供房產、房款與租賃流程使用。', 'Maintain project master data used by properties, payments, and leasing.'],
+  add: ['新增建案', '新增建案', 'Add Project'],
+  total: ['全部建案', '全部建案', 'All Projects'],
+  active: ['启用中', '啟用中', 'Active'],
+  inactive: ['已停用', '已停用', 'Inactive'],
+  units: ['房产单位', '房產單位', 'Property Units'],
+  projectUnit: ['个建案', '個建案', 'projects'],
+  availableHint: ['可用于新增房产', '可用於新增房產', 'Available for new properties'],
+  inactiveHint: ['暂停新增关联', '暫停新增關聯', 'New links are paused'],
+  unitsHint: ['全部建案合计', '全部建案合計', 'Across all projects'],
+  search: ['搜索建案编码、名称、州属、城市或地址', '搜尋建案編碼、名稱、州屬、城市或地址', 'Search code, name, state, city, or address'],
+  allStatus: ['全部状态', '全部狀態', 'All Statuses'],
+  refresh: ['重新载入', '重新載入', 'Refresh'],
+  listTitle: ['建案列表', '建案列表', 'Project List'],
+  listHint: ['每页显示 5 条；有关联房产的建案不可删除。', '每頁顯示 5 條；有關聯房產的建案不可刪除。', '5 records per page. Projects linked to units cannot be deleted.'],
+  records: ['共 {count} 条', '共 {count} 條', '{count} records'],
+  pageSize: ['5 条/页', '5 條/頁', '5 per page'],
+  code: ['建案编码', '建案編碼', 'Project Code'],
+  name: ['建案名称', '建案名稱', 'Project Name'],
+  location: ['城市 / 州属', '城市 / 州屬', 'City / State'],
+  state: ['州属 / 联邦直辖区', '州屬 / 聯邦直轄區', 'State / Federal Territory'],
+  statePlaceholder: ['请选择州属', '請選擇州屬', 'Select a state'],
+  city: ['城市 / 县区', '城市 / 縣區', 'City / District'],
+  cityPlaceholder: ['请选择城市或县区', '請選擇城市或縣區', 'Select a city or district'],
+  countryCode: ['国家代码', '國家代碼', 'Country Code'],
+  address: ['详细地址', '詳細地址', 'Detailed Address'],
+  detailedAddress: ['详细地址', '詳細地址', 'Detailed Address'],
+  unitCount: ['房产数量', '房產數量', 'Units'],
+  ownerCount: ['关联业主', '關聯業主', 'Owners'],
+  status: ['状态', '狀態', 'Status'],
+  actions: ['操作', '操作', 'Actions'],
+  updatedAt: ['更新于', '更新於', 'Updated'],
+  edit: ['编辑', '編輯', 'Edit'],
+  disable: ['停用', '停用', 'Disable'],
+  enable: ['启用', '啟用', 'Enable'],
+  delete: ['删除', '刪除', 'Delete'],
+  noRows: ['目前没有符合条件的建案', '目前沒有符合條件的建案', 'No matching projects'],
+  formEyebrow: ['建案资料', '建案資料', 'PROJECT PROFILE'],
+  createTitle: ['新增建案', '新增建案', 'Add Project'],
+  editTitle: ['编辑建案', '編輯建案', 'Edit Project'],
+  formHint: ['建案编码必须唯一，国家代码使用两个英文字母。', '建案編碼必須唯一，國家代碼使用兩個英文字母。', 'Project codes must be unique. Use a two-letter country code.'],
+  codePlaceholder: ['例如：CCPS-001', '例如：CCPS-001', 'Example: CCPS-001'],
+  namePlaceholder: ['请输入建案名称', '請輸入建案名稱', 'Enter project name'],
+  addressPlaceholder: ['请输入街道、门牌号、楼栋等详细地址', '請輸入街道、門牌號、樓棟等詳細地址', 'Enter street, building, and unit details'],
+  save: ['保存建案', '儲存建案', 'Save Project'],
+  created: ['建案已新增', '建案已新增', 'Project created'],
+  updated: ['建案资料已更新', '建案資料已更新', 'Project updated'],
+  statusUpdated: ['建案状态已更新', '建案狀態已更新', 'Project status updated'],
+  deleted: ['建案已删除', '建案已刪除', 'Project deleted'],
+  loadFailed: ['建案资料加载失败', '建案資料載入失敗', 'Failed to load projects'],
+  saveFailed: ['建案保存失败', '建案儲存失敗', 'Failed to save project'],
+  deleteFailed: ['建案删除失败', '建案刪除失敗', 'Failed to delete project'],
+  deleteBlocked: ['该建案已有房产，不能删除；可改为停用。', '該建案已有房產，不能刪除；可改為停用。', 'This project has units and cannot be deleted. Disable it instead.'],
+  deleteConfirm: ['确定删除建案“{name}”吗？', '確定刪除建案「{name}」嗎？', 'Delete project “{name}”?']
+};
+const projectManagementMessages = (index) => Object.fromEntries(Object.entries(projectManagementLabels).map(([key, labels]) => [key, labels[index]]));
+const rentalMandateLabels = {
+  all: ['全部委托', '全部委託', 'All Mandates'],
+  active: ['启用中', '啟用中', 'Active']
+};
+const rentalMandateMessages = (index) => Object.fromEntries(Object.entries(rentalMandateLabels).map(([key, labels]) => [key, labels[index]]));
 const buildingLabels = {
   listTitle: ['建筑与房款列表', '建築與房款列表', 'Buildings & Payments'],
   paymentInstallment: ['付款期数', '付款期數', 'Payment Installment'],
@@ -49,6 +104,7 @@ const buildingLabels = {
   paymentDataLoadFailed: ['建筑与房款资料加载失败', '建築與房款資料載入失敗', 'Failed to load building payment data'], noMatchingPayments: ['目前没有符合条件的付款资料', '目前沒有符合條件的付款資料', 'No matching payment records'], noPaymentData: ['目前没有可查看的付款资料', '目前沒有可查看的付款資料', 'No payment record to view'],
   editInstallment: ['编辑本期', '編輯本期', 'Edit Installment'], sendOverdueReminder: ['发送逾期提醒', '發送逾期提醒', 'Send Overdue Reminder'], sendBalanceReminder: ['发送余款提醒', '發送餘款提醒', 'Send Balance Reminder'], sendPaymentReminder: ['发送付款提醒', '發送付款提醒', 'Send Payment Reminder'], sending: ['发送中…', '發送中…', 'Sending…'], viewReceipt: ['查看收据', '查看收據', 'View Receipt'], viewPaymentRecord: ['查看付款记录', '查看付款記錄', 'View Payment Record'], goToFinanceReview: ['前往财务确认', '前往財務確認', 'Go to Finance Review'],
   information: ['资料资讯', '資料資訊', 'Information'], contractNo: ['合约编号', '合約編號', 'Contract No.'], paymentPlan: ['付款计划', '付款計劃', 'Payment Plan'], paymentStatus: ['付款状态', '付款狀態', 'Payment Status'], paymentProgress: ['付款进度', '付款進度', 'Payment Progress'],
+  addPreHandoverProperty: ['新增未交房房产', '新增未交房房產', 'Add Pre-handover Property'], preHandoverPropertyHint: ['选择已有业主和建案，建立未交房房产及购房合约。', '選擇現有業主和建案，建立未交房房產及購房合約。', 'Select an existing owner and project to create a pre-handover property and purchase contract.'], loadingPropertyOptions: ['正在加载业主与建案…', '正在載入業主與建案…', 'Loading owners and projects…'], selectOwner: ['请选择业主', '請選擇業主', 'Select an owner'], buildingBlock: ['栋／座', '棟／座', 'Building / Block'], floorNo: ['楼层', '樓層', 'Floor'], unitNo: ['单位编号', '單位編號', 'Unit No.'], unitType: ['房型', '房型', 'Unit Type'], areaSqm: ['面积（m²）', '面積（m²）', 'Area (m²)'], bedroomCount: ['房间数', '房間數', 'Bedrooms'], purchasePrice: ['房产总价', '房產總價', 'Purchase Price'], expectedHandoverDate: ['预计交房日期', '預計交房日期', 'Expected Handover Date'], ownershipPercent: ['持有比例（%）', '持有比例（%）', 'Ownership (%)'], purchaseDate: ['持有开始日期', '持有開始日期', 'Ownership Start Date'], propertyStage: ['房产阶段', '房產階段', 'Property Stage'], preHandoverStageLocked: ['此入口固定建立为未交房，交房后可在房产管理更新阶段。', '此入口固定建立為未交房，交房後可在房產管理更新階段。', 'This entry always creates a pre-handover property. Update the stage in Property Management after handover.'], primaryProperty: ['设为主房产', '設為主房產', 'Set as Primary Property'], confirmAddProperty: ['确认新增房产', '確認新增房產', 'Add Property'], propertyOptionsLoadFailed: ['业主或建案加载失败', '業主或建案載入失敗', 'Failed to load owners or projects'], preHandoverPropertyRequired: ['请选择业主、建案并填写单位编号', '請選擇業主、建案並填寫單位編號', 'Select an owner and project, then enter a unit number'], preHandoverPropertyCreated: ['未交房房产及购房合约已建立，可继续新增房款', '未交房房產及購房合約已建立，可繼續新增房款', 'The pre-handover property and purchase contract were created. You can now add a payment plan.'], preHandoverPropertyCreateFailed: ['新增未交房房产失败', '新增未交房房產失敗', 'Failed to create pre-handover property'],
   createProject: ['新增建案', '新增建案', 'Add Project'], projectCreatedHint: ['建立后可在业主管理新增单位与房产', '建立後可在業主管理新增單位與房產', 'After creation, units and properties can be added in Owner Management'], projectCode: ['建案编码', '建案編碼', 'Project Code'], projectCodeExample: ['例如：CCPS-01', '例如：CCPS-01', 'Example: CCPS-01'], projectName: ['建案名称', '建案名稱', 'Project Name'], address: ['地址', '地址', 'Address'], city: ['城市', '城市', 'City'], cityExample: ['例如：吉隆坡', '例如：吉隆坡', 'Example: Kuala Lumpur'], countryCode: ['国家代码', '國家代碼', 'Country Code'], currencyMyr: ['（RM）', '（RM）', '(MYR)'], creating: ['建立中…', '建立中…', 'Creating…'], confirmCreate: ['确认新增', '確認新增', 'Confirm Create'],
   createPaymentPlan: ['新增房款', '新增房款', 'Add Payment Plan'], paymentPlanHint: ['建立购房合约的付款计划与应收分期', '建立購房合約的付款計劃與應收分期', 'Create a payment plan and receivable installments for a purchase contract'], loadingEligibleContracts: ['正在载入可设定房款的合约…', '正在載入可設定房款的合約…', 'Loading eligible contracts…'], noEligibleContracts: ['目前没有可新增房款的合约。房产必须为未交房，且不能已有启用中的付款计划。', '目前沒有可新增房款的合約。房產必須為未交房，且不能已有啟用中的付款計劃。', 'No eligible purchase contracts are available. The property must not be handed over and cannot already have an active payment plan.'],
   purchaseContract: ['购房合约', '購房合約', 'Purchase Contract'], selectProjectUnitOwner: ['请选择建案、单位与业主', '請選擇建案、單位與業主', 'Select a project, unit, and owner'], planName: ['计划名称', '計劃名稱', 'Plan Name'], effectiveDate: ['生效日期', '生效日期', 'Effective Date'], ownerUnit: ['业主／单位', '業主／單位', 'Owner / Unit'], contractTotal: ['合约总价', '合約總價', 'Contract Total'], paymentInstallments: ['付款分期', '付款分期', 'Payment Installments'], installmentHint: ['到期日必须依序递增，合计必须等于合约总价', '到期日必須依序遞增，合計必須等於合約總價', 'Due dates must increase in order and the total must equal the contract total'], splitEvenly: ['平均分期', '平均分期', 'Split Evenly'], addInstallment: ['增加一期', '增加一期', 'Add Installment'], removeInstallment: ['删除本期', '刪除本期', 'Remove Installment'], milestoneDescription: ['工程阶段／说明', '工程階段／說明', 'Milestone / Description'], installmentTotal: ['分期合计', '分期合計', 'Installment Total'], difference: ['差额', '差額', 'Difference'], confirmCreatePaymentPlan: ['确认建立房款', '確認建立房款', 'Create Payment Plan'],
@@ -62,11 +118,9 @@ const propertyLabels = {
   unsetProject: ['未设置建案', '未設定建案', 'Project not set'], unsetMobile: ['未设置手机', '未設定手機', 'Mobile not set'], allRentalStatuses: ['全部出租状态', '全部出租狀態', 'All Rental Statuses'], preHandover: ['未交房', '未交房', 'Pre-handover'], handedOver: ['已交房', '已交房', 'Handed Over'], pendingRental: ['已交房待出租', '已交房待出租', 'Handed Over, Awaiting Rental'], rented: ['出租中', '出租中', 'Rented'], notForRent: ['未启用出租', '未啟用出租', 'Not for Rent'],
   totalProperties: ['房产总数', '房產總數', 'Total Properties'], availableForManagement: ['可进入运营管理', '可進入營運管理', 'Available for Operations'], underConstruction: ['仍在建设或交房前', '仍在建設或交房前', 'Under construction or pre-handover'], outstandingPayments: ['尚有未缴', '尚有未繳', 'Outstanding Payments'], followUpPayment: ['需继续跟进房款', '需繼續跟進房款', 'Payment follow-up required'],
   searchProperties: ['搜索建案／单位／业主', '搜尋建案／單位／業主', 'Search project / unit / owner'], addProperty: ['新增房产', '新增房產', 'Add Property'],
-  projectInputPlaceholder: ['选择已有建案或输入新建案名称', '選擇已有建案或輸入新建案名稱', 'Select an existing project or enter a new project name'],
-  newProjectHint: ['未找到相同建案，保存时会先确认并自动建立建案。', '找不到相同建案，儲存時會先確認並自動建立建案。', 'No matching project found. You will confirm before the project is created.'],
-  confirmNewProjectTitle: ['确认建立建案', '確認建立建案', 'Confirm New Project'],
-  confirmNewProjectMessage: ['没有找到“{name}”。确认后系统会先建立这个建案，再继续建立房产。', '找不到「{name}」。確認後系統會先建立這個建案，再繼續建立房產。', '“{name}” was not found. Confirm to create the project first, then continue creating the property.'],
-  confirmNewProject: ['确认建立并继续', '確認建立並繼續', 'Create and Continue']
+  projectInputPlaceholder: ['请选择已建立的建案', '請選擇已建立的建案', 'Select an existing project'],
+  createStepChooseOwner: ['步骤 1/2：选择业主', '步驟 1/2：選擇業主', 'Step 1/2: Select owner'],
+  createStepDetails: ['步骤 2/2：建立房产', '步驟 2/2：建立房產', 'Step 2/2: Create property']
 };
 const propertyMessages = (index) => Object.fromEntries(Object.entries(propertyLabels).map(([key, labels]) => [key, labels[index]]));
 const tenancyLabels = {
@@ -91,11 +145,11 @@ const tenancyLabels = {
   generateTenancyAgreement: ['生成租赁合约', '生成租賃合約', 'Generate Tenancy Agreement'],
   generateTenancyAgreementTitle: ['生成租赁合约 PDF', '生成租賃合約 PDF', 'Generate Tenancy Agreement PDF'],
   generateAuthorizationTitle: ['生成授权委托书', '生成授權委託書', 'Generate Authorization Letter'],
-  signedAuthorizationUploadHint: ['请上传业主签署后的授权委托书，确认后才能启用出租委托。', '請上傳業主簽署後的授權委託書，確認後才能啟用出租委託。', 'Upload the owner-signed authorization letter before activating the rental mandate.'],
+  signedAuthorizationUploadHint: ['授权委托书在附件签约中独立办理，不影响系统租房流程。', '授權委託書在附件簽約中獨立辦理，不影響系統租房流程。', 'Authorization signing is handled separately and does not block the system rental workflow.'],
   loadingDocuments: ['正在载入附件…', '正在載入附件…', 'Loading attachments…'],
   documentsLoadFailed: ['附件载入失败，请稍后重试。', '附件載入失敗，請稍後重試。', 'Failed to load attachments. Please try again.'],
   authorizationGeneratedDownloadOnly: ['生成的授权委托书只是待签署模板，请下载后交由业主签署，再上传签署版本。', '生成的授權委託書只是待簽署範本，請下載後交由業主簽署，再上傳簽署版本。', 'The generated authorization letter is an unsigned template. Download it, have the owner sign it, then upload the signed copy.'],
-  authorizationUploaded: ['业主签署的授权委托书已上传，现在可以提交审核。', '業主簽署的授權委託書已上傳，現在可以提交審核。', 'The owner-signed authorization letter was uploaded. The mandate can now be submitted for review.'],
+  authorizationUploaded: ['业主签署的授权委托书已上传，附件签约已完成。', '業主簽署的授權委託書已上傳，附件簽約已完成。', 'The owner-signed authorization letter was uploaded. File signing is complete.'],
   authorizationRequiredBeforeApproval: ['启用前必须先上传业主签署的授权委托书。请点击需要审核的委托，上传对应的委托书。', '啟用前必須先上傳業主簽署的授權委託書。請點擊需要審核的委託，上傳對應的委託書。', 'Upload the owner-signed authorization letter before activation. Click the mandate that needs review and upload the corresponding authorization letter.'],
   authorizationStatusMissing: ['授权书状态：未上传', '授權書狀態：未上傳', 'Authorization status: Not uploaded'],
   authorizationStatusUploaded: ['授权书状态：已上传', '授權書狀態：已上傳', 'Authorization status: Uploaded'],
@@ -110,6 +164,7 @@ const tenancyLabels = {
   authorizationStepGenerate: ['生成', '生成', 'Generate'],
   authorizationStepSign: ['线上签署', '線上簽署', 'Online signing'],
   authorizationStepReview: ['返回审核', '返回審核', 'Return to review'],
+  authorizationStepComplete: ['签署完成', '簽署完成', 'Signing complete'],
   authorizationWorkspaceHint: ['先生成授权委托书，系统会保存待签署文件。', '先生成授權委託書，系統會保存待簽署文件。', 'Generate the authorization letter first; the system will save the unsigned file.'],
   authorizationDraftLabel: ['待业主线上签署', '待業主線上簽署', 'Awaiting owner online signature'],
   startOnlineSigning: ['发起线上签署', '發起線上簽署', 'Start online signing'],
@@ -125,6 +180,7 @@ const tenancyLabels = {
   prepaymentHelp: ['本期欠款会先收齐；多出的 RM {amount} 将自动抵扣最早的未缴租金。', '本期欠款會先收齊；多出的 RM {amount} 將自動抵扣最早的未繳租金。', 'The current bill is settled first; the excess RM {amount} will automatically offset the earliest unpaid rent.'],
   prepaymentNotice: ['本期会收齐；RM {amount} 将进入预收租金，并自动抵扣后续月份。', '本期會收齊；RM {amount} 將進入預收租金，並自動抵扣後續月份。', 'The current bill will be settled; RM {amount} will become prepaid rent and offset future months automatically.'],
   prepaymentSelectionRequired: ['金额超过本期欠款，请勾选“将多收金额转为预收租金”。', '金額超過本期欠款，請勾選「將多收金額轉為預收租金」。', 'The amount exceeds this bill. Select “Convert excess amount to prepaid rent”.'],
+  securityDepositPayment: ['扣租客押金', '扣租客押金', 'Deduct Tenant Deposit'], securityDepositCurrentOnly: ['扣押金只能支付本期未缴租金，不能作为预付租金。', '扣押金只能支付本期未繳租金，不能作為預付租金。', 'A deposit deduction can only pay the current outstanding rent and cannot become prepaid rent.'],
   advanceRentMonths: ['预计覆盖 {months} 个月租金。', '預計覆蓋 {months} 個月租金。', 'Estimated coverage: {months} months of rent.'],
   advanceRentPartial: ['最后一个月将收取 RM {amount}，该月账单金额为 RM {due}，仍欠 RM {remaining}。', '最後一個月將收取 RM {amount}，該月帳單金額為 RM {due}，仍欠 RM {remaining}。', 'The last month will receive RM {amount} of RM {due}; RM {remaining} will remain outstanding.'],
   advanceRentExceedsLease: ['金额超过本租约剩余租金，不能生成租期外账单。', '金額超過本租約剩餘租金，不能生成租期外帳單。', 'The amount exceeds the remaining rent in this lease; invoices outside the lease will not be created.'],
@@ -143,7 +199,11 @@ const tenantDirectoryLabels = {
   noLease: ['暂无生效租约', '暫無生效租約', 'No active lease'], records: ['{count} 笔', '{count} 筆', '{count} records'], details: ['详情', '詳情', 'Details'], detailTitle: ['租客详情', '租客詳情', 'Tenant Details'], leaseDetails: ['租约资料', '租約資料', 'Lease Details'], leasePeriod: ['租期', '租期', 'Lease Period'], rent: ['月租', '月租', 'Monthly Rent'], deposit: ['押金', '押金', 'Deposit'], paymentDay: ['缴费日', '繳費日', 'Payment Day'], unpaidRent: ['未缴租金', '未繳租金', 'Unpaid Rent'], pendingMaintenance: ['待处理维修', '待處理維修', 'Pending Maintenance'], pendingSignature: ['待签合约', '待簽合約', 'Pending Signature'], workflow: ['当前流程', '目前流程', 'Current Workflow'], workflow_contract_pending: ['待生成租赁合约', '待產生租賃合約', 'Contract to Generate'], workflow_signature_pending: ['等待租客签署', '等待租客簽署', 'Awaiting Tenant Signature'], workflow_ready_to_start: ['合约已签，等待起租', '合約已簽，等待起租', 'Signed, Awaiting Start'], workflow_active_tenancy: ['租约进行中', '租約進行中', 'Active Tenancy'], workflow_completed: ['租约已结束', '租約已結束', 'Lease Completed'], workflow_closed: ['租约已关闭', '租約已關閉', 'Lease Closed'], leaseStatus_active: ['进行中', '進行中', 'Active'], leaseStatus_expired: ['已到期', '已到期', 'Expired'], leaseStatus_terminated: ['已终止', '已終止', 'Terminated'], leaseStatus_transferred: ['已转租', '已轉租', 'Transferred'], signature_not_generated: ['合约未生成', '合約未產生', 'Contract Not Generated'], signature_ready_to_sign: ['可发起签署', '可發起簽署', 'Ready to Sign'], signature_pending_signature: ['签署进行中', '簽署進行中', 'Signature In Progress'], signature_signed: ['已完成签署', '已完成簽署', 'Signed'], noLeaseHistory: ['暂无租约记录', '暫無租約記錄', 'No lease history'], edit: ['编辑', '編輯', 'Edit'], enable: ['启用', '啟用', 'Enable'], disable: ['停用', '停用', 'Disable'], delete: ['删除', '刪除', 'Delete'],
   createTitle: ['新增租客', '新增租客', 'Add Tenant'], editTitle: ['编辑租客', '編輯租客', 'Edit Tenant'], fullName: ['姓名', '姓名', 'Full Name'], phone: ['电话', '電話', 'Phone'], email: ['邮箱', '電郵', 'Email'], cancel: ['取消', '取消', 'Cancel'], save: ['保存', '儲存', 'Save'], creating: ['建立中…', '建立中…', 'Creating…'], saving: ['保存中…', '儲存中…', 'Saving…'],
   noRows: ['没有符合条件的租客', '沒有符合條件的租客', 'No matching tenants'], loadFailed: ['租客资料加载失败', '租客資料載入失敗', 'Failed to load tenant data'], saved: ['租客资料已保存', '租客資料已儲存', 'Tenant details saved'], deleted: ['租客已删除', '租客已刪除', 'Tenant deleted'], deleteFailed: ['删除租客失败', '刪除租客失敗', 'Failed to delete tenant'],
-  deleteConfirm: ['确定删除“{name}”吗？此操作无法恢复。', '確定刪除「{name}」嗎？此操作無法復原。', 'Delete “{name}”? This cannot be undone.'], deleteBlocked: ['该租客已有租约记录，不能删除；请改为停用。', '該租客已有租約記錄，不能刪除；請改為停用。', 'This tenant has lease history and cannot be deleted. Disable the tenant instead.']
+  deleteConfirm: ['确定删除“{name}”吗？此操作无法恢复。', '確定刪除「{name}」嗎？此操作無法復原。', 'Delete “{name}”? This cannot be undone.'], deleteBlocked: ['该租客已有租约记录，不能删除；请改为停用。', '該租客已有租約記錄，不能刪除；請改為停用。', 'This tenant has lease history and cannot be deleted. Disable the tenant instead.'],
+  depositBalance: ['押金余额', '押金餘額', 'Deposit Balance'], depositLedger: ['租客押金明细', '租客押金明細', 'Tenant Deposit Ledger'], addDepositTransaction: ['新增押金异动', '新增押金異動', 'Add Deposit Transaction'], noDepositTransactions: ['暂无押金明细', '暫無押金明細', 'No deposit transactions'],
+  depositLease: ['所属租约', '所屬租約', 'Lease'], depositType: ['异动类型', '異動類型', 'Transaction Type'], depositAmount: ['金额（RM）', '金額（RM）', 'Amount (RM)'], depositDate: ['发生日期', '發生日期', 'Date'], depositDescription: ['说明', '說明', 'Description'], depositDirection: ['收支', '收支', 'Direction'], depositBalanceAfter: ['异动后余额', '異動後餘額', 'Balance After'], depositStatus: ['处理状态', '處理狀態', 'Status'],
+  deposit_tenant_advance: ['代付租客费用', '代付租客費用', 'Advance Paid for Tenant'], deposit_tenant_repayment: ['租客归还代付款', '租客歸還代付款', 'Tenant Repayment'], deposit_refund: ['押金余款返还', '押金餘款返還', 'Deposit Refund'], deposit_forfeiture: ['押金余款没收', '押金餘款沒收', 'Deposit Forfeiture'], deposit_adjustment_credit: ['押金调增', '押金調增', 'Deposit Increase'], deposit_adjustment_debit: ['押金调减', '押金調減', 'Deposit Decrease'], deposit_collection: ['押金收款', '押金收款', 'Deposit Collection'], deposit_rent_deduction: ['扣押金支付租金', '扣押金支付租金', 'Rent Deducted from Deposit'],
+  deposit_credit: ['增加', '增加', 'Credit'], deposit_debit: ['扣减', '扣減', 'Debit'], deposit_pending: ['待财务确认', '待財務確認', 'Pending Finance Review'], deposit_confirmed: ['财务已确认', '財務已確認', 'Finance Confirmed'], deposit_posted: ['已入账', '已入帳', 'Posted'], deposit_rejected: ['已退回', '已退回', 'Rejected'], deposit_unrecorded: ['尚未提交', '尚未提交', 'Not Submitted'], depositSaved: ['押金异动已保存', '押金異動已儲存', 'Deposit transaction saved'], depositSaveFailed: ['保存押金异动失败', '儲存押金異動失敗', 'Failed to save deposit transaction']
 };
 tenantDirectoryLabels.openLeaseWorkbench = ['前往租赁工作台', '前往租賃工作台', 'Open Rental Workbench'];
 const tenantDirectoryMessages = (index) => Object.fromEntries(Object.entries(tenantDirectoryLabels).map(([key, labels]) => [key, labels[index]]));
@@ -195,6 +255,7 @@ const financeLabels = {
   reviewNoteDefault: ['银行入账与付款凭证核对一致', '銀行入賬與付款憑證核對一致', 'Bank entry matches the payment proof'],
   reviewNoteRequired: ['请填写审核备注', '請填寫審核備註', 'Enter a review note'],
   batchNoteDefault: ['批量核对付款凭证与银行入账资料一致', '批量核對付款憑證與銀行入賬資料一致', 'Batch verification: payment proofs match bank entries'],
+  batchReferenceNo: ['批量确认编号', '批量確認編號', 'Batch Confirmation Reference'], batchReferencePlaceholder: ['例如银行流水号、付款批次号', '例如銀行流水號、付款批次號', 'Bank reference or payment batch number'],
   batchNoteRequired: ['请填写批量审核备注', '請填寫批量審核備註', 'Enter a batch review note'],
   selectPendingTransaction: ['请先勾选待确认交易', '請先勾選待確認交易', 'Select pending transactions first'],
   collectionConfirmed: ['收款已确认并计入房款', '收款已確認並計入房款', 'Collection confirmed and applied to property payment'],
@@ -202,6 +263,13 @@ const financeLabels = {
   reviewOperationFailed: ['审核操作失败', '審核操作失敗', 'Review action failed'],
   batchConfirmed: ['已确认 {count} 笔收款', '已確認 {count} 筆收款', 'Confirmed {count} collections'],
   batchConfirmFailed: ['批量确认失败', '批量確認失敗', 'Batch confirmation failed'],
+  reopen: ['退回待确认', '退回待確認', 'Return to pending'],
+  reopenTitle: ['退回待确认', '退回待確認', 'Return finance record to pending'],
+  reopenHint: ['系统会撤销本次确认产生的入账，并将记录恢复为待确认。', '系統會撤銷本次確認產生的入賬，並將記錄恢復為待確認。', 'The posted accounting effects will be reversed and the record returned to pending.'],
+  reopenNote: ['退回原因', '退回原因', 'Reason'],
+  reopenNotePlaceholder: ['请说明需要修改的错误内容', '請說明需要修改的錯誤內容', 'Describe what must be corrected'],
+  reopenSuccess: ['已退回待确认，可修改后重新审核', '已退回待確認，可修改後重新審核', 'Returned to pending for correction'],
+  reopenFailed: ['退回待确认失败', '退回待確認失敗', 'Failed to return record to pending'],
   proofLoadFailed: ['付款凭证载入失败', '付款憑證載入失敗', 'Failed to load payment proof'],
   proofDownloadFailed: ['凭证下载失败', '憑證下載失敗', 'Failed to download proof'],
   unknownStatus: ['未知', '未知', 'Unknown'],
@@ -250,24 +318,10 @@ const propertyProcessLabels = {
 };
 const propertyProcessMessages = (index) => Object.fromEntries(Object.entries(propertyProcessLabels).map(([key, labels]) => [key, labels[index]]));
 const processCenterLabels = {
-  paginationLabel: ['租房流程分頁', '租房流程分頁', 'Rental workflow pagination'], previousPage: ['上一頁', '上一頁', 'Previous'], nextPage: ['下一頁', '下一頁', 'Next'], pageIndicator: ['第 {page} / {total} 頁', '第 {page} / {total} 頁', 'Page {page} of {total}'],
-  kicker: ['租赁智控台', '租賃智控台', 'Rental Control Hub'], title: ['租赁智控台', '租賃智控台', 'Rental Control Hub'], description: ['先选择房产，再集中完成租赁操作及待处理事项。', '先選擇房產，再集中完成租賃操作及待處理事項。', 'Complete rental operations and outstanding tasks in one place.'], propertyCount: ['套房产', '套房產', 'properties'], selectProperty: ['选择房产', '選擇房產', 'Select Property'], searchPlaceholder: ['搜索建案、单位或业主', '搜尋建案、單位或業主', 'Search project, unit, or owner'], loading: ['正在加载房产…', '正在載入房產…', 'Loading properties…'], loadingWorkspace: ['正在加载房产流程…', '正在載入房產流程…', 'Loading property workflow…'], retry: ['重试', '重試', 'Retry'], noProperties: ['目前没有可用房产', '目前沒有可用房產', 'No properties available'], loadFailed: ['房产流程资料加载失败', '房產流程資料載入失敗', 'Failed to load workflow data'], chooseProperty: ['请先选择一套房产', '請先選擇一套房產', 'Select a property first'], choosePropertyHint: ['左侧选择房产后，这里会显示对应的出租流程。', '左側選擇房產後，這裡會顯示對應的出租流程。', 'Choose a property on the left to view its rental workflow.'], selectedProperty: ['当前房产', '目前房產', 'Selected Property'], overallProgress: ['整体进度', '整體進度', 'Overall Progress'], nextStep: ['建议下一步', '建議下一步', 'Suggested next step'], timelineTitle: ['租赁流程进度', '租賃流程進度', 'Rental workflow progress'], timelineHint: ['每个步骤都可以直接进入对应功能', '每個步驟都可以直接進入對應功能', 'Open the related function directly from each step'], completedCount: ['{done} / {total} 已完成', '{done} / {total} 已完成', '{done} / {total} completed'], statusComplete: ['已完成', '已完成', 'Completed'], statusProgress: ['进行中', '進行中', 'In progress'], statusPending: ['待处理', '待處理', 'Pending'], checkmark: ['✓', '✓', '✓'], unsetProject: ['未设置建案', '未設定建案', 'Project not set'], unsetUnit: ['未设置单位', '未設定單位', 'Unit not set'], unitNotSet: ['房型未设置', '房型未設定', 'Unit type not set'], unsetOwner: ['未设置业主', '未設定業主', 'Owner not set'], rentalEnabled: ['已启用代租', '已啟用代租', 'Rental enabled'], rentalNotEnabled: ['未启用代租', '未啟用代租', 'Rental service is not enabled'], stageOperating: ['运营中', '營運中', 'Operating'], stageDisposed: ['已处置', '已處置', 'Disposed'], stagePreHandover: ['未交房', '未交房', 'Pre-handover'], detailProperty: ['房产资料已建立', '房產資料已建立', 'Property details are ready'], detailRentalEnabled: ['代租服务已启用', '代租服務已啟用', 'Rental service is enabled'], detailRentalMissing: ['尚未启用代租服务', '尚未啟用代租服務', 'Rental service is not enabled'], detailTenantReady: ['已有租客资料', '已有租客資料', 'Tenant information is ready'], detailTenantMissing: ['尚未关联租客资料', '尚未關聯租客資料', 'Tenant information is missing'], detailLeaseReady: ['已有租约资料', '已有租約資料', 'Lease information is ready'], detailLeaseMissing: ['尚未建立租约', '尚未建立租約', 'Lease has not been created'], detailRentTracking: ['可持续追踪租金及收款', '可持續追蹤租金及收款', 'Rent and collection tracking is available'], detailRentWaiting: ['完成租约后开始追踪', '完成租約後開始追蹤', 'Tracking starts after the lease is created'], detailHandoverDone: ['房产已进入运营阶段', '房產已進入營運階段', 'Property is in the operating stage'], detailHandoverWaiting: ['尚未完成交房', '尚未完成交房', 'Handover is not complete'], detailOperationsReady: ['可进入日常运营管理', '可進入日常營運管理', 'Ready for day-to-day operations'], detailOperationsWaiting: ['交房后开始日常运营', '交房後開始日常營運', 'Operations start after handover']
+  kicker: ['房產流程中心', '房產流程中心', 'Property Workflow Center'], title: ['租房流程中心', '租房流程中心', 'Rental Workflow Center'], description: ['先選擇房產，再集中查看租房流程進度及待處理事項。', '先選擇房產，再集中查看租房流程進度及待處理事項。', 'Select a property to view its rental progress and outstanding actions in one place.'], propertyCount: ['套房產', '套房產', 'properties'], selectProperty: ['選擇房產', '選擇房產', 'Select Property'], searchPlaceholder: ['搜尋建案、單位或業主', '搜尋建案、單位或業主', 'Search project, unit, or owner'], loading: ['正在載入房產…', '正在載入房產…', 'Loading properties…'], loadingWorkspace: ['正在載入房產流程…', '正在載入房產流程…', 'Loading property workflow…'], retry: ['重試', '重試', 'Retry'], noProperties: ['目前沒有可用房產', '目前沒有可用房產', 'No properties available'], loadFailed: ['房產流程資料載入失敗', '房產流程資料載入失敗', 'Failed to load workflow data'], chooseProperty: ['請先選擇一套房產', '請先選擇一套房產', 'Select a property first'], choosePropertyHint: ['左側選擇房產後，這裡會顯示對應的出租流程。', '左側選擇房產後，這裡會顯示對應的出租流程。', 'Choose a property on the left to view its rental workflow.'], selectedProperty: ['目前房產', '目前房產', 'Selected Property'], overallProgress: ['整體進度', '整體進度', 'Overall Progress'], nextStep: ['建議下一步', '建議下一步', 'Suggested next step'], timelineTitle: ['租房流程進度', '租房流程進度', 'Rental workflow progress'], timelineHint: ['每個步驟都可以直接進入對應功能', '每個步驟都可以直接進入對應功能', 'Open the related function directly from each step'], completedCount: ['{done} / {total} 已完成', '{done} / {total} 已完成', '{done} / {total} completed'], statusComplete: ['已完成', '已完成', 'Completed'], statusProgress: ['進行中', '進行中', 'In progress'], statusPending: ['待處理', '待處理', 'Pending'], checkmark: ['✓', '✓', '✓'], unsetProject: ['未設定建案', '未設定建案', 'Project not set'], unsetUnit: ['未設定單位', '未設定單位', 'Unit not set'], unitNotSet: ['房型未設定', '房型未設定', 'Unit type not set'], unsetOwner: ['未設定業主', '未設定業主', 'Owner not set'], rentalEnabled: ['已啟用代租', '已啟用代租', 'Rental enabled'], rentalNotEnabled: ['未啟用代租', '未啟用代租', 'Rental not enabled'], stageOperating: ['營運中', '營運中', 'Operating'], stageDisposed: ['已處置', '已處置', 'Disposed'], stagePreHandover: ['未交房', '未交房', 'Pre-handover'], detailProperty: ['房產資料已建立', '房產資料已建立', 'Property details are ready'], detailRentalEnabled: ['代租服務已啟用', '代租服務已啟用', 'Rental service is enabled'], detailRentalMissing: ['尚未啟用代租服務', '尚未啟用代租服務', 'Rental service is not enabled'], detailTenantReady: ['已有租客資料', '已有租客資料', 'Tenant information is ready'], detailTenantMissing: ['尚未關聯租客資料', '尚未關聯租客資料', 'Tenant information is missing'], detailLeaseReady: ['已有租約資料', '已有租約資料', 'Lease information is ready'], detailLeaseMissing: ['尚未建立租約', '尚未建立租約', 'Lease has not been created'], detailRentTracking: ['可持續追蹤租金及收款', '可持續追蹤租金及收款', 'Rent and collection tracking is available'], detailRentWaiting: ['完成租約後開始追蹤', '完成租約後開始追蹤', 'Tracking starts after the lease is created'], detailHandoverDone: ['房產已進入營運階段', '房產已進入營運階段', 'Property is in the operating stage'], detailHandoverWaiting: ['尚未完成交屋', '尚未完成交屋', 'Handover is not complete'], detailOperationsReady: ['可進入日常營運管理', '可進入日常營運管理', 'Ready for day-to-day operations'], detailOperationsWaiting: ['交屋後開始日常營運', '交屋後開始日常營運', 'Operations start after handover']
 };
 const processCenterStepLabels = {
-  foundation: ['确认建案、业主、房产已存在', '確認建案、業主、房產已存在', 'Confirm the project, owner, and property exist'],
-  propertyProfile: ['补充房产资料、照片、交接清单', '補充房產資料、照片、交接清單', 'Complete property details, photos, and handover checklist'],
-  rentalMandate: ['建立出租委托书', '建立出租委託書', 'Create the rental mandate'],
-  authorizationDraft: ['生成授权委托书', '生成授權委託書', 'Generate the authorization letter'],
-  authorizationSigning: ['业主在线签署授权书', '業主線上簽署授權書', 'Owner signs the authorization online'],
-  mandateActivation: ['审核并启用委托', '審核並啟用委託', 'Review and activate the mandate'],
-  tenant: ['建立租客', '建立租客', 'Create the tenant'],
-  otrOffer: ['生成 OTR 出价函', '生成 OTR 出價函', 'Generate the OTR offer letter'],
-  lease: ['建立租约', '建立租約', 'Create the lease'],
-  leaseContract: ['生成租赁合约并在线签署', '生成租賃合約並線上簽署', 'Generate and sign the tenancy agreement online'],
-  rentInvoice: ['产生租金账单', '產生租金帳單', 'Generate rent invoices'],
-  financeReceipt: ['财务确认收款、下载收据', '財務確認收款、下載收據', 'Confirm collection and download receipts'],
-  operations: ['日常维修／支出／预备金／报表', '日常維修／支出／預備金／報表', 'Manage maintenance, expenses, reserves, and reports'],
-  end: ['流程结束', '流程結束', 'Rental workflow complete']
+  property: ['房產基本資料', '房產基本資料', 'Property details'], rentalService: ['出租服務', '出租服務', 'Rental service'], tenant: ['租客資料', '租客資料', 'Tenant information'], lease: ['租約與合約文件', '租約與合約文件', 'Lease and contract documents'], rent: ['租金與收款', '租金與收款', 'Rent and collection'], handover: ['交屋／入住', '交屋／入住', 'Handover / move-in'], operations: ['後續營運與維護', '後續營運與維護', 'Ongoing operations and maintenance']
 };
 const processCenterDetails = {
   foundation: ['建案、业主与房产的关联资料已齐全。', '建案、業主與房產的關聯資料已齊全。', 'Project, owner, and property records are linked.'],
@@ -286,11 +340,16 @@ const processCenterDetails = {
   end: ['前置租房步骤均已完成。', '前置租房步驟均已完成。', 'All required rental steps are complete.']
 };
 const processCenterWorkbenchLabels = {
+  kicker: ['完整租房流程', '完整租房流程', 'End-to-end rental workflow'],
+  title: ['租房流程中心', '租房流程中心', 'Rental Workflow Center'],
+  description: ['从建立建案、业主和房产开始，一站办理交房、委托、租客、租约、入住、租中运营及结束租约。', '從建立建案、業主和房產開始，一站辦理交房、委託、租客、租約、入住、租中營運及結束租約。', 'Handle the full rental journey from project setup through lease closure in one workspace.'],
+  noProperties: ['尚未建立房产，可点击“开始新租房流程”。', '尚未建立房產，可點擊「開始新租房流程」。', 'No property yet. Start a new rental workflow.'],
+  choosePropertyHint: ['选择已有房产继续办理，或点击“开始新租房流程”建立新的租房业务。', '選擇已有房產繼續辦理，或點擊「開始新租房流程」建立新的租房業務。', 'Choose a property to continue or start a new rental workflow.'],
   currentRental: ['本次出租', '本次出租', 'Current rental'],
   noCurrentRental: ['尚未建立本次出租委托', '尚未建立本次出租委託', 'No current rental mandate'],
   currentTask: ['当前任务', '當前任務', 'Current task'],
-  stageTitle: ['出租阶段', '出租階段', 'Rental stage'],
-  stageHint: ['只显示本次出租的待办；历史记录不会影响当前状态。', '只顯示本次出租的待辦；歷史記錄不會影響當前狀態。', 'Only the current rental cycle is shown; history does not affect its status.'],
+  stageTitle: ['完整租房步骤', '完整租房步驟', 'Complete rental steps'],
+  stageHint: ['按系统业务状态从房产交房推进到租约结束；附件不影响流程。', '按系統業務狀態從房產交房推進到租約結束；附件不影響流程。', 'Progress from property handover to lease closure using system state only.'],
   missing: ['缺少资料', '缺少資料', 'Missing'],
   viewGeneratedFiles: ['查看之前生成的文件', '查看之前生成的文件', 'View generated files'],
   generatedFilesKicker: ['已生成文件', '已生成文件', 'Generated files'],
@@ -315,7 +374,7 @@ const processCenterWorkbenchLabels = {
   operationsTenant: ['租客', '租客', 'Tenant'],
   operationsLeasePeriod: ['租约期间', '租約期間', 'Lease period'],
   operationsMonth: ['运营月份', '營運月份', 'Operating month'],
-  operationsTabs: { overview: ['运营概览', '營運概覽', 'Overview'], billing: ['收租与账单', '收租與帳單', 'Billing'], maintenance: ['维修工单', '維修工單', 'Maintenance'], lease: ['租约事件', '租約事件', 'Lease events'] },
+  operationsTabs: { overview: ['运营总览', '營運總覽', 'Overview'], billing: ['租金收款', '租金收款', 'Rent collection'], expenses: ['开支登记', '開支登記', 'Expenses'], expenseReview: ['开支确认', '開支確認', 'Expense review'], maintenance: ['维修处理', '維修處理', 'Maintenance'], lease: ['租约事务', '租約事務', 'Lease'] },
   operationsOverviewTitle: ['本月运营概览', '本月營運概覽', 'Monthly operations overview'],
   operationsOverviewHint: ['先处理本月待办，再查看完整账单与工单。', '先處理本月待辦，再查看完整帳單與工單。', 'Handle this month’s tasks first, then review billing and work orders.'],
   operationsKpiReceivable: ['本月应收', '本月應收', 'Receivable'],
@@ -389,6 +448,32 @@ const processCenterWorkbenchLabels = {
   operationsTableAmount: ['金额', '金額', 'Amount'],
   operationsTableStatus: ['状态', '狀態', 'Status'],
   operationsViewDetail: ['查看', '查看', 'View'],
+  operationsConfirmReceipt: ['确认收款', '確認收款', 'Confirm collection'],
+  operationsSendReminder: ['发送催租提醒', '發送催租提醒', 'Send rent reminder'],
+  operationsExpenseTitle: ['开支登记', '開支登記', 'Expense records'],
+  operationsExpenseHint: ['登记当前房产的水电、管理、清洁、维修及其他实际开支。', '登記目前房產的水電、管理、清潔、維修及其他實際開支。', 'Record actual expenses for the current property.'],
+  operationsCreateExpense: ['新增开支', '新增開支', 'Add expense'],
+  operationsExpenseReviewTitle: ['开支确认', '開支確認', 'Expense review'],
+  operationsExpenseReviewHint: ['核对待确认开支，确认后进入正式财务记录；有误可退回修改。', '核對待確認開支，確認後進入正式財務記錄；有誤可退回修改。', 'Confirm valid expenses or return incorrect entries.'],
+  operationsExpenseCategory: ['开支类别', '開支類別', 'Expense category'],
+  operationsExpenseDate: ['发生日期', '發生日期', 'Expense date'],
+  operationsExpenseDescription: ['开支说明', '開支說明', 'Description'],
+  operationsExpenseSettlement: ['结算方式', '結算方式', 'Settlement method'],
+  operationsExpenseReserve: ['从预备金扣款', '從預備金扣款', 'Reserve fund'],
+  operationsExpenseDirect: ['公司代付款', '公司代付款', 'Agency advance'],
+  operationsExpenseUnpaid: ['暂未付款', '暫未付款', 'Unpaid'],
+  operationsExpenseUtilities: ['水电费', '水電費', 'Utilities'],
+  operationsExpenseCleaning: ['清洁费', '清潔費', 'Cleaning'],
+  operationsExpenseMaintenance: ['维修费', '維修費', 'Maintenance'],
+  operationsExpenseOther: ['其他开支', '其他開支', 'Other'],
+  operationsExpensePending: ['待财务确认', '待財務確認', 'Pending review'],
+  operationsExpenseConfirmed: ['已确认', '已確認', 'Confirmed'],
+  operationsExpenseRejected: ['已退回', '已退回', 'Returned'],
+  operationsExpenseReviewNote: ['确认备注', '確認備註', 'Review note'],
+  operationsExpenseConfirm: ['确认开支', '確認開支', 'Confirm expense'],
+  operationsExpenseReject: ['退回修改', '退回修改', 'Return for correction'],
+  operationsExpenseEmpty: ['本月暂无开支记录', '本月暫無開支記錄', 'No expenses this month'],
+  operationsExpenseReviewEmpty: ['当前房产没有待确认开支', '目前房產沒有待確認開支', 'No expenses awaiting review'],
   operationsMaintenanceTitle: ['维修工单', '維修工單', 'Maintenance work orders'],
   operationsMaintenanceHint: ['从报修到验收、结算，记录每一个处理环节。', '從報修到驗收、結算，記錄每一個處理環節。', 'Track every step from report to acceptance and settlement.'],
   operationsCreateWorkOrder: ['建立维修工单', '建立維修工單', 'Create work order'],
@@ -424,6 +509,12 @@ const processCenterWorkbenchLabels = {
     commissionPercent: ['佣金比例', '佣金比例', 'Commission percent'],
     signerName: ['签署人姓名', '簽署人姓名', 'Signer name'],
     signerEmail: ['签署人邮箱', '簽署人電郵', 'Signer email'],
+    signingStatus: ['签署状态', '簽署狀態', 'Signing status'],
+    signingPending: ['已发起 · 等待签署', '已發起 · 等待簽署', 'Started · Awaiting signature'],
+    signingRequestedAt: ['发起时间', '發起時間', 'Requested at'],
+    signingExpiresAt: ['签署链接有效期至', '簽署連結有效期至', 'Signing link expires at'],
+    signingStatusHint: ['这里显示本次签约的实际状态，不会重复发起签署。', '這裡顯示本次簽約的實際狀態，不會重複發起簽署。', 'This shows the actual signing status and will not start a duplicate request.'],
+    signingPendingHint: ['签署邀请已经发送，请等待签署人完成；完成后重新进入或刷新页面即可更新状态。', '簽署邀請已經寄出，請等待簽署人完成；完成後重新進入或重新整理頁面即可更新狀態。', 'The invitation has been sent. Refresh after the signer completes it to update the status.'],
     tenantName: ['租客姓名', '租客姓名', 'Tenant name'],
     existingTenant: ['选择已有租客', '選擇現有租客', 'Select existing tenant'],
     noExistingTenant: ['不选择，新增租客', '不選擇，新增租客', 'No selection, add a tenant'],
@@ -509,9 +600,12 @@ const processCenterWorkbenchLabels = {
     pending: ['待处理', '待處理', 'Pending'],
   },
   stages: {
-    mandateAuthorization: ['委托与授权', '委託與授權', 'Mandate & authorization'],
-    leasingSigning: ['招租与签约', '招租與簽約', 'Leasing & signing'],
+    propertySetup: ['房产建档与交房', '房產建檔與交房', 'Property setup & handover'],
+    mandateAuthorization: ['出租委托', '出租委託', 'Rental mandate'],
+    leasingSigning: ['租客与租约', '租客與租約', 'Tenant & lease'],
     moveInCollection: ['入住交接', '入住交接', 'Move-in handover'],
+    rentalOperations: ['租中运营', '租中營運', 'Rental operations'],
+    leaseClosure: ['结束租约', '結束租約', 'Lease closure'],
   },
   roles: {
     business: ['业务', '業務', 'Business'],
@@ -526,7 +620,7 @@ const processCenterWorkbenchLabels = {
   operationsReceiptPositiveAmount: ['收款金额必须大于 0。', '收款金額必須大於 0。', 'The receipt amount must be greater than 0.'],
   operationsReceiptExceedsOutstanding: ['收款金额不能超过未收金额 RM {amount}。', '收款金額不能超過未收金額 RM {amount}。', 'The receipt cannot exceed the outstanding amount of RM {amount}.'],
   operationsMaintenancePhotosRequired: ['维修前与维修后照片各至少需要一张。', '維修前與維修後照片各至少需要一張。', 'At least one before and one after photo are required.'],
-  operationsMaintenanceReserveInsufficient: ['预备金不足，请改用直接支付。', '預備金不足，請改用直接支付。', 'The reserve fund is insufficient. Use direct payment.'],
+  operationsMaintenanceReserveInsufficient: ['扣款后预备金将为负数，请提醒业主补缴。', '扣款後預備金將為負數，請提醒業主補繳。', 'The reserve balance will become negative. Ask the owner to replenish it.'],
   operationsRenewalTitle: ['办理续租', '辦理續租', 'Create renewal lease'],
   operationsRenewalButton: ['办理续租', '辦理續租', 'Renew lease'],
   operationsRenewalSubmit: ['创建续租租约', '建立續租租約', 'Create renewal lease'],
@@ -553,11 +647,12 @@ const processCenterWorkbenchLabels = {
     rental_mandate: ['本次出租委托', '本次出租委託', 'Current rental mandate'],
     authorization_draft: ['授权委托书', '授權委託書', 'Authorization letter'],
     authorization_signature: ['业主线上签署', '業主線上簽署', 'Owner online signature'],
-    mandate_activation: ['审核并启用委托', '審核並啟用委託', 'Mandate review and activation'],
-    mandate_review: ['委托审核', '委託審核', 'Mandate review'],
+    mandate_activation: ['委托尚未启用', '委託尚未啟用', 'Mandate is not active'],
+    mandate_review: ['委托状态异常', '委託狀態異常', 'Unexpected mandate status'],
     tenant: ['租客资料', '租客資料', 'Tenant details'],
     otr_offer: ['OTR 出价函', 'OTR 出價函', 'OTR offer'],
     lease: ['租约', '租約', 'Lease'],
+    lease_closure: ['结束当前租约', '結束目前租約', 'Close current lease'],
     lease_contract_signature: ['租赁合约签署', '租賃合約簽署', 'Tenancy agreement signing'],
     handover: ['入住交接', '入住交接', 'Move-in handover'],
     first_invoice: ['首期账单', '首期帳單', 'First invoice'],
@@ -568,23 +663,27 @@ const processCenterWorkbenchLabels = {
     property_not_operating: ['无法出租：房产尚未完成交房。', '無法出租：房產尚未完成交房。', 'Cannot rent: property handover is not complete.'],
     handover_report_required: ['无法继续：本次出租尚未生成交接报告。', '無法繼續：本次出租尚未生成交接報告。', 'Cannot continue: the current rental has no handover report.'],
     authorization_signing_required: ['无法审核：请先生成并完成业主授权委托书线上签署。', '無法審核：請先生成並完成業主授權委託書線上簽署。', 'Cannot review: generate the owner authorization and complete online signing first.'],
+    authorization_signing_pending: ['签署邀请已发出，正在等待业主完成线上签署。', '簽署邀請已寄出，正在等待業主完成線上簽署。', 'The signing invitation was sent and is awaiting the owner’s signature.'],
   },
   actions: {
     create_mandate: ['建立本次出租委托', '建立本次出租委託', 'Create rental mandate'],
     complete_handover: ['完善交房资料', '完善交房資料', 'Complete handover'],
     complete_property_data: ['完善房产资料', '完善房產資料', 'Complete property data'],
     generate_authorization: ['生成授权委托书', '生成授權委託書', 'Generate authorization'],
+    start_authorization_signing: ['发起线上签署', '發起線上簽署', 'Start online signing'],
     view_signing_status: ['查看签署状态', '查看簽署狀態', 'View signing status'],
-    review_mandate: ['审核并启用委托', '審核並啟用委託', 'Review and activate mandate'],
+    review_mandate: ['启用委托', '啟用委託', 'Activate mandate'],
     create_tenant: ['新增租客', '新增租客', 'Add tenant'],
     use_existing_tenant: ['使用此租客', '使用此租客', 'Use this tenant'],
     generate_otr: ['生成 OTR 出价函', '生成 OTR 出價函', 'Generate OTR offer'],
     create_lease: ['建立租约', '建立租約', 'Create lease'],
     sign_lease_contract: ['处理租赁合约签署', '處理租賃合約簽署', 'Handle tenancy agreement signing'],
+    openSigningCenter: ['前往附件签约', '前往附件簽約', 'Open files & signing'],
     create_first_invoice: ['创建首期账单', '建立首期帳單', 'Create first invoice'],
     confirm_first_receipt: ['确认首期收款', '確認首期收款', 'Confirm first collection'],
     close_lease: ['结束租约', '結束租約', 'Close lease'],
     complete_move_out_handover: ['完成退租交接报告', '完成退租交接報告', 'Complete move-out handover report'],
+    open_operations_center: ['进入租中运营', '進入租中營運', 'Open rental operations'],
     openOperationsCenter: ['前往运营中心', '前往營運中心', 'Open operations center'],
     view: ['查看详情', '查看詳情', 'View details'],
   },
@@ -601,18 +700,100 @@ const processCenterMessages = (index) => ({
   steps: Object.fromEntries(Object.entries(processCenterStepLabels).map(([key, labels]) => [key, { title: labels[index], description: ['处理此阶段资料并确认下一步操作。', '處理此階段資料並確認下一步操作。', 'Complete this stage and confirm the next action.'][index], view: ['查看', '查看', 'View'][index], action: ['开始处理', '開始處理', 'Start'][index] }])),
   details: Object.fromEntries(Object.entries(processCenterDetails).map(([key, labels]) => [key, labels[index]])),
 });
+const rentalFileLabels = {
+  kicker: ['附件与电子签约', '附件與電子簽約', 'FILES & E-SIGNING'],
+  title: ['附件签约', '附件簽約', 'Files & Signing'],
+  description: ['集中生成授权书、OTR 与租赁合同，并处理电子签署和文件归档。', '集中生成授權書、OTR 與租賃合同，並處理電子簽署和文件歸檔。', 'Generate authorization, OTR, and tenancy documents, then manage e-signing and archiving.'],
+  files: ['份文件', '份文件', 'files'], selectProperty: ['选择房产', '選擇房產', 'Select Property'],
+  propertySearch: ['搜索建案、单位或业主', '搜尋建案、單位或業主', 'Search project, unit, or owner'],
+  loadingProperties: ['正在加载房产…', '正在載入房產…', 'Loading properties…'], retry: ['重试', '重試', 'Retry'],
+  noProperties: ['目前没有租赁中的房产', '目前沒有租賃中的房產', 'No rental properties'],
+  unsetProject: ['未设置建案', '未設定建案', 'Project not set'], unsetUnit: ['未设置单位', '未設定單位', 'Unit not set'], unsetOwner: ['未设置业主', '未設定業主', 'Owner not set'],
+  loadingFiles: ['正在加载附件签约资料…', '正在載入附件簽約資料…', 'Loading signing workspace…'], loadFailed: ['附件签约资料加载失败', '附件簽約資料載入失敗', 'Failed to load signing workspace'],
+  chooseProperty: ['请先选择一套房产', '請先選擇一套房產', 'Select a property first'], choosePropertyHint: ['左侧选择房产后，这里会显示可生成附件及签约状态。', '左側選擇房產後，這裡會顯示可生成附件及簽約狀態。', 'Choose a property to manage generated files and signing.'],
+  currentProperty: ['当前房产', '目前房產', 'Current Property'], fileSearch: ['搜索文件名、编号或委托编号', '搜尋文件名、編號或委託編號', 'Search file name, reference, or mandate'],
+  allCategories: ['全部分类', '全部分類', 'All Categories'], fileName: ['文件名称', '文件名稱', 'File Name'], category: ['文件分类', '文件分類', 'Category'], rentalNo: ['出租委托编号', '出租委託編號', 'Rental Mandate'],
+  status: ['状态', '狀態', 'Status'], createdAt: ['建立时间', '建立時間', 'Created At'], action: ['操作', '操作', 'Action'], download: ['下载', '下載', 'Download'], downloading: ['下载中…', '下載中…', 'Downloading…'],
+  noFiles: ['该房产目前没有租赁附件', '該房產目前沒有租賃附件', 'No rental files for this property'], downloadFailed: ['文件下载失败', '文件下載失敗', 'Failed to download file'], unnamedFile: ['未命名文件', '未命名文件', 'Unnamed file'],
+  contractFile: ['租赁合同', '租賃合同', 'Rental contract'], leaseContract: ['租约文件', '租約文件', 'Lease contract'], handoverFile: ['交接文件', '交接文件', 'Handover file'], paymentProof: ['付款凭证', '付款憑證', 'Payment proof'], receipt: ['收据', '收據', 'Receipt'],
+  statusComplete: ['已完成', '已完成', 'Completed'], statusPending: ['处理中', '處理中', 'In progress'], statusReady: ['待签署', '待簽署', 'Ready to sign'], statusDisabled: ['已停用', '已停用', 'Disabled'], statusStored: ['已归档', '已歸檔', 'Stored'],
+  statusNotStarted: ['可办理', '可辦理', 'Available'], signingProgress: ['已完成附件', '已完成附件', 'Completed files'], currentRental: ['当前出租', '目前出租', 'Current rental'], historyRental: ['历史出租', '歷史出租', 'Rental history'], waitingRental: ['等待建立出租委托', '等待建立出租委託', 'Waiting for rental mandate'], noMandate: ['暂无出租委托', '暫無出租委託', 'No rental mandate'],
+  rentalCycle: ['出租周期', '出租週期', 'Rental Cycle'], currentCycleTitle: ['当前出租周期', '目前出租週期', 'Current rental cycle'], historyCycleTitle: ['历史出租周期', '歷史出租週期', 'Historical rental cycle'], currentCycleHint: ['本次生成、签署和归档的文件都归入该周期。', '本次生成、簽署和歸檔的文件都歸入該週期。', 'Newly generated, signed, and archived files belong to this cycle.'], historyCycleHint: ['查看该次出租保留的合同与附件。', '查看該次出租保留的合約與附件。', 'Review contracts and files retained for this rental cycle.'], historyReadOnly: ['历史出租周期仅供查看和下载，不能重新生成或发起签署。', '歷史出租週期僅供查看和下載，不能重新生成或發起簽署。', 'Historical cycles are read-only and cannot generate files or start signing.'], currentCycleOption: ['当前', '目前', 'Current'], historyCycleOption: ['历史', '歷史', 'History'],
+  signingTasks: ['可办理附件', '可辦理附件', 'Available files'], signingTasksHint: ['各附件相互独立、不设先后顺序，需要哪份即可直接办理。', '各附件相互獨立、不設先後順序，需要哪份即可直接辦理。', 'Each file is independent and can be handled whenever needed.'],
+  pmaTitle: ['代租管合约', '代租管合約', 'Property Management Agreement'], pmaHint: ['自动带入业主及房产资料，依次由屋主、代租管公司和客服签署。', '自動帶入業主及房產資料，依次由屋主、代租管公司和客服簽署。', 'Auto-fill owner and property details, then sign by owner, company and customer service.'],
+  rentalAppointmentTitle: ['租赁委任书', '租賃委任書', 'Rental Appointment Letter'], rentalAppointmentHint: ['委任 CCPS 处理招租事务，与物业管理授权书分开办理。', '委任 CCPS 處理招租事務，與物業管理授權書分開辦理。', 'Appoints CCPS for rental matters; handled separately from management authorization.'],
+  authorizationTitle: ['授权委托书', '授權委託書', 'Authorization Letter'], authorizationHint: ['生成业主授权文件并发起线上签署。', '生成業主授權文件並發起線上簽署。', 'Generate the owner authorization and start online signing.'],
+  otrTitle: ['OTR 出价函', 'OTR 出價函', 'OTR Offer'], otrHint: ['按当前委托资料生成并归档，不必等待租约建立。', '按目前委託資料生成並歸檔，不必等待租約建立。', 'Generate from the current mandate without waiting for a lease.'],
+  leaseTitle: ['租赁合同签约', '租賃合同簽約', 'Tenancy Agreement'], leaseHint: ['生成租赁合同并发起电子签署。', '生成租賃合同並發起電子簽署。', 'Generate the tenancy agreement and start e-signing.'],
+  document: ['当前文件', '目前文件', 'Current file'], latestStatus: ['当前状态', '目前狀態', 'Current status'], createMandateFirst: ['请先在租房流程中建立出租委托', '請先在租房流程中建立出租委託', 'Create the rental mandate in the workflow first'], createLeaseFirst: ['请先在租房流程中建立租约', '請先在租房流程中建立租約', 'Create the lease in the workflow first'],
+  authorizationSigned: ['业主授权已经签署完成', '業主授權已經簽署完成', 'Owner authorization is signed'], authorizationAwaiting: ['签署邀请已发出，等待业主签署', '簽署邀請已發出，等待業主簽署', 'Invitation sent; waiting for owner signature'], readyToSign: ['文件已生成，可以发起签署', '文件已生成，可以發起簽署', 'File generated and ready for signing'], notGenerated: ['文件尚未生成', '文件尚未生成', 'File not generated'], generatedAndStored: ['文件已生成并归档', '文件已生成並歸檔', 'Generated and archived'], leaseSigned: ['租赁合同已经签署完成', '租賃合同已經簽署完成', 'Tenancy agreement is signed'], leaseAwaiting: ['租赁合同已生成，等待完成签署', '租賃合同已生成，等待完成簽署', 'Agreement generated and awaiting signature'],
+  pmaSigned: ['三方签署已经完成', '三方簽署已經完成', 'All three signers have completed'], awaitingSignature: ['待签署', '待簽署', ' awaiting signature'], nextSigner: ['下一签署人', '下一簽署人', 'Next signer'], continueSigning: ['继续签署', '繼續簽署', 'Continue signing'], generatePma: ['生成代租管合约', '生成代租管合約', 'Generate management agreement'],
+  regeneratePma: ['完善资料并重新生成', '完善資料並重新生成', 'Update details & regenerate'], regenerateFile: ['重新生成', '重新生成', 'Regenerate'], leaseRegenerated: ['租赁合同已重新生成', '租賃合同已重新生成', 'Tenancy agreement regenerated'], pmaFormKicker: ['代租管合约资料', '代租管合約資料', 'MANAGEMENT AGREEMENT DETAILS'], pmaFormTitle: ['补充代租管合约资料', '補充代租管合約資料', 'Complete management agreement details'], pmaFormHint: ['系统会带入已有资料；请补齐所有必填项后再生成合约。', '系統會帶入已有資料；請補齊所有必填項後再生成合約。', 'Existing details are prefilled. Complete every required field before generation.'],
+  pmaOwnerSection: ['业主与房产资料', '業主與房產資料', 'Owner & Property'], pmaOwnerName: ['业主姓名', '業主姓名', 'Owner name'], pmaOwnerIdentity: ['身份证／护照号码', '身份證／護照號碼', 'NRIC / Passport no.'], pmaPropertyAddress: ['受托管理房产完整地址', '受託管理房產完整地址', 'Managed property address'], pmaOwnerAddress: ['业主通讯地址', '業主通訊地址', 'Owner correspondence address'], pmaOwnerEmail: ['业主邮箱', '業主郵箱', 'Owner email'], pmaOwnerPhone: ['业主联系电话', '業主聯絡電話', 'Owner contact no.'],
+  pmaAgreementSection: ['协议日期', '協議日期', 'Agreement dates'], pmaAgreementDate: ['协议签订日期', '協議簽訂日期', 'Agreement date'], pmaStartDate: ['协议生效日期', '協議生效日期', 'Effective date'], pmaEndDate: ['协议到期日期', '協議到期日期', 'Expiry date'],
+  pmaBankSection: ['业主收款银行资料', '業主收款銀行資料', 'Owner bank details'], pmaPayeeName: ['收款人姓名', '收款人姓名', 'Payee name'], pmaBankName: ['银行名称', '銀行名稱', 'Bank name'], pmaBankAddress: ['银行地址', '銀行地址', 'Bank address'], pmaBranchCode: ['银行／分行代码', '銀行／分行代碼', 'Bank / branch code'], pmaAccountNo: ['银行账号', '銀行帳號', 'Bank account no.'], pmaSwiftCode: ['SWIFT 代码', 'SWIFT 代碼', 'SWIFT code'], confirmGeneratePma: ['确认资料并生成', '確認資料並生成', 'Confirm & generate'],
+  rentalAppointmentSigned: ['租赁委任书已由屋主签署', '租賃委任書已由屋主簽署', 'Rental appointment signed by owner'], rentalAppointmentAwaiting: ['等待屋主签署租赁委任书', '等待屋主簽署租賃委任書', 'Waiting for owner to sign the rental appointment'], generateRentalAppointment: ['生成租赁委任书', '生成租賃委任書', 'Generate rental appointment'],
+  generateAuthorization: ['生成授权委托书', '生成授權委託書', 'Generate authorization'], viewSigningStatus: ['查看签署状态', '查看簽署狀態', 'View signing status'], startSigning: ['发起线上签署', '發起線上簽署', 'Start online signing'], generateOtr: ['生成 OTR', '生成 OTR', 'Generate OTR'], generateAndSignLease: ['生成合同并发起签署', '生成合同並發起簽署', 'Generate & start signing'],
+  signingPanelKicker: ['电子签约', '電子簽約', 'E-SIGNING'], pmaSigningTitle: ['发起代租管合约签署', '發起代租管合約簽署', 'Start management agreement signing'], rentalAppointmentSigningTitle: ['发起租赁委任书签署', '發起租賃委任書簽署', 'Start rental appointment signing'], authorizationSigningTitle: ['发起授权委托书签署', '發起授權委託書簽署', 'Start authorization signing'], leaseSigningTitle: ['发起租赁合同签署', '發起租賃合同簽署', 'Start tenancy signing'], signingPanelHint: ['确认签署人资料后，系统会发送线上签署邀请。', '確認簽署人資料後，系統會發送線上簽署邀請。', 'Confirm signer details to send the online signing invitation.'], signerName: ['签署人姓名', '簽署人姓名', 'Signer name'], signerEmail: ['签署人邮箱', '簽署人郵箱', 'Signer email'], signerRole: ['签署身份', '簽署身份', 'Signer role'], requestedAt: ['发起时间', '發起時間', 'Requested at'], expiresAt: ['到期时间', '到期時間', 'Expires at'], cancel: ['取消', '取消', 'Cancel'], processing: ['处理中…', '處理中…', 'Processing…'],
+  signerRoleOwner: ['屋主', '屋主', 'Owner'], signerRoleCompany: ['代租管公司', '代租管公司', 'Property management company'], signerRoleCustomerService: ['客服见证人', '客服見證人', 'Customer service witness'], signerRoleTenant: ['租客', '租客', 'Tenant'],
+  generatedFiles: ['本周期附件', '本週期附件', 'Cycle files'], generatedFilesHint: ['仅显示所选出租周期的附件；生成与签署操作在上方完成。', '僅顯示所選出租週期的附件；生成與簽署操作在上方完成。', 'Only files from the selected rental cycle are shown; generate and sign above.'], propertyFiles: ['房产通用附件', '房產通用附件', 'Property files'], propertyFilesHint: ['长期归属该房产，不跟随某一次出租周期。', '長期歸屬該房產，不跟隨某一次出租週期。', 'Permanent property files that do not belong to a specific rental cycle.'],
+  pmaGenerated: ['代租管合约已生成', '代租管合約已生成', 'Management agreement generated'], rentalAppointmentGenerated: ['租赁委任书已生成', '租賃委任書已生成', 'Rental appointment generated'], authorizationGenerated: ['授权委托书已生成', '授權委託書已生成', 'Authorization generated'], otrGenerated: ['OTR 已生成并归档', 'OTR 已生成並歸檔', 'OTR generated and archived'], signingStarted: ['线上签署已发起', '線上簽署已發起', 'Online signing started'], replaceTemplate: ['更新模板', '更新範本', 'Update template'], templateVersion: ['模板版本', '範本版本', 'Template version'], templateReplaced: ['新模板已启用，旧版文件仍保留', '新範本已啟用，舊版文件仍保留', 'New template activated; old files retained'], actionFailed: ['附件签约操作失败', '附件簽約操作失敗', 'Signing action failed'],
+};
+const rentalFileCategories = {
+  management: ['代租管合约', '代租管合約', 'Management Agreements'], appointment: ['租赁委任书', '租賃委任書', 'Rental Appointment'], authorization: ['授权委托书', '授權委託書', 'Management Authorization'], contract: ['租赁合同', '租賃合同', 'Rental Contracts'], handover: ['交接文件', '交接文件', 'Handover Files'], payment: ['收款文件', '收款文件', 'Payment Files'], property: ['其他附件', '其他附件', 'Other Attachments'],
+};
+const rentalFileMessages = (index) => ({
+  ...Object.fromEntries(Object.entries(rentalFileLabels).map(([key, labels]) => [key, labels[index]])),
+  categories: Object.fromEntries(Object.entries(rentalFileCategories).map(([key, labels]) => [key, labels[index]])),
+});
 const reportLabels = {
   archiveTitle: ['报表生成与归档', '報表生成與歸檔', 'Report Generation & Archive'], archiveHint: ['报表直接读取 CCPS 已确认资料，SQL Account 是否完成导入不影响统计。', '報表直接讀取 CCPS 已確認資料，SQL Account 是否完成匯入不影響統計。', 'Reports read confirmed CCPS data directly. SQL Account import status does not affect the figures.'],
   loading: ['正在加载报表资料…', '正在載入報表資料…', 'Loading report data…'], loadFailed: ['报表资料加载失败', '報表資料載入失敗', 'Failed to load report data'], retry: ['重试', '重試', 'Retry'], reportName: ['报表名称', '報表名稱', 'Report Name'], dataPeriod: ['资料期间', '資料期間', 'Data Period'], exportScope: ['导出范围', '匯出範圍', 'Export Scope'], format: ['格式', '格式', 'Format'], recordCount: ['记录数', '記錄數', 'Record Count'], createdBy: ['建立人', '建立人', 'Created By'], completedAt: ['完成时间', '完成時間', 'Completed At'], allScope: ['全部范围', '全部範圍', 'All Scope'], system: ['系统', '系統', 'System'], download: ['下载', '下載', 'Download'], viewError: ['查看错误', '查看錯誤', 'View Error'], noReports: ['尚无符合条件的报表记录', '尚無符合條件的報表記錄', 'No matching report records'],
   enabled: ['已启用', '已啟用', 'Enabled'], generateThisReport: ['产生此报表', '產生此報表', 'Generate This Report'], settings: ['报表设定', '報表設定', 'Report Settings'], reportType: ['报表类型', '報表類型', 'Report Type'], defaultFormat: ['预设格式', '預設格式', 'Default Format'], schedule: ['排程', '排程', 'Schedule'], notConfigured: ['尚未设定', '尚未設定', 'Not Configured'], dataDefinition: ['资料口径', '資料口徑', 'Data Definition'], recentRuns: ['最近产生', '最近產生', 'Recent Runs'], noRecords: ['尚无记录', '尚無記錄', 'No records'],
-  generate: ['产生报表', '產生報表', 'Generate Report'], generationHint: ['完成后会保存历史记录并提供下载。', '完成後會保存歷史記錄並提供下載。', 'Completed reports are saved in history and available to download.'], startDate: ['开始日期', '開始日期', 'Start Date'], endDate: ['结束日期', '結束日期', 'End Date'], allData: ['全部资料', '全部資料', 'All Data'], byProject: ['按项目', '按項目', 'By Project'], byOwner: ['按业主', '按業主', 'By Owner'], byUnit: ['按单位', '按單位', 'By Unit'], select: ['请选择', '請選擇', 'Select'], outputFormat: ['输出格式', '輸出格式', 'Output Format'], xlsxHint: ['适合筛选、计算及会计复核', '適合篩選、計算及會計複核', 'Best for filtering, calculation, and accounting review'], pdfHint: ['适合列印、签核及归档', '適合列印、簽核及歸檔', 'Best for printing, approval, and filing'], generating: ['产生中…', '產生中…', 'Generating…'], generated: ['报表已完成，共 {count} 笔', '報表已完成，共 {count} 筆', 'Report completed with {count} records'], generationFailed: ['报表产生失败', '報表產生失敗', 'Report generation failed'], downloadFailed: ['下载失败', '下載失敗', 'Download failed'],
+  generate: ['产生报表', '產生報表', 'Generate Report'], generationHint: ['完成后会保存历史记录并提供下载。', '完成後會保存歷史記錄並提供下載。', 'Completed reports are saved in history and available to download.'], startDate: ['开始日期', '開始日期', 'Start Date'], endDate: ['结束日期', '結束日期', 'End Date'], allData: ['全部资料', '全部資料', 'All Data'], byProject: ['按项目', '按項目', 'By Project'], byOwner: ['单个业主', '單個業主', 'One Owner'], byTenant: ['单个租客', '單個租客', 'One Tenant'], byUnit: ['按单位', '按單位', 'By Unit'], select: ['请选择', '請選擇', 'Select'], outputFormat: ['输出格式', '輸出格式', 'Output Format'], xlsxHint: ['适合筛选、计算及会计复核', '適合篩選、計算及會計複核', 'Best for filtering, calculation, and accounting review'], pdfHint: ['适合列印、签核及归档', '適合列印、簽核及歸檔', 'Best for printing, approval, and filing'], generating: ['产生中…', '產生中…', 'Generating…'], generated: ['报表已完成，共 {count} 笔', '報表已完成，共 {count} 筆', 'Report completed with {count} records'], generationFailed: ['报表产生失败', '報表產生失敗', 'Report generation failed'], downloadFailed: ['下载失败', '下載失敗', 'Download failed'],
   availableReports: ['可用报表', '可用報表', 'Available Reports'], generatedThisMonth: ['本月产生', '本月產生', 'Generated This Month'], completed: ['已完成', '已完成', 'Completed'], failed: ['产生失败', '產生失敗', 'Generation Failed'], databaseDefinitions: ['资料库报表定义', '資料庫報表定義', 'Database Report Definitions'], downloadableArchive: ['可下载归档', '可下載歸檔', 'Downloadable Archive'], retainFailureReason: ['保留错误原因', '保留錯誤原因', 'Failure Reason Retained'],
-  property_payment: ['房款收款与未收款', '房款收款與未收款', 'Property Payments'], rent_collection: ['租金收款进度', '租金收款進度', 'Rent Collection Progress'], income_expense: ['收入与支出明细', '收入與支出明細', 'Income & Expense Details'], maintenance: ['维修费用统计', '維修費用統計', 'Maintenance Cost Summary'], reserve: ['预备金余额及流水', '預備金餘額及流水', 'Reserve Fund Balance & Ledger'], reserve_refund: ['业主预备金返还清单', '業主預備金返還清單', 'Owner Reserve Refund List'], finance: ['财务确认记录', '財務確認記錄', 'Finance Confirmation Records'], sync: ['SQL Account 汇出结果', 'SQL Account 匯出結果', 'SQL Account Export Results'],
+  property_payment: ['房款收款与未收款', '房款收款與未收款', 'Property Payments'], rent_collection: ['租金收款进度', '租金收款進度', 'Rent Collection Progress'], income_expense: ['收入与支出明细', '收入與支出明細', 'Income & Expense Details'], maintenance: ['维修费用统计', '維修費用統計', 'Maintenance Cost Summary'], reserve: ['预备金余额及流水', '預備金餘額及流水', 'Reserve Fund Balance & Ledger'], reserve_refund: ['业主预备金返还清单', '業主預備金返還清單', 'Owner Reserve Refund List'], finance: ['财务确认记录', '財務確認記錄', 'Finance Confirmation Records'], sync: ['SQL Account 汇出结果', 'SQL Account 匯出結果', 'SQL Account Export Results'], owner_statement: ['业主账单', '業主帳單', 'Owner Statement'], tenant_statement: ['租客账单', '租客帳單', 'Tenant Statement'],
   pending: ['排队中', '排隊中', 'Queued'], processing: ['产生中', '產生中', 'Processing'],
-  hint_property_payment: ['按交易日期统计房款财务记录、付款状态及同步状态。', '按交易日期統計房款財務記錄、付款狀態及同步狀態。', 'Lists property payment records, payment status, and sync status by transaction date.'], hint_rent_collection: ['按交易日期统计已登记的租金收款及相关租客、单位。', '按交易日期統計已登記的租金收款及相關租客、單位。', 'Lists recorded rent collections with tenants and units by transaction date.'], hint_income_expense: ['按指定项目、业主或单位导出双语收支明细，分列收入、支出及逐笔余额。', '按指定項目、業主或單位匯出雙語收支明細，分列收入、支出及逐筆餘額。', 'Exports bilingual income and expense details by project, owner, or unit, including running balances.'], hint_maintenance: ['按报修日期列出工单、服务商、实际费用及完成状态。', '按報修日期列出工單、服務商、實際費用及完成狀態。', 'Lists work orders, vendors, actual costs, and completion status by repair date.'], hint_reserve: ['按预备金异动日期列出充值、扣款、业主单位及异动后余额。', '按預備金異動日期列出充值、扣款、業主單位及異動後餘額。', 'Lists top-ups, deductions, owner units, and balances after each reserve movement.'], hint_reserve_refund: ['列出业主预备金返还申请、金额、付款状态及财务确认结果，供财务直接出款。', '列出業主預備金返還申請、金額、付款狀態及財務確認結果，供財務直接出款。', 'Lists owner reserve refund requests, amounts, payment status, and finance confirmation for direct payout.'], hint_finance: ['列出日期范围内全部财务记录及确认、付款、同步状态。', '列出日期範圍內全部財務記錄及確認、付款、同步狀態。', 'Lists all finance records in the selected period and their confirmation, payment, and sync status.'], hint_sync: ['按批次建立日期统计 SQL Account 汇出成功、失败及总笔数。', '按批次建立日期統計 SQL Account 匯出成功、失敗及總筆數。', 'Summarises successful, failed, and total SQL Account exports by batch creation date.'], hint_default: ['依 CCPS 资料库产生。', '依 CCPS 資料庫產生。', 'Generated from the CCPS database.']
+  hint_property_payment: ['按交易日期统计房款财务记录、付款状态及同步状态。', '按交易日期統計房款財務記錄、付款狀態及同步狀態。', 'Lists property payment records, payment status, and sync status by transaction date.'], hint_rent_collection: ['按交易日期统计已登记的租金收款及相关租客、单位。', '按交易日期統計已登記的租金收款及相關租客、單位。', 'Lists recorded rent collections with tenants and units by transaction date.'], hint_income_expense: ['按指定项目、业主或单位导出双语收支明细，分列收入、支出及逐笔余额。', '按指定項目、業主或單位匯出雙語收支明細，分列收入、支出及逐筆餘額。', 'Exports bilingual income and expense details by project, owner, or unit, including running balances.'], hint_maintenance: ['按报修日期列出工单、服务商、实际费用及完成状态。', '按報修日期列出工單、服務商、實際費用及完成狀態。', 'Lists work orders, vendors, actual costs, and completion status by repair date.'], hint_reserve: ['按预备金异动日期列出充值、扣款、业主单位及异动后余额。', '按預備金異動日期列出充值、扣款、業主單位及異動後餘額。', 'Lists top-ups, deductions, owner units, and balances after each reserve movement.'], hint_reserve_refund: ['列出业主预备金返还申请、金额、付款状态及财务确认结果，供财务直接出款。', '列出業主預備金返還申請、金額、付款狀態及財務確認結果，供財務直接出款。', 'Lists owner reserve refund requests, amounts, payment status, and finance confirmation for direct payout.'], hint_finance: ['列出日期范围内全部财务记录及确认、付款、同步状态。', '列出日期範圍內全部財務記錄及確認、付款、同步狀態。', 'Lists all finance records in the selected period and their confirmation, payment, and sync status.'], hint_sync: ['按批次建立日期统计 SQL Account 汇出成功、失败及总笔数。', '按批次建立日期統計 SQL Account 匯出成功、失敗及總筆數。', 'Summarises successful, failed, and total SQL Account exports by batch creation date.'], hint_owner_statement: ['导出所选业主在指定期间内已确认的收入、支出及逐笔余额。', '匯出所選業主在指定期間內已確認的收入、支出及逐筆餘額。', 'Exports confirmed income, expenses, and running balances for the selected owner.'], hint_tenant_statement: ['导出所选租客每月账单的应收、已收、未收金额及付款状态。', '匯出所選租客每月帳單的應收、已收、未收金額及付款狀態。', 'Exports monthly amounts due, paid, outstanding, and payment status for the selected tenant.'], hint_default: ['依 CCPS 资料库产生。', '依 CCPS 資料庫產生。', 'Generated from the CCPS database.']
 };
 const reportMessages = (index) => Object.fromEntries(Object.entries(reportLabels).map(([key, labels]) => [key, labels[index]]));
+const backupLabels = {
+  title: ['整站备份与恢复', '整站備份與恢復', 'Full Backup & Restore'],
+  subtitle: ['保护数据库和全部上传文件，备份包可下载并离线保存。', '保護資料庫和全部上傳檔案，備份包可下載並離線保存。', 'Protect the database and all uploaded files in one downloadable archive.'],
+  createTitle: ['建立完整备份', '建立完整備份', 'Create Full Backup'],
+  createHint: ['备份将包含当前 MySQL 数据库和 uploads 文件目录。生成完成后会自动下载。', '備份將包含目前 MySQL 資料庫和 uploads 檔案目錄。完成後會自動下載。', 'Includes the current MySQL database and the complete uploads directory, then downloads automatically.'],
+  create: ['立即备份并下载', '立即備份並下載', 'Back Up & Download'],
+  creating: ['正在打包，请勿关闭页面…', '正在打包，請勿關閉頁面…', 'Creating backup, keep this page open…'],
+  restoreTitle: ['恢复整站资料', '恢復整站資料', 'Restore Full System'],
+  restoreHint: ['高风险操作：当前数据库和上传文件将被备份包替换。系统会先自动建立一份安全备份。', '高風險操作：目前資料庫和上傳檔案將被備份包取代。系統會先自動建立一份安全備份。', 'High-risk operation: current data and uploads will be replaced. A safety backup is created first.'],
+  selectFile: ['选择 CCPS 备份 ZIP', '選擇 CCPS 備份 ZIP', 'Select CCPS Backup ZIP'],
+  noFile: ['尚未选择文件', '尚未選擇檔案', 'No file selected'],
+  confirmation: ['恢复确认短语', '恢復確認短語', 'Restore Confirmation Phrase'],
+  confirmationHint: ['请输入 RESTORE CCPS 以启用恢复按钮', '請輸入 RESTORE CCPS 以啟用恢復按鈕', 'Type RESTORE CCPS to enable restore'],
+  restore: ['确认恢复整站', '確認恢復整站', 'Restore Full System'],
+  restoring: ['正在安全备份并恢复…', '正在安全備份並恢復…', 'Creating safety backup and restoring…'],
+  history: ['备份记录', '備份記錄', 'Backup History'],
+  historyHint: ['服务器最多显示最近 50 个备份包', '伺服器最多顯示最近 50 個備份包', 'Up to 50 recent archives are shown'],
+  fileName: ['文件名', '檔案名稱', 'File Name'],
+  type: ['类型', '類型', 'Type'],
+  createdAt: ['建立时间', '建立時間', 'Created At'],
+  size: ['大小', '大小', 'Size'],
+  action: ['操作', '操作', 'Action'],
+  manual: ['手动备份', '手動備份', 'Manual Backup'],
+  preRestore: ['恢复前安全备份', '恢復前安全備份', 'Pre-restore Safety Backup'],
+  download: ['下载', '下載', 'Download'],
+  empty: ['尚无备份记录', '尚無備份記錄', 'No backups yet'],
+  loading: ['正在读取备份记录…', '正在讀取備份記錄…', 'Loading backup history…'],
+  createSuccess: ['完整备份已建立并开始下载。', '完整備份已建立並開始下載。', 'Full backup created and download started.'],
+  restoreSuccess: ['恢复完成。请重启后端服务后再继续使用。安全备份：{file}', '恢復完成。請重新啟動後端服務後再繼續使用。安全備份：{file}', 'Restore completed. Restart the backend before continuing. Safety backup: {file}'],
+  loadFailed: ['备份记录加载失败', '備份記錄載入失敗', 'Failed to load backup history'],
+  createFailed: ['建立备份失败', '建立備份失敗', 'Failed to create backup'],
+  downloadFailed: ['下载备份失败', '下載備份失敗', 'Failed to download backup'],
+  restoreFailed: ['恢复失败，当前资料未完成替换', '恢復失敗，目前資料未完成取代', 'Restore failed before replacement completed'],
+};
+const backupMessages = (index) => Object.fromEntries(Object.entries(backupLabels).map(([key, labels]) => [key, labels[index]]));
 const uiLabels = {
+  search: ['搜索', '搜尋', 'Search'], loading: ['加载中…', '載入中…', 'Loading…'], close: ['关闭', '關閉', 'Close'], details: ['详情', '詳情', 'Details'], failed: ['失败', '失敗', 'Failed'],
   allProjects: ['全部建案', '全部建案', 'All Projects'], allStatus: ['全部状态', '全部狀態', 'All Statuses'], allReminders: ['全部提醒', '全部提醒', 'All Reminders'], allBatches: ['全部批次', '全部批次', 'All Batches'], export: ['导出', '匯出', 'Export'], reload: ['重新载入', '重新載入', 'Reload'], addReminderRule: ['新增提醒规则', '新增提醒規則', 'Add Reminder Rule'], runAllRules: ['执行全部规则', '執行全部規則', 'Run All Rules'], ownerReserveRefund: ['业主预备金返还', '業主預備金返還', 'Owner Reserve Refund'], addAccount: ['新增账号', '新增帳號', 'Add Account'], addOwner: ['新增业主', '新增業主', 'Add Owner'], addTenant: ['新增租客', '新增租客', 'Add Tenant'], addLease: ['新增租约', '新增租約', 'Add Lease'], addExpense: ['新增支出', '新增支出', 'Add Expense'], addMaintenance: ['新增维修', '新增維修', 'Add Maintenance'], addReserveTopup: ['新增充值', '新增充值', 'Add Top-up'], addReserveDebit: ['新增扣款', '新增扣款', 'Add Debit'], syncNow: ['立即同步', '立即同步', 'Sync Now'], addReport: ['新增报表', '新增報表', 'Add Report'], accountHelp: ['账号说明', '帳號說明', 'Account Help'], searchOwners: ['搜索业主姓名 / 手机号 / 邮箱', '搜尋業主姓名 / 手機號 / 郵箱', 'Search owner name / mobile / email'], searchReminders: ['搜索提醒场景 / 对象 / 发送状态', '搜尋提醒場景 / 對象 / 發送狀態', 'Search reminder scenario / recipient / delivery status'], searchAccounts: ['搜索登入账号 / 姓名 / 手机号', '搜尋登入帳號 / 姓名 / 手機號', 'Search login / name / mobile'],
   reminderRules: ['提醒规则', '提醒規則', 'Reminder Rules'], notificationRecords: ['通知记录', '通知記錄', 'Notification Records'], deliveryResults: ['发送结果', '發送結果', 'Delivery Results'], reminderRulesAndHistory: ['提醒规则与发送记录', '提醒規則與發送記錄', 'Reminder Rules & Delivery History'], liveDatabaseHourly: ['资料库即时资料 · 排程每小时执行', '資料庫即時資料 · 排程每小時執行', 'Live database data · scheduled hourly'], loadingReminders: ['正在加载自动提醒资料…', '正在載入自動提醒資料…', 'Loading automated reminders…'], loadRemindersFailed: ['提醒资料加载失败', '提醒資料載入失敗', 'Failed to load reminders'],
   enabledRules: ['{count} 条已启用', '{count} 條已啟用', '{count} enabled'], notificationsCreated: ['已建立通知', '已建立通知', 'Notifications Created'], databaseNotificationRecords: ['资料库通知记录', '資料庫通知記錄', 'Database notification records'], awaitingChannel: ['等待管道处理', '等待管道處理', 'Awaiting channel delivery'], deliveryFailed: ['发送失败', '發送失敗', 'Delivery Failed'], viewReasonRetry: ['可查看原因或重试', '可查看原因或重試', 'View reason or retry'],
@@ -630,20 +811,23 @@ const messages = {
   'zh-CN': {
     language: { label: '语言', zhCN: '简体中文', zhTW: '繁體中文', en: 'English' },
     common: { searchPlaceholder: '搜索业主 / 单位 / 租客 / 文件', searchApplied: '已套用搜索', notifications: '通知', account: '我的账号', accountMenu: '账号菜单', enterAdmin: '进入后台管理', logout: '退出登录', loggingOut: '正在退出…', backToOwner: '返回业主端', welcomeOwner: '欢迎回来，尊贵的业主', ownerProperties: '我的房产', paymentBreadcrumb: '我的房产　>　房款进度　>　房款进度详情' },
+    navigation: { assets: '资产与项目', rental: '租赁运营', finance: '财务与费用', operations: '运营工具', system: '系统管理' },
     login: { adminConsole: 'CCPS / 管理控制台', adminHeadline: '掌握全局，', adminHeadlineEmphasis: '安心管理。', adminDescription: '安全存取房产组合、财务审核、维修流程与系统运营资料。', allSystemsNormal: '所有系统运行正常', secureSession: '安全工作阶段', operationModules: '运营模块', auditVisibility: '审计可见性', protectedWorkspace: '受保护工作区', adminAccess: '管理员访问', adminSignIn: '管理员登录', ownerSignIn: '业主登录', welcomeBack: '欢迎回来', ownerSubtitle: '登录您的房产管理工作台以继续', signInToAdmin: '登录管理中心以继续工作', username: '账号或电子邮件', password: '密码', usernamePlaceholder: '请输入管理员账号或电子邮件', passwordPlaceholder: '请输入登录密码', show: '显示', hide: '隐藏', remember: '记住登录状态', forgot: '忘记密码？', forgotNotice: '请联系系统管理员重设密码。', signIn: '登录管理中心', signingIn: '登录中…', demo: '测试账号', secureWorkspace: '安全管理工作区', required: '请输入账号与密码', failed: '登录失败，请稍后再试。' },
-    navigation: navigationMessages(0), modules: moduleMessages(0), ui: uiMessages(0), building: buildingMessages(0), properties: propertyMessages(0), tenancy: tenancyMessages(0), tenantDirectory: tenantDirectoryMessages(0), reserve: reserveMessages(0), sync: syncMessages(0), finance: financeMessages(0), propertyDetail: propertyDetailMessages(0), propertyProcess: propertyProcessMessages(0), processCenter: processCenterMessages(0), reports: reportMessages(0), legacy: { ...legacyMessages['zh-CN'], ...legacyOverrides['zh-CN'] }
+    modules: moduleMessages(0), projectManagement: projectManagementMessages(0), rentalMandates: rentalMandateMessages(0), tenantDirectory: tenantDirectoryMessages(0), backup: backupMessages(0), ui: uiMessages(0), building: buildingMessages(0), properties: propertyMessages(0), tenancy: tenancyMessages(0), reserve: reserveMessages(0), sync: syncMessages(0), finance: financeMessages(0), propertyDetail: propertyDetailMessages(0), propertyProcess: propertyProcessMessages(0), processCenter: processCenterMessages(0), rentalFiles: rentalFileMessages(0), reports: reportMessages(0), legacy: { ...legacyMessages['zh-CN'], ...legacyOverrides['zh-CN'] }
   },
   'zh-TW': {
     language: { label: '語言', zhCN: '简体中文', zhTW: '繁體中文', en: 'English' },
     common: { searchPlaceholder: '搜尋業主 / 單位 / 租客 / 文件', searchApplied: '已套用搜尋', notifications: '通知', account: '我的帳號', accountMenu: '帳號選單', enterAdmin: '進入後臺管理', logout: '退出登入', loggingOut: '正在退出…', backToOwner: '返回業主端', welcomeOwner: '歡迎回來，尊貴的業主', ownerProperties: '我的房產', paymentBreadcrumb: '我的房產　>　房款進度　>　房款進度詳情' },
+    navigation: { assets: '資產與項目', rental: '租賃營運', finance: '財務與費用', operations: '營運工具', system: '系統管理' },
     login: { adminConsole: 'CCPS / 管理控制台', adminHeadline: '掌握全局，', adminHeadlineEmphasis: '安心管理。', adminDescription: '安全存取房產組合、財務審核、維修流程與系統營運資料。', allSystemsNormal: '所有系統運作正常', secureSession: '安全工作階段', operationModules: '營運模組', auditVisibility: '稽核可見性', protectedWorkspace: '受保護工作區', adminAccess: '管理員存取', adminSignIn: '管理員登入', ownerSignIn: '業主登入', welcomeBack: '歡迎回來', ownerSubtitle: '登入您的房產管理工作區以繼續', signInToAdmin: '登入管理中心以繼續工作', username: '帳號或電子郵件', password: '密碼', usernamePlaceholder: '請輸入管理員帳號或電子郵件', passwordPlaceholder: '請輸入登入密碼', show: '顯示', hide: '隱藏', remember: '記住登入狀態', forgot: '忘記密碼？', forgotNotice: '請聯絡系統管理員重設密碼。', signIn: '登入管理中心', signingIn: '登入中…', demo: '測試帳號', secureWorkspace: '安全管理工作區', required: '請輸入帳號與密碼', failed: '登入失敗，請稍後再試。' },
-    navigation: navigationMessages(1), modules: moduleMessages(1), ui: uiMessages(1), building: buildingMessages(1), properties: propertyMessages(1), tenancy: tenancyMessages(1), tenantDirectory: tenantDirectoryMessages(1), reserve: reserveMessages(1), sync: syncMessages(1), finance: financeMessages(1), propertyDetail: propertyDetailMessages(1), propertyProcess: propertyProcessMessages(1), processCenter: processCenterMessages(1), reports: reportMessages(1), legacy: { ...legacyMessages['zh-TW'], ...legacyOverrides['zh-TW'] }
+    modules: moduleMessages(1), projectManagement: projectManagementMessages(1), rentalMandates: rentalMandateMessages(1), tenantDirectory: tenantDirectoryMessages(1), backup: backupMessages(1), ui: uiMessages(1), building: buildingMessages(1), properties: propertyMessages(1), tenancy: tenancyMessages(1), reserve: reserveMessages(1), sync: syncMessages(1), finance: financeMessages(1), propertyDetail: propertyDetailMessages(1), propertyProcess: propertyProcessMessages(1), processCenter: processCenterMessages(1), rentalFiles: rentalFileMessages(1), reports: reportMessages(1), legacy: { ...legacyMessages['zh-TW'], ...legacyOverrides['zh-TW'] }
   },
   en: {
     language: { label: 'Language', zhCN: '简体中文', zhTW: '繁體中文', en: 'English' },
     common: { searchPlaceholder: 'Search owner / unit / tenant / document', searchApplied: 'Search applied', notifications: 'Notifications', account: 'My account', accountMenu: 'Account menu', enterAdmin: 'Open admin portal', logout: 'Sign out', loggingOut: 'Signing out…', backToOwner: 'Back to owner portal', welcomeOwner: 'Welcome back', ownerProperties: 'My Properties', paymentBreadcrumb: 'My Properties  >  Payment Progress  >  Details' },
+    navigation: { assets: 'Assets & Projects', rental: 'Rental Operations', finance: 'Finance & Expenses', operations: 'Operations Tools', system: 'System Management' },
     login: { adminConsole: 'CCPS / ADMIN CONSOLE', adminHeadline: 'See the whole picture,', adminHeadlineEmphasis: 'manage with confidence.', adminDescription: 'Secure access to your property portfolio, finance review, maintenance workflows, and operational data.', allSystemsNormal: 'All systems operational', secureSession: 'Secure session', operationModules: 'Operational modules', auditVisibility: 'Audit visibility', protectedWorkspace: 'Protected workspace', adminAccess: 'ADMIN ACCESS', adminSignIn: 'Admin sign in', ownerSignIn: 'Owner sign in', welcomeBack: 'Welcome back', ownerSubtitle: 'Sign in to your property management workspace to continue', signInToAdmin: 'Sign in to continue to the administration centre', username: 'Username or email', password: 'Password', usernamePlaceholder: 'Enter administrator username or email', passwordPlaceholder: 'Enter your password', show: 'Show', hide: 'Hide', remember: 'Remember me', forgot: 'Forgot password?', forgotNotice: 'Please contact your system administrator to reset your password.', signIn: 'Sign in', signingIn: 'Signing in…', demo: 'Demo account', secureWorkspace: 'Secure management workspace', required: 'Username and password are required', failed: 'Login failed. Please try again.' },
-    navigation: navigationMessages(2), modules: moduleMessages(2), ui: uiMessages(2), building: buildingMessages(2), properties: propertyMessages(2), tenancy: tenancyMessages(2), tenantDirectory: tenantDirectoryMessages(2), reserve: reserveMessages(2), sync: syncMessages(2), finance: financeMessages(2), propertyDetail: propertyDetailMessages(2), propertyProcess: propertyProcessMessages(2), processCenter: processCenterMessages(2), reports: reportMessages(2), legacy: { ...legacyMessages.en, ...legacyOverrides.en }
+    modules: moduleMessages(2), projectManagement: projectManagementMessages(2), rentalMandates: rentalMandateMessages(2), tenantDirectory: tenantDirectoryMessages(2), backup: backupMessages(2), ui: uiMessages(2), building: buildingMessages(2), properties: propertyMessages(2), tenancy: tenancyMessages(2), reserve: reserveMessages(2), sync: syncMessages(2), finance: financeMessages(2), propertyDetail: propertyDetailMessages(2), propertyProcess: propertyProcessMessages(2), processCenter: processCenterMessages(2), rentalFiles: rentalFileMessages(2), reports: reportMessages(2), legacy: { ...legacyMessages.en, ...legacyOverrides.en }
   }
 };
 

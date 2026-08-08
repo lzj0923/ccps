@@ -18,6 +18,6 @@ test('下載檔名包含報表範圍與資料期間', () => {
   const workspace = read('../src/components/AdminReportWorkspace.vue');
 
   assert.match(workspace, /downloadName\(run\)/, '下載時必須使用描述性檔名');
-  assert.match(workspace, /run\.scopeName \|\| run\.projectName \|\| "全部範圍"/, '檔名必須包含匯出範圍');
+  assert.match(workspace, /run\.scopeName \|\| run\.projectName \|\| this\.\$t\('reports\.allScope'\)/, '檔名必須包含匯出範圍');
   assert.match(workspace, /run\.dateStart.*run\.dateEnd/, '檔名必須包含資料期間');
 });

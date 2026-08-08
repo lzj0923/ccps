@@ -17,6 +17,7 @@ import com.ccps.backend.dto.MaintenanceDetailResponse;
 import com.ccps.backend.dto.OwnerExpenseMaintenanceResponse;
 import com.ccps.backend.dto.OwnerExpenseMaintenanceResponse.Summary;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper;
+import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.CashflowTotals;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.ExpenseTotals;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.MaintenanceHeader;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.ReserveTotals;
@@ -52,9 +53,12 @@ public class OwnerExpenseMaintenanceService {
 
         ExpenseTotals current = totals(userId, projectId, monthStart, monthEnd);
         ExpenseTotals previous = totals(userId, projectId, monthStart.minusMonths(1), monthStart);
+        CashflowTotals lifetime = cashflowTotals(userId, projectId);
         ReserveTotals reserve = reserveTotals(userId, projectId, monthStart, monthEnd);
         Summary summary = new Summary(
                 zero(current.getExpenseAmount()),
+                zero(lifetime.getIncomeAmount()),
+                zero(lifetime.getExpenseAmount()),
                 percentChange(current.getExpenseAmount(), previous.getExpenseAmount()),
                 zero(current.getMaintenanceAmount()),
                 percentChange(current.getMaintenanceAmount(), previous.getMaintenanceAmount()),
@@ -94,6 +98,11 @@ public class OwnerExpenseMaintenanceService {
     private ExpenseTotals totals(Long userId, Long projectId, LocalDate start, LocalDate end) {
         ExpenseTotals result = mapper.findTotals(userId, projectId, start, end);
         return result == null ? new ExpenseTotals() : result;
+    }
+
+    private CashflowTotals cashflowTotals(Long userId, Long projectId) {
+        CashflowTotals result = mapper.findCashflowTotals(userId, projectId);
+        return result == null ? new CashflowTotals() : result;
     }
 
     private ReserveTotals reserveTotals(Long userId, Long projectId, LocalDate start, LocalDate end) {

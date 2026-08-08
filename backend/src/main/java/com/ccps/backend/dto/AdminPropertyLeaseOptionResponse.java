@@ -15,5 +15,6 @@ public record AdminPropertyLeaseOptionResponse(
         BigDecimal depositAmount,
         Integer paymentDay,
         String status,
-        boolean linked) {
+        boolean linked,
+        String signatureStatus) {
 }

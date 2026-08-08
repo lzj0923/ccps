@@ -1,6 +1,6 @@
 -- Automatically fund confirmed property expenses from the owner's reserve account.
--- If the reserve balance cannot cover the confirmed amount, the expense remains
--- unpaid and keeps its normal payment-proof requirement.
+-- An explicitly selected reserve payment may produce a negative balance; the
+-- negative amount represents the owner's outstanding replenishment obligation.
 USE ccps_property_management;
 SET NAMES utf8mb4;
 
@@ -37,7 +37,7 @@ BEGIN
         FROM reserve_accounts ra
        WHERE ra.id = NEW.reserve_account_id
        FOR UPDATE;
-      IF v_amount IS NULL OR v_balance IS NULL OR v_balance < v_amount THEN
+      IF v_amount IS NULL OR v_balance IS NULL THEN
         SET NEW.reserve_account_id = NULL;
       ELSE
         SET NEW.attachment_status = 'not_required';
@@ -93,7 +93,7 @@ BEGIN
      WHERE ra.id = NEW.reserve_account_id
      FOR UPDATE;
     IF v_payment_status = 'paid' AND v_confirmation_status = 'confirmed'
-       AND v_amount IS NOT NULL AND v_balance >= v_amount THEN
+       AND v_amount IS NOT NULL AND v_balance IS NOT NULL THEN
       SET v_after = v_balance - v_amount;
       UPDATE reserve_accounts
          SET current_balance = v_after
@@ -197,7 +197,7 @@ BEGIN
      ORDER BY ra.id
      LIMIT 1
      FOR UPDATE;
-    IF v_reserve_id IS NOT NULL AND v_balance >= NEW.amount THEN
+    IF v_reserve_id IS NOT NULL THEN
       SET v_after = v_balance - NEW.amount;
       UPDATE cashflow_entries
          SET reserve_account_id = v_reserve_id,

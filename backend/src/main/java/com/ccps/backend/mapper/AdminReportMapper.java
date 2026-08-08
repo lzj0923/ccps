@@ -25,7 +25,9 @@ public interface AdminReportMapper {
               ('RESERVE', '預備金餘額及流水', 'reserve', 'XLSX', JSON_OBJECT(), 1),
               ('RESERVE_REFUND', '業主預備金返還清單', 'reserve_refund', 'XLSX', JSON_OBJECT(), 1),
               ('FINANCE', '財務確認記錄', 'finance', 'XLSX', JSON_OBJECT(), 1),
-              ('SYNC', 'SQL Account 匯出結果', 'sync', 'PDF', JSON_OBJECT(), 1)
+              ('SYNC', 'SQL Account 匯出結果', 'sync', 'PDF', JSON_OBJECT(), 1),
+              ('OWNER_STATEMENT', '業主帳單', 'owner_statement', 'XLSX', JSON_OBJECT(), 1),
+              ('TENANT_STATEMENT', '租客帳單', 'tenant_statement', 'PDF', JSON_OBJECT(), 1)
             """)
     int ensureDefinitions();
 
@@ -54,6 +56,7 @@ public interface AdminReportMapper {
             FROM report_runs rr LEFT JOIN users u ON u.id = rr.requested_by
             LEFT JOIN projects p ON p.id = rr.project_id
             LEFT JOIN owners filter_owner ON filter_owner.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.ownerId')), 'null') AS UNSIGNED)
+            LEFT JOIN tenants filter_tenant ON filter_tenant.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.tenantId')), 'null') AS UNSIGNED)
             LEFT JOIN units filter_unit ON filter_unit.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.unitId')), 'null') AS UNSIGNED)
             LEFT JOIN projects filter_unit_project ON filter_unit_project.id = filter_unit.project_id
             WHERE 1 = 1
@@ -62,6 +65,7 @@ public interface AdminReportMapper {
                    OR u.display_name LIKE CONCAT('%', #{keyword}, '%')
                    OR p.name LIKE CONCAT('%', #{keyword}, '%')
                    OR filter_owner.full_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR filter_tenant.full_name LIKE CONCAT('%', #{keyword}, '%')
                    OR filter_unit.unit_no LIKE CONCAT('%', #{keyword}, '%'))
             </if>
             <if test="project != null">AND p.name = #{project}</if>
@@ -79,14 +83,16 @@ public interface AdminReportMapper {
                    rr.project_id, p.name AS project_name, rr.output_format, rr.status,
                    CASE WHEN rr.project_id IS NOT NULL THEN 'project'
                         WHEN filter_owner.id IS NOT NULL THEN 'owner'
+                        WHEN filter_tenant.id IS NOT NULL THEN 'tenant'
                         WHEN filter_unit.id IS NOT NULL THEN 'unit' ELSE 'all' END AS scope_type,
-                   COALESCE(p.name, filter_owner.full_name,
+                   COALESCE(p.name, filter_owner.full_name, filter_tenant.full_name,
                             CONCAT(filter_unit_project.name, ' · ', filter_unit.unit_no), '全部範圍') AS scope_name,
                    rr.record_count, rr.storage_key, rr.error_message, rr.started_at,
                    rr.completed_at, rr.created_at
             FROM report_runs rr LEFT JOIN users u ON u.id = rr.requested_by
             LEFT JOIN projects p ON p.id = rr.project_id
             LEFT JOIN owners filter_owner ON filter_owner.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.ownerId')), 'null') AS UNSIGNED)
+            LEFT JOIN tenants filter_tenant ON filter_tenant.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.tenantId')), 'null') AS UNSIGNED)
             LEFT JOIN units filter_unit ON filter_unit.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.unitId')), 'null') AS UNSIGNED)
             LEFT JOIN projects filter_unit_project ON filter_unit_project.id = filter_unit.project_id
             WHERE 1 = 1
@@ -95,6 +101,7 @@ public interface AdminReportMapper {
                    OR u.display_name LIKE CONCAT('%', #{keyword}, '%')
                    OR p.name LIKE CONCAT('%', #{keyword}, '%')
                    OR filter_owner.full_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR filter_tenant.full_name LIKE CONCAT('%', #{keyword}, '%')
                    OR filter_unit.unit_no LIKE CONCAT('%', #{keyword}, '%'))
             </if>
             <if test="project != null">AND p.name = #{project}</if>
@@ -113,14 +120,16 @@ public interface AdminReportMapper {
                    rr.project_id, p.name AS project_name, rr.output_format, rr.status,
                    CASE WHEN rr.project_id IS NOT NULL THEN 'project'
                         WHEN filter_owner.id IS NOT NULL THEN 'owner'
+                        WHEN filter_tenant.id IS NOT NULL THEN 'tenant'
                         WHEN filter_unit.id IS NOT NULL THEN 'unit' ELSE 'all' END AS scope_type,
-                   COALESCE(p.name, filter_owner.full_name,
+                   COALESCE(p.name, filter_owner.full_name, filter_tenant.full_name,
                             CONCAT(filter_unit_project.name, ' · ', filter_unit.unit_no), '全部範圍') AS scope_name,
                    rr.record_count, rr.storage_key, rr.error_message, rr.started_at,
                    rr.completed_at, rr.created_at
             FROM report_runs rr LEFT JOIN users u ON u.id = rr.requested_by
             LEFT JOIN projects p ON p.id = rr.project_id
             LEFT JOIN owners filter_owner ON filter_owner.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.ownerId')), 'null') AS UNSIGNED)
+            LEFT JOIN tenants filter_tenant ON filter_tenant.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.tenantId')), 'null') AS UNSIGNED)
             LEFT JOIN units filter_unit ON filter_unit.id = CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rr.filters, '$.unitId')), 'null') AS UNSIGNED)
             LEFT JOIN projects filter_unit_project ON filter_unit_project.id = filter_unit.project_id
             WHERE rr.id = #{runId}
@@ -132,6 +141,9 @@ public interface AdminReportMapper {
 
     @Select("SELECT id, full_name AS name FROM owners WHERE status = 'active' ORDER BY full_name, id")
     List<OwnerRow> findOwners();
+
+    @Select("SELECT id, full_name AS name FROM tenants WHERE status = 'active' ORDER BY full_name, id")
+    List<TenantRow> findTenants();
 
     @Select("SELECT u.id, u.project_id, p.name AS project_name, u.unit_no FROM units u JOIN projects p ON p.id=u.project_id WHERE p.status='active' ORDER BY p.name,u.unit_no,u.id")
     List<UnitRow> findUnits();
@@ -184,6 +196,29 @@ public interface AdminReportMapper {
                                                @Param("start") LocalDate start, @Param("end") LocalDate end,
                                                @Param("projectId") Long projectId,
                                                @Param("ownerId") Long ownerId, @Param("unitId") Long unitId);
+
+    @Select("""
+            SELECT ri.billing_month AS record_date, CONCAT('INV-', LPAD(ri.id, 6, '0')) AS reference_no,
+                   '租金帳單' AS category, p.name AS project_name, u.unit_no,
+                   t.full_name AS party_name,
+                   CONCAT('租約 ', l.lease_no, ' · 到期日 ', DATE_FORMAT(ri.due_date, '%Y-%m-%d')) AS description,
+                   ri.amount_due AS amount,
+                   CASE WHEN ri.amount_paid >= ri.amount_due THEN 'paid'
+                        WHEN ri.amount_paid > 0 THEN 'partial'
+                        WHEN ri.due_date < CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS status,
+                   CONCAT('已收 RM ', FORMAT(ri.amount_paid, 2),
+                          ' · 未收 RM ', FORMAT(GREATEST(ri.amount_due - ri.amount_paid, 0), 2)) AS extra_status
+            FROM rent_invoices ri
+            JOIN leases l ON l.id = ri.lease_id
+            JOIN tenants t ON t.id = l.tenant_id
+            JOIN units u ON u.id = l.unit_id
+            JOIN projects p ON p.id = u.project_id
+            WHERE t.id = #{tenantId} AND ri.billing_month BETWEEN #{start} AND #{end}
+            ORDER BY ri.billing_month, ri.id
+            """)
+    List<ReportDataRow> findTenantStatementRows(@Param("start") LocalDate start,
+                                                 @Param("end") LocalDate end,
+                                                 @Param("tenantId") Long tenantId);
 
     @Select("""
             <script>
@@ -366,6 +401,7 @@ public interface AdminReportMapper {
         public LocalDateTime getCreatedAt(){return createdAt;} public void setCreatedAt(LocalDateTime v){createdAt=v;} }
     class ProjectRow { private Long id; private String name; public Long getId(){return id;} public void setId(Long v){id=v;} public String getName(){return name;} public void setName(String v){name=v;} }
     class OwnerRow { private Long id; private String name; public Long getId(){return id;} public void setId(Long v){id=v;} public String getName(){return name;} public void setName(String v){name=v;} }
+    class TenantRow { private Long id; private String name; public Long getId(){return id;} public void setId(Long v){id=v;} public String getName(){return name;} public void setName(String v){name=v;} }
     class UnitRow { private Long id,projectId; private String projectName,unitNo;
         public Long getId(){return id;} public void setId(Long v){id=v;} public Long getProjectId(){return projectId;} public void setProjectId(Long v){projectId=v;}
         public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} }

@@ -14,6 +14,8 @@ public record OwnerExpenseMaintenanceResponse(
 
     public record Summary(
             BigDecimal monthlyExpense,
+            BigDecimal totalIncome,
+            BigDecimal totalExpense,
             BigDecimal expenseChangePercent,
             BigDecimal monthlyMaintenanceExpense,
             BigDecimal maintenanceChangePercent,
@@ -27,6 +29,8 @@ public record OwnerExpenseMaintenanceResponse(
 
     public record ExpenseItem(
             Long id,
+            Long financeRecordId,
+            Long unitId,
             Long projectId,
             String projectName,
             String unitNo,
@@ -40,20 +44,25 @@ public record OwnerExpenseMaintenanceResponse(
             String paymentMethod,
             LocalDate paymentDate,
             Long workOrderId,
-            int attachmentCount) {
+            int attachmentCount,
+            boolean editable) {
     }
 
     public record MaintenanceItem(
             Long id,
             String workOrderNo,
+            Long unitId,
             Long projectId,
             String projectName,
             String unitNo,
+            Long vendorId,
             String category,
             String title,
+            String description,
             LocalDateTime requestedAt,
             LocalDateTime completedAt,
             String status,
+            BigDecimal estimatedAmount,
             BigDecimal amount,
             BigDecimal reserveDeductedAmount,
             int attachmentCount) {

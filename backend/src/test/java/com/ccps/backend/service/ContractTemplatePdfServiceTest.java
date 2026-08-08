@@ -58,4 +58,23 @@ class ContractTemplatePdfServiceTest {
                                     "RM 3,500.00", "Additional condition", List.of())));
         }
     }
+
+    @Test
+    void generatesAuthorizationForChineseOwnerAndProperty() throws Exception {
+        ContractTemplatePdfService service = new ContractTemplatePdfService();
+
+        byte[] pdf = service.generate(ContractTemplatePdfService.TemplateType.AUTHORIZATION,
+                service.data(Map.of(
+                        "caseNo", "RM-20260807-46375C",
+                        "propertyAddress", "翻斗花园 · 102",
+                        "landlordName", "吕志杰",
+                        "startDate", "2026-08-07",
+                        "commencementDate", "2027-08-06",
+                        "commission", "3%")));
+
+        assertTrue(pdf.length > 100_000);
+        PdfReader reader = new PdfReader(pdf);
+        assertEquals(1, reader.getNumberOfPages());
+        reader.close();
+    }
 }

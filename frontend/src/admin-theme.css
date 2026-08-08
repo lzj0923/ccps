@@ -98,3 +98,190 @@
 .admin-shell .reserve-layout .reserve-detail-panel{align-self:start;max-height:calc(100vh - 190px);overflow-y:auto;overflow-x:hidden}
 .admin-shell .reserve-layout .reserve-table-wrap{min-width:0;max-width:100%;min-height:0;flex:1;overflow:auto}
 @media(max-width:1050px){.admin-shell .reserve-layout{grid-template-columns:minmax(0,1fr)!important}.admin-shell .reserve-layout .reserve-detail-panel{max-height:none!important}}
+
+/* Unified administrator visual system. Presentation only: no workflow behavior lives here. */
+.admin-shell{
+  --admin-ink:#14324b;
+  --admin-muted:#61778a;
+  --admin-line:#d9e4eb;
+  --admin-soft:#f5f9fa;
+  --admin-accent:#087f87;
+  --admin-accent-dark:#05646c;
+  --admin-gold:#d99b00;
+  color:var(--admin-ink);
+}
+.admin-shell .main{
+  scrollbar-color:#b8cbd2 transparent;
+  scrollbar-width:thin;
+  background:
+    radial-gradient(circle at 88% 4%,rgba(23,156,158,.055),transparent 28%),
+    linear-gradient(180deg,#f4f9f9 0%,#f7fafb 100%);
+}
+.admin-shell .main::-webkit-scrollbar,.admin-shell .nav::-webkit-scrollbar,.admin-shell .table-wrap::-webkit-scrollbar{width:8px;height:8px}
+.admin-shell .main::-webkit-scrollbar-thumb,.admin-shell .nav::-webkit-scrollbar-thumb,.admin-shell .table-wrap::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:99px;background:#b8cbd2;background-clip:padding-box}
+.admin-shell button,.admin-shell input,.admin-shell select,.admin-shell textarea{transition:border-color .18s ease,background-color .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}
+.admin-shell button:focus-visible,.admin-shell input:focus-visible,.admin-shell select:focus-visible,.admin-shell textarea:focus-visible{outline:3px solid rgba(8,127,135,.16);outline-offset:1px;border-color:#5ab2b7!important}
+
+/* Navigation */
+.admin-shell .sidebar{background:linear-gradient(180deg,#073f4d 0%,#052d39 64%,#042630 100%);border-right-color:rgba(126,201,204,.18);box-shadow:10px 0 30px rgba(3,32,40,.16)}
+.admin-shell .brand{position:relative;height:76px;min-height:76px;padding:12px 18px;background:rgba(3,34,43,.42);border-bottom:1px solid rgba(153,213,215,.12)}
+.admin-shell .brand .crest{width:45px;height:45px;flex:0 0 45px;border-width:1.5px;border-color:rgba(212,233,234,.55);color:#f0c765;box-shadow:inset 0 0 0 4px rgba(255,255,255,.025)}
+.admin-shell .brand strong{font-size:25px;letter-spacing:.7px}
+.admin-shell .brand span{display:block;margin-top:5px;color:#c2dadd;font-size:10px;line-height:1.35;opacity:1}
+.admin-shell .brand-copy{min-width:0}
+.admin-shell .nav{flex:1 1 auto;min-height:0;align-content:start;grid-auto-rows:max-content;padding:12px 10px 14px;gap:5px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-color:rgba(132,196,199,.56) transparent;scrollbar-width:thin}
+.admin-shell .nav::-webkit-scrollbar{width:8px}
+.admin-shell .nav::-webkit-scrollbar-track{background:transparent}
+.admin-shell .nav::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:999px;background:rgba(132,196,199,.56);background-clip:padding-box}
+.admin-shell .nav::-webkit-scrollbar-thumb:hover{background:rgba(159,220,221,.78);background-clip:padding-box}
+.admin-shell .project-card{position:relative;isolation:isolate;flex:0 0 auto;margin:auto 12px 14px;overflow:hidden;border:1px solid rgba(151,207,210,.2);border-radius:12px;background:transparent;box-shadow:0 9px 24px rgba(0,18,25,.2)}
+.admin-shell .project-card::after{content:'';position:absolute;z-index:1;inset:0;background:linear-gradient(180deg,rgba(3,38,48,.02),rgba(3,38,48,.24))}
+.admin-shell .project-photo{height:104px;background-size:100% auto;background-position:center 77%;filter:saturate(.82) contrast(.96);transform:scale(1.02)}
+.admin-shell .nav-group{display:grid;gap:4px;margin:0 0 7px;padding:0 0 5px;border:0}
+.admin-shell .nav-primary-items{display:grid;gap:4px;margin:0 0 10px;padding:0 0 10px;border-bottom:1px solid rgba(155,205,208,.18)}
+.admin-shell .nav-primary-items button{width:100%;min-height:45px;text-align:left}
+.admin-shell .nav-primary-items button.active{border-left-color:#f1c34e;background:linear-gradient(90deg,rgba(11,143,150,.46),rgba(10,151,157,.17));color:#fff;box-shadow:inset 3px 0 #f1c34e,0 7px 16px rgba(0,0,0,.1)}
+.admin-shell .nav-group:last-child{margin-bottom:0}
+.admin-shell .nav>.nav-group>.nav-group-heading{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:36px;padding:4px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:#92b3ba;font-size:12px;font-weight:800;letter-spacing:.035em;text-align:left;cursor:pointer}
+.admin-shell .nav>.nav-group>.nav-group-heading:hover{border-color:rgba(151,207,210,.12);background:rgba(255,255,255,.045);color:#d5e8e9}
+.admin-shell .nav-group-title{gap:8px;min-width:0}
+.admin-shell .nav-group-title>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-shell .nav-group.has-active>.nav-group-heading{border-color:rgba(76,209,207,.2);background:rgba(10,151,157,.12);color:#c7f5f1}
+.admin-shell .nav-group-icon{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.035);color:#91bac0}
+.admin-shell .nav-group.has-active .nav-group-icon{border-color:rgba(82,213,211,.42);background:rgba(10,151,157,.2);color:#69d9d6}
+.admin-shell .nav-group-count{display:grid;min-width:22px;height:21px;place-items:center;padding:0 6px;border:1px solid rgba(153,205,208,.14);border-radius:999px;background:rgba(255,255,255,.035);color:#8fb2b9;font-size:10px;line-height:1}
+.admin-shell .nav-group.has-active .nav-group-count{border-color:rgba(82,213,211,.25);background:rgba(10,151,157,.13);color:#b5e8e5}
+.admin-shell .nav-group-meta{gap:5px}
+.admin-shell .nav-group-chevron{color:#79a5ad;transition:transform .18s ease}
+.admin-shell .nav-group-chevron.expanded{transform:rotate(180deg)}
+.admin-shell .nav-group-items{gap:3px;margin:0 0 0 12px;padding:1px 0 1px 10px;border-left:1px solid rgba(155,205,208,.18)}
+.admin-shell .nav .nav-group-items button{min-height:40px;padding:5px 9px;border-radius:9px;color:#d4e4e7;font-size:13px;line-height:1.3}
+.admin-shell .nav button .ico{width:30px;height:30px;flex-basis:30px;border-radius:8px;background:rgba(255,255,255,.05);color:#aac4ca}
+.admin-shell .nav .nav-group-items button:hover{background:rgba(111,194,198,.1);color:#fff}
+.admin-shell .nav .nav-group-items button.active{background:linear-gradient(90deg,rgba(10,151,157,.46),rgba(10,151,157,.17));color:#fff;box-shadow:inset 3px 0 #56d7d5,0 7px 16px rgba(0,0,0,.1)}
+.admin-shell .portal-switch{height:42px;min-height:42px;margin:8px 12px 10px;border-radius:9px;border-color:rgba(190,224,226,.2);background:rgba(255,255,255,.055);font-size:14px}
+
+@media (min-width:821px) and (max-height:899px){
+  .admin-shell .project-card{display:block;margin:6px 12px 10px}
+  .admin-shell .project-photo{height:72px}
+}
+
+
+/* Header */
+.admin-shell .topbar{position:sticky;z-index:25;top:0;height:68px;padding:0 22px;gap:18px;border-bottom:1px solid rgba(207,221,229,.9);background:rgba(255,255,255,.94);box-shadow:0 5px 16px rgba(24,60,76,.045);backdrop-filter:blur(12px)}
+.admin-shell .topbar>div:first-child{flex:0 1 220px;min-width:0}
+.admin-shell .topbar h1{overflow:hidden;margin:0;color:#123550;font-size:24px;line-height:1.2;letter-spacing:-.025em;text-overflow:ellipsis;white-space:nowrap}
+.admin-shell .top-actions{flex:1 1 auto;justify-content:flex-end;gap:9px;min-width:0}
+.admin-shell .top-actions .global-search,.admin-shell .top-actions .date-btn,.admin-shell .top-actions .icon-btn,.admin-shell .top-actions .user-btn{height:40px;border-color:#d5e1e8;border-radius:9px;background:#fff;color:#183c58;box-shadow:0 1px 2px rgba(18,53,80,.025)}
+.admin-shell .global-search{width:clamp(220px,25vw,330px);padding:0 12px}
+.admin-shell .global-search input{min-width:0;font-size:13px}
+.admin-shell .global-search input::placeholder{color:#8596a6}
+.admin-shell .top-action-icon{flex:0 0 auto;color:#58758b}
+.admin-shell .date-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-width:178px;padding:0 12px;font-size:12px;white-space:nowrap}
+.admin-shell .icon-btn{display:grid;place-items:center;width:42px;padding:0;color:#345b75}
+.admin-shell .icon-btn b{right:-5px;top:-7px;min-width:19px;padding:2px 5px;background:#d89a00;text-align:center}
+.admin-shell .user-btn{min-width:132px;padding:0 12px;font-size:12px}
+.admin-shell .user-btn>span{width:30px;height:30px;background:linear-gradient(145deg,#0a4774,#07335c);font-size:10px}
+.admin-shell .top-actions button:hover,.admin-shell .top-actions .global-search:focus-within{border-color:#9fc9cc;background:#f8fcfc;box-shadow:0 3px 10px rgba(8,96,104,.08)}
+
+/* Page rhythm and common controls */
+.admin-shell .page-view>.metrics{height:auto!important;min-height:0;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));grid-auto-rows:minmax(102px,auto);align-content:start;gap:14px;padding:14px 28px 16px}
+.admin-shell .metric{height:auto!important;min-height:102px;padding:17px 18px;border:1px solid var(--admin-line);border-radius:13px;background:linear-gradient(150deg,#fff 0%,#f8fbfc 100%);box-shadow:0 7px 20px rgba(30,70,88,.055)}
+.admin-shell .metric::before{height:3px;background:linear-gradient(90deg,#07838a,#1ca4a6)}
+.admin-shell .metric .admin-metric-icon{width:42px;height:42px;flex-basis:42px;border-radius:12px;border-color:#d4e3e9;background:#eef7f7;color:#176c76}
+.admin-shell .metric span{color:#456176;font-size:13px}
+.admin-shell .metric strong{margin:7px 0 4px;color:#113752;font-size:22px;line-height:1.05}
+.admin-shell .metric small{color:#788c9d;font-size:11px;line-height:1.4}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar{width:auto;margin:0 28px 16px;padding:13px 14px;gap:11px;flex-wrap:nowrap;border:1px solid var(--admin-line);border-radius:13px;background:rgba(255,255,255,.92);box-shadow:0 6px 18px rgba(29,69,87,.045)}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .search-box{height:44px;min-width:210px;max-width:none;flex:1 1 260px;border-color:#d4e1e8;border-radius:9px;background:#fbfdfd}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar select{width:178px;min-width:148px;flex:0 1 178px;height:44px;border-color:#d4e1e8;border-radius:9px;color:#294a62}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .primary-btn,.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .ghost-btn{height:44px;min-width:106px;padding:0 14px;border-radius:9px;white-space:nowrap}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .primary-btn{background:linear-gradient(180deg,#f6bd12,#dfa000);box-shadow:0 5px 12px rgba(210,147,0,.16)}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .primary-btn:hover{transform:translateY(-1px);box-shadow:0 8px 16px rgba(210,147,0,.2)}
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .ghost-btn:hover{border-color:#8fc2c5;background:#f4fbfb;color:#096d74}
+
+/* Panels and tables */
+.admin-shell .panel,.admin-shell .table-card,.admin-shell .history-panel{border-color:var(--admin-line);border-radius:14px;box-shadow:0 8px 24px rgba(28,67,84,.055)}
+.admin-shell .panel-head{min-height:66px;height:auto;padding:13px 18px;background:linear-gradient(180deg,#fff,#fbfdfd)}
+.admin-shell .panel-head h2{color:#153c57;font-size:18px;letter-spacing:-.01em}
+.admin-shell .panel-head span{color:#718596;font-size:13px}
+.admin-shell .page-view .table-wrap{min-height:0}
+.admin-shell table{font-size:13px}
+.admin-shell th{height:45px;padding:0 12px;background:#f5f9fa;color:#405d72;font-size:12px;font-weight:800;letter-spacing:.015em}
+.admin-shell td{height:50px;padding:8px 12px;color:#213f56;font-size:13px;line-height:1.4}
+.admin-shell tbody tr:hover,.admin-shell tbody tr.selected{background:#f2faf9}
+.admin-shell tbody tr.selected td:first-child{box-shadow:inset 3px 0 #11999d}
+.admin-shell .tag{height:auto;min-height:27px;padding:5px 9px;border-radius:7px;font-size:12px;line-height:1.2}
+.admin-shell .row-actions,.admin-shell .detail-button,.admin-shell .maintenance-detail-btn{min-width:34px;height:34px;border-color:#cbdde4;border-radius:8px;background:#fff;color:#176979}
+.admin-shell .row-actions:hover,.admin-shell .detail-button:hover,.admin-shell .maintenance-detail-btn:hover{border-color:#78bfc3;background:#edf9f8;color:#075f67}
+.admin-shell .pager,.admin-shell .owners-pager{min-height:58px;height:auto;padding:9px 16px;background:#fcfefe;color:#536d80}
+.admin-shell .pager button,.admin-shell .owners-pager button{border-color:#d4e1e8;border-radius:8px}
+.admin-shell .pager select,.admin-shell .owners-pager select{height:36px;border-color:#d4e1e8;border-radius:8px}
+.admin-shell .admin-owner-empty,.admin-shell .empty-cell,.admin-shell .empty-state{min-height:150px;padding:42px 20px!important;color:#738797!important}
+
+/* Dashboard: keep five summaries on standard desktop widths and remove the artificial empty table height. */
+.admin-shell .admin-dashboard-workspace{gap:18px;margin:14px 28px 30px}
+.admin-shell .admin-dashboard-workspace .dashboard-summary-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.admin-shell .admin-dashboard-workspace .dashboard-summary-grid article{min-height:128px;padding:20px;border:1px solid var(--admin-line);border-top:3px solid #0c979d;border-radius:14px;background:linear-gradient(145deg,#fff,#f7fbfb);box-shadow:0 7px 20px rgba(27,67,84,.055)}
+.admin-shell .admin-dashboard-workspace .dashboard-summary-grid strong{font-size:22px;letter-spacing:-.025em;white-space:nowrap}
+.admin-shell .admin-dashboard-workspace .region-overview-panel{border-radius:14px}
+.admin-shell .admin-dashboard-workspace .region-overview-panel .table-wrap{min-height:0}
+.admin-shell .admin-dashboard-workspace .region-overview-panel th,.admin-shell .admin-dashboard-workspace .region-overview-panel td{padding:14px 15px}
+
+/* Workspace spacing */
+.admin-shell .content-grid{gap:16px;padding:0 28px 30px}
+.admin-shell .admin-owner-workspace{margin:0 28px 30px}
+.admin-shell .admin-owner-workspace .owners-table-panel{border-radius:14px;box-shadow:0 8px 24px rgba(28,67,84,.055)}
+.admin-shell .admin-owner-workspace .owners-table-wrap th{height:45px}
+.admin-shell .admin-owner-workspace .owners-table-wrap td{height:50px}
+.admin-shell .admin-finance-navigation{margin-left:28px;margin-right:28px}
+.admin-shell .admin-finance-shell{grid-template-columns:minmax(0,1fr);min-width:0;overflow:hidden}
+.admin-shell .admin-finance-shell>.toolbar{min-width:0}
+.admin-shell .admin-finance-workspace{width:100%;max-width:100%;min-width:0;grid-template-columns:minmax(0,1fr) minmax(280px,32%)!important}
+.admin-shell .admin-finance-workspace .finance-review-panel,.admin-shell .admin-finance-workspace .finance-review-detail{min-width:0;max-width:100%}
+.admin-shell .admin-building-workspace{width:100%;max-width:100%;min-width:0;grid-template-columns:minmax(0,1fr) minmax(280px,32%)!important}
+.admin-shell .admin-building-workspace>.panel{min-width:0;max-width:100%}
+.admin-shell .audit-workspace{margin:14px 28px 30px;padding:0}
+.admin-shell .backup-workspace{margin-top:14px}
+.admin-shell .audit-filters{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr)) minmax(180px,1.4fr) auto;align-items:end;gap:12px;padding:16px 20px}
+.admin-shell .audit-filters label,.admin-shell .audit-filters input,.admin-shell .audit-filters select,.admin-shell .audit-filters .keyword input{width:100%;min-width:0}
+.admin-shell .audit-filter-actions{white-space:nowrap}
+
+/* Dialogs */
+.admin-shell dialog,.admin-shell .modal-backdrop .modal,.admin-shell [class$="-detail-modal"]>[class*="detail"]{border:1px solid #d5e1e8;border-radius:16px;background:#fff;box-shadow:0 28px 80px rgba(5,35,50,.28)}
+.admin-shell dialog::backdrop{background:rgba(4,27,39,.54);backdrop-filter:blur(4px)}
+.admin-shell .modal-backdrop,.admin-shell [class$="-detail-modal"]{background:rgba(4,27,39,.5);backdrop-filter:blur(4px)}
+.admin-shell dialog .modal-head,.admin-shell dialog header{min-height:68px;height:auto;padding:16px 22px}
+.admin-shell dialog h3,.admin-shell dialog header h3{color:#143b56;font-size:20px}
+.admin-shell dialog .form-grid{gap:16px;padding:22px}
+.admin-shell dialog label{color:#3f5b70;font-size:13px}
+.admin-shell dialog input:not([type="checkbox"]):not([type="radio"]),.admin-shell dialog select,.admin-shell dialog textarea{min-height:42px;border-color:#cbdbe3;border-radius:9px;background:#fff}
+.admin-shell dialog menu{padding:16px 22px;background:#f8fbfc}
+.admin-shell dialog menu button{min-height:40px;border-radius:9px}
+.admin-shell .admin-owner-detail-modal .admin-owner-detail{width:min(760px,calc(100vw - 48px));padding:24px 28px 22px;border-radius:16px}
+
+@media (max-width:1180px){
+  .admin-shell .admin-dashboard-workspace .dashboard-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .admin-shell :is(.page-view,.admin-finance-shell)>.toolbar{flex-wrap:wrap}
+  .admin-shell :is(.page-view,.admin-finance-shell)>.toolbar .search-box{flex-basis:100%}
+  .admin-shell .topbar{height:auto;min-height:68px;align-items:center;flex-direction:row;padding:12px 18px}
+  .admin-shell .top-actions{flex-wrap:wrap}
+  .admin-shell .audit-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin-shell .audit-filter-actions{grid-column:1/-1}
+}
+@media (max-width:900px){
+  .admin-shell .topbar{position:relative;align-items:flex-start;flex-direction:column}
+  .admin-shell .top-actions{width:100%;justify-content:flex-start}
+  .admin-shell .global-search{width:min(100%,360px)}
+  .admin-shell .page-view>.metrics{padding-left:14px;padding-right:14px}
+  .admin-shell :is(.page-view,.admin-finance-shell)>.toolbar{margin-left:14px;margin-right:14px}
+  .admin-shell .admin-dashboard-workspace,.admin-shell .admin-owner-workspace{margin-left:14px;margin-right:14px}
+  .admin-shell .audit-workspace{margin-left:14px;margin-right:14px}
+  .admin-shell .content-grid{padding-left:14px;padding-right:14px}
+}
+@media (max-width:620px){
+  .admin-shell .admin-dashboard-workspace .dashboard-summary-grid{grid-template-columns:1fr}
+  .admin-shell .top-actions>*{width:100%!important}
+  .admin-shell .top-actions .icon-btn{width:42px!important}
+  .admin-shell :is(.page-view,.admin-finance-shell)>.toolbar>*{flex:1 1 100%!important;width:100%!important}
+}

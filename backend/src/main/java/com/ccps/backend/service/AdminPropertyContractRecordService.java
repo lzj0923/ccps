@@ -251,7 +251,7 @@ public class AdminPropertyContractRecordService {
     private AdminPropertyLeaseOptionResponse leaseOption(LeaseOptionRow row) {
         return new AdminPropertyLeaseOptionResponse(row.getLeaseId(), row.getRentalMandateId(), row.getLeaseNo(), row.getTenantId(),
                 row.getTenantName(), row.getStartDate(), row.getEndDate(), row.getMonthlyRent(),
-                row.getDepositAmount(), row.getPaymentDay(), row.getStatus(), row.isLinked());
+                row.getDepositAmount(), row.getPaymentDay(), row.getStatus(), row.isLinked(), row.getSignatureStatus());
     }
 
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }

@@ -18,6 +18,7 @@ class AdminReportMapperSqlTest {
     void scopedReportScriptsAreValidMyBatisXml() throws Exception {
         assertScriptParses("findFinanceReportRows");
         assertScriptParses("findIncomeExpenseRows");
+        assertScriptParses("findTenantStatementRows");
         assertScriptParses("findMaintenanceRows");
         assertScriptParses("findReserveRows");
     }
@@ -40,6 +41,13 @@ class AdminReportMapperSqlTest {
         Pattern reportType = AdminReportGenerateRequest.class.getDeclaredMethod("reportType").getAnnotation(Pattern.class);
 
         assertThat(reportType.regexp()).contains("reserve_refund");
+    }
+
+    @Test
+    void individualStatementsAreAcceptedAsGeneratedReportTypes() throws Exception {
+        Pattern reportType = AdminReportGenerateRequest.class.getDeclaredMethod("reportType").getAnnotation(Pattern.class);
+
+        assertThat(reportType.regexp()).contains("owner_statement").contains("tenant_statement");
     }
 
     private void assertScriptParses(String methodName) throws Exception {

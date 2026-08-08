@@ -88,6 +88,7 @@ public class AdminReportService {
                         pageSize, (page - 1) * pageSize).stream().map(this::toRun).toList(),
                 mapper.findProjects().stream().map(row -> new AdminReportResponse.Project(row.getId(), row.getName())).toList(),
                 mapper.findOwners().stream().map(row -> new AdminReportResponse.Owner(row.getId(), row.getName())).toList(),
+                mapper.findTenants().stream().map(row -> new AdminReportResponse.Tenant(row.getId(), row.getName())).toList(),
                 mapper.findUnits().stream().map(row -> new AdminReportResponse.Unit(
                         row.getId(), row.getProjectId(), row.getProjectName(), row.getUnitNo())).toList(),
                 new AdminReportResponse.Page(totalRows, page, pageSize, totalPages));
@@ -119,9 +120,18 @@ public class AdminReportService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Report end date cannot be before start date");
         }
         int scopeCount = (request.projectId() == null ? 0 : 1) + (request.ownerId() == null ? 0 : 1)
-                + (request.unitId() == null ? 0 : 1);
+                + (request.tenantId() == null ? 0 : 1) + (request.unitId() == null ? 0 : 1);
         if (scopeCount > 1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose only one report scope");
+        }
+        if ("owner_statement".equals(request.reportType()) && request.ownerId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Owner statement requires one owner");
+        }
+        if ("tenant_statement".equals(request.reportType()) && request.tenantId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant statement requires one tenant");
+        }
+        if (request.tenantId() != null && !"tenant_statement".equals(request.reportType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant scope is only available for tenant statements");
         }
         mapper.ensureDefinitions();
         DefinitionRow definition = mapper.findDefinitionByType(request.reportType());
@@ -162,8 +172,10 @@ public class AdminReportService {
 
     private List<ReportDataRow> data(AdminReportGenerateRequest request) {
         return switch (request.reportType()) {
-            case "income_expense" -> withRunningBalance(mapper.findIncomeExpenseRows(
+            case "income_expense", "owner_statement" -> withRunningBalance(mapper.findIncomeExpenseRows(
                     request.dateStart(), request.dateEnd(), request.projectId(), request.ownerId(), request.unitId()));
+            case "tenant_statement" -> mapper.findTenantStatementRows(
+                    request.dateStart(), request.dateEnd(), request.tenantId());
             case "maintenance" -> mapper.findMaintenanceRows(request.dateStart(), request.dateEnd(),
                     request.projectId(), request.ownerId(), request.unitId());
             case "reserve" -> mapper.findReserveRows(request.dateStart(), request.dateEnd(),
@@ -187,7 +199,7 @@ public class AdminReportService {
                            List<ReportDataRow> rows) throws IOException {
         try (Workbook workbook = new XSSFWorkbook(); OutputStream output = Files.newOutputStream(target)) {
             Sheet sheet = workbook.createSheet("Report");
-            boolean incomeExpense = "income_expense".equals(request.reportType());
+            boolean incomeExpense = isIncomeExpense(request.reportType());
             if (!incomeExpense) {
                 CellStyle titleStyle = workbook.createCellStyle(); Font titleFont = workbook.createFont();
                 titleFont.setBold(true); titleFont.setFontHeightInPoints((short) 16); titleStyle.setFont(titleFont);
@@ -249,7 +261,7 @@ public class AdminReportService {
     }
 
     private List<String> values(ReportDataRow row, String reportType) {
-        if ("income_expense".equals(reportType)) {
+        if (isIncomeExpense(reportType)) {
             return List.of(text(row.getItem()), text(row.getObjectName()), text(row.getItemName()),
                     text(row.getPaymentName()), displayStatus(row.getStatus()), displayPaymentMethod(row.getPaymentMethod()),
                     dateText(row.getRealDate()), dateText(row.getPayDate()), zero(row.getIncome()).setScale(2).toPlainString(),
@@ -262,8 +274,9 @@ public class AdminReportService {
         values.add(text(row.getPartyName())); values.add(text(row.getDescription())); values.add(zero(row.getAmount()).setScale(2).toPlainString());
         values.add(text(row.getStatus())); values.add(text(row.getExtraStatus())); return values;
     }
-    private List<String> headers(String reportType) { return "income_expense".equals(reportType) ? INCOME_EXPENSE_HEADERS : GENERIC_HEADERS; }
-    private boolean numericColumn(String reportType, int index) { return "income_expense".equals(reportType) ? index >= 8 && index <= 10 : index == 7; }
+    private List<String> headers(String reportType) { return isIncomeExpense(reportType) ? INCOME_EXPENSE_HEADERS : GENERIC_HEADERS; }
+    private boolean numericColumn(String reportType, int index) { return isIncomeExpense(reportType) ? index >= 8 && index <= 10 : index == 7; }
+    private boolean isIncomeExpense(String reportType) { return "income_expense".equals(reportType) || "owner_statement".equals(reportType); }
     private Path target(Long runId, String code, String format) { String month = LocalDateTime.now().toLocalDate().toString().substring(0, 7); return reportRoot.resolve(month).resolve(runId + "-" + safe(code) + "." + format.toLowerCase(Locale.ROOT)).normalize(); }
     private String downloadName(RunRow run) {
         String scope = run.getScopeName() == null || run.getScopeName().isBlank() ? "全部範圍" : run.getScopeName();

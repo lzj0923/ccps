@@ -3,7 +3,6 @@ package com.ccps.backend.controller;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.time.LocalDate;
-import java.util.List;
 
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.ContentDisposition;
@@ -71,10 +70,18 @@ public class AdminFinanceReviewController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/reviews/{financeRecordId}/reopen")
+    public ResponseEntity<Void> reopen(@PathVariable Long financeRecordId,
+            @Valid @RequestBody AdminFinanceDecisionRequest request,
+            HttpServletRequest httpRequest) {
+        service.reopen(AuthInterceptor.userId(httpRequest), financeRecordId, request.note());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/reviews/batch-confirm")
     public ResponseEntity<Void> confirmBatch(@Valid @RequestBody AdminFinanceBatchConfirmRequest request,
             HttpServletRequest httpRequest) {
-        service.confirmBatch(AuthInterceptor.userId(httpRequest), request.ids(), request.note());
+        service.confirmBatch(AuthInterceptor.userId(httpRequest), request.ids(), request.note(), request.referenceNo());
         return ResponseEntity.noContent().build();
     }
 

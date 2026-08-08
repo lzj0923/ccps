@@ -20,8 +20,8 @@ public interface AdminBuildingPaymentMapper {
     int countProjectCode(@Param("projectCode") String projectCode);
 
     @Insert("""
-            INSERT INTO projects (project_code, name, address, city, country_code, status)
-            VALUES (#{projectCode}, #{name}, #{address}, #{city}, #{countryCode}, #{status})
+            INSERT INTO projects (project_code, name, address, state_name, city, country_code, status)
+            VALUES (#{projectCode}, #{name}, #{address}, #{state}, #{city}, #{countryCode}, #{status})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertProject(NewProject project);
@@ -317,6 +317,7 @@ public interface AdminBuildingPaymentMapper {
         private String projectCode;
         private String name;
         private String address;
+        private String state;
         private String city;
         private String countryCode;
         private String status;
@@ -329,6 +330,8 @@ public interface AdminBuildingPaymentMapper {
         public void setName(String value) { name = value; }
         public String getAddress() { return address; }
         public void setAddress(String value) { address = value; }
+        public String getState() { return state; }
+        public void setState(String value) { state = value; }
         public String getCity() { return city; }
         public void setCity(String value) { city = value; }
         public String getCountryCode() { return countryCode; }

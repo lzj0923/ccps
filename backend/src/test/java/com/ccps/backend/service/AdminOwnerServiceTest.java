@@ -103,13 +103,17 @@ class AdminOwnerServiceTest {
     @Test
     void createsOwnerAndReturnsGeneratedDatabaseRecord() {
         AdminOwnerCreateRequest request = new AdminOwnerCreateRequest(
-                " New Owner ", "ID-900", "+60 12-000 0000", "new.owner@example.com", "active");
+                "MANUAL-OWNER-NO", " New Owner ", "ID-900", "+60 12-000 0000", "+60 12-000 0000",
+                null, null, null, "new.owner@example.com", "active");
         when(mapper.insertOwner(any(NewOwner.class))).thenAnswer(invocation -> {
             NewOwner owner = invocation.getArgument(0);
+            assertThat(owner.getOwnerNo()).isNull();
             owner.setId(99L);
             return 1;
         });
+        when(mapper.assignOwnerNo(99L, "000099")).thenReturn(1);
         OwnerPropertyRow created = propertyRow(99L, null, null, null);
+        created.setOwnerNo("000099");
         created.setFullName("New Owner");
         created.setIdentityNo("ID-900");
         created.setPhone("+60 12-000 0000");
@@ -119,6 +123,7 @@ class AdminOwnerServiceTest {
         AdminOwnerResponse result = service.createOwner(request);
 
         assertThat(result.id()).isEqualTo(99L);
+        assertThat(result.ownerNo()).isEqualTo("000099");
         assertThat(result.fullName()).isEqualTo("New Owner");
         assertThat(result.properties()).isEmpty();
     }

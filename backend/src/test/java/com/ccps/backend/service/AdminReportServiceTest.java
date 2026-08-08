@@ -49,7 +49,7 @@ class AdminReportServiceTest {
         when(mapper.findRun(55L)).thenAnswer(invocation -> completed(storage.get()));
 
         var result = service.generate(5L, new AdminReportGenerateRequest("rent_collection",
-                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, null, null, "XLSX"));
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, null, null, null, "XLSX"));
 
         assertThat(result.status()).isEqualTo("completed");
         assertThat(storage.get()).endsWith("55-RENT_COLLECTION.xlsx");
@@ -72,7 +72,7 @@ class AdminReportServiceTest {
         when(mapper.findRun(56L)).thenAnswer(invocation -> { RunRow run = completed(storage.get()); run.setId(56L); run.setDefinitionId(4L); run.setReportName("維修費用統計"); run.setOutputFormat("PDF"); return run; });
 
         var result = service.generate(5L, new AdminReportGenerateRequest("maintenance",
-                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, null, null, "PDF"));
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, null, null, null, "PDF"));
 
         assertThat(result.errorMessage()).isNull();
         assertThat(result.status()).isEqualTo("completed");
@@ -99,7 +99,7 @@ class AdminReportServiceTest {
         when(mapper.findRun(57L)).thenAnswer(invocation -> { RunRow run = completed(storage.get()); run.setId(57L); run.setReportName("收入與支出明細"); return run; });
 
         var result = service.generate(5L, new AdminReportGenerateRequest("income_expense",
-                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, 9L, null, "XLSX"));
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, 9L, null, null, "XLSX"));
 
         assertThat(result.status()).isEqualTo("completed");
         try (var input = Files.newInputStream(tempDir.resolve(storage.get())); var workbook = new XSSFWorkbook(input)) {
@@ -137,6 +137,38 @@ class AdminReportServiceTest {
         var download = service.download(55L);
 
         assertThat(download.filename()).isEqualTo("業主預備金返還清單_呂小布_2026-07-01至2026-07-31.xlsx");
+    }
+
+    @Test void generatesOwnerStatementForExactlyOneOwner() {
+        AdminReportService service = new AdminReportService(mapper, new ObjectMapper(), tempDir.toString());
+        DefinitionRow definition = new DefinitionRow(); definition.setId(9L); definition.setReportCode("OWNER_STATEMENT");
+        definition.setName("業主帳單"); definition.setReportType("owner_statement"); definition.setEnabled(true);
+        when(mapper.findDefinitionByType("owner_statement")).thenReturn(definition);
+        when(mapper.insertRun(any())).thenAnswer(invocation -> { NewRun run = invocation.getArgument(0); run.setId(58L); return 1; });
+        when(mapper.findIncomeExpenseRows(any(), any(), eq(null), eq(21L), eq(null))).thenReturn(List.of());
+        when(mapper.findRun(58L)).thenAnswer(invocation -> { RunRow run = completed(null); run.setId(58L); run.setDefinitionId(9L); run.setReportName("業主帳單"); return run; });
+
+        var result = service.generate(5L, new AdminReportGenerateRequest("owner_statement",
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, 21L, null, null, "XLSX"));
+
+        assertThat(result.status()).isEqualTo("completed");
+        verify(mapper).findIncomeExpenseRows(any(), any(), eq(null), eq(21L), eq(null));
+    }
+
+    @Test void generatesTenantStatementForExactlyOneTenant() {
+        AdminReportService service = new AdminReportService(mapper, new ObjectMapper(), tempDir.toString());
+        DefinitionRow definition = new DefinitionRow(); definition.setId(10L); definition.setReportCode("TENANT_STATEMENT");
+        definition.setName("租客帳單"); definition.setReportType("tenant_statement"); definition.setEnabled(true);
+        when(mapper.findDefinitionByType("tenant_statement")).thenReturn(definition);
+        when(mapper.insertRun(any())).thenAnswer(invocation -> { NewRun run = invocation.getArgument(0); run.setId(59L); return 1; });
+        when(mapper.findTenantStatementRows(any(), any(), eq(31L))).thenReturn(List.of());
+        when(mapper.findRun(59L)).thenAnswer(invocation -> { RunRow run = completed(null); run.setId(59L); run.setDefinitionId(10L); run.setReportName("租客帳單"); return run; });
+
+        var result = service.generate(5L, new AdminReportGenerateRequest("tenant_statement",
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), null, null, 31L, null, "PDF"));
+
+        assertThat(result.status()).isEqualTo("completed");
+        verify(mapper).findTenantStatementRows(any(), any(), eq(31L));
     }
 
     private RunRow completed(String storage) {

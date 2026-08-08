@@ -47,6 +47,31 @@
       <div v-else class="admin-owner-empty">{{ $t('building.noPaymentData') }}</div>
     </aside>
 
+    <dialog ref="preHandoverPropertyDialog" class="modal admin-pre-handover-property-dialog">
+      <form method="dialog" @submit.prevent="savePreHandoverProperty">
+        <div class="modal-head"><div><h3>{{ $t('building.addPreHandoverProperty') }}</h3><small>{{ $t('building.preHandoverPropertyHint') }}</small></div><button class="icon-close" type="button" @click="closePreHandoverPropertyDialog">×</button></div>
+        <div v-if="propertyOptionsLoading" class="admin-owner-state">{{ $t('building.loadingPropertyOptions') }}</div>
+        <div v-else class="form-grid pre-handover-property-form">
+          <label class="wide">{{ $t('ui.owner') }}<select v-model.number="preHandoverPropertyForm.ownerId" required><option disabled value="">{{ $t('building.selectOwner') }}</option><option v-for="owner in propertyOwners" :key="owner.id" :value="owner.id">{{ owner.fullName }}{{ owner.mobilePhone || owner.phone ? ` · ${owner.mobilePhone || owner.phone}` : '' }}</option></select></label>
+          <label class="wide">{{ $t('building.projectName') }}<select v-model.number="preHandoverPropertyForm.projectId" required><option disabled value="">{{ $t('properties.projectInputPlaceholder') }}</option><option v-for="project in propertyProjects" :key="project.id" :value="project.id">{{ project.name }}{{ project.city ? ` · ${project.city}` : '' }}</option></select></label>
+          <label>{{ $t('building.buildingBlock') }}<input v-model.trim="preHandoverPropertyForm.building" maxlength="80"></label>
+          <label>{{ $t('building.floorNo') }}<input v-model.trim="preHandoverPropertyForm.floorNo" maxlength="20"></label>
+          <label>{{ $t('building.unitNo') }}<input v-model.trim="preHandoverPropertyForm.unitNo" maxlength="40" required></label>
+          <label>{{ $t('building.unitType') }}<input v-model.trim="preHandoverPropertyForm.unitType" maxlength="80"></label>
+          <label>{{ $t('building.areaSqm') }}<input v-model.number="preHandoverPropertyForm.areaSqm" type="number" min="0.01" step="0.01"></label>
+          <label>{{ $t('building.bedroomCount') }}<input v-model.number="preHandoverPropertyForm.bedroomCount" type="number" min="0" max="50"></label>
+          <label>{{ $t('building.purchasePrice') }} {{ $t('building.currencyMyr') }}<input v-model.number="preHandoverPropertyForm.purchasePrice" type="number" min="0" step="0.01" required></label>
+          <label>{{ $t('building.expectedHandoverDate') }}<input v-model="preHandoverPropertyForm.expectedHandoverDate" type="date"></label>
+          <label>{{ $t('building.ownershipPercent') }}<input v-model.number="preHandoverPropertyForm.ownershipPercent" type="number" min="0.01" max="100" step="0.01" required></label>
+          <label>{{ $t('building.purchaseDate') }}<input v-model="preHandoverPropertyForm.startDate" type="date"></label>
+          <div class="pre-handover-stage-note wide"><strong>{{ $t('building.propertyStage') }}</strong><span>{{ $t('properties.preHandover') }}</span><small>{{ $t('building.preHandoverStageLocked') }}</small></div>
+          <label class="property-primary-check wide"><input v-model="preHandoverPropertyForm.primary" type="checkbox">{{ $t('building.primaryProperty') }}</label>
+          <p v-if="preHandoverPropertyError" class="admin-property-error wide">{{ preHandoverPropertyError }}</p>
+        </div>
+        <menu><button type="button" @click="closePreHandoverPropertyDialog">{{ $t('ui.cancel') }}</button><button type="submit" class="primary-btn" :disabled="preHandoverPropertySaving || propertyOptionsLoading">{{ preHandoverPropertySaving ? $t('building.creating') : $t('building.confirmAddProperty') }}</button></menu>
+      </form>
+    </dialog>
+
     <dialog ref="projectDialog" class="modal admin-building-dialog">
       <form method="dialog" @submit.prevent="saveProject">
         <div class="modal-head"><div><h3>{{ $t('building.createProject') }}</h3><small>{{ $t('building.projectCreatedHint') }}</small></div><button class="icon-close" type="button" @click="closeProjectDialog">×</button></div>
@@ -144,13 +169,14 @@
 <script>
 import pageBridge from '../pageBridge';
 import { i18n } from '../i18n';
-import { createAdminBuildingProject, createAdminPaymentPlan, fetchAdminBuildingPaymentProgress, fetchAdminPaymentContracts, sendAdminPaymentReminder, updateAdminPaymentInstallment } from '../services/propertyApi';
+import { createAdminBuildingProject, createAdminOwnerProperty, createAdminPaymentPlan, fetchAdminBuildingPaymentProgress, fetchAdminOwners, fetchAdminPaymentContracts, fetchAdminPropertyProjects, sendAdminPaymentReminder, updateAdminPaymentInstallment } from '../services/propertyApi';
 
 export default {
   mixins: [pageBridge],
   data() { return {
     rows: [], summary: null, selectedId: null, loading: false, errorMessage: '', pageNumber: 1, pageSize: 10, totalRows: 0, totalPages: 1, requestSerial: 0,
     projectSaving: false, projectFormError: '', projectForm: { projectCode: '', name: '', address: '', city: '', countryCode: 'MY', status: 'active' },
+    propertyOwners: [], propertyProjects: [], propertyOptionsLoading: false, preHandoverPropertySaving: false, preHandoverPropertyError: '', preHandoverPropertyForm: {},
     paymentContracts: [], contractsLoading: false, paymentPlanSaving: false, paymentPlanError: '', installmentKey: 1,
     paymentPlanForm: { purchaseContractId: '', planName: '', startDate: '', installments: [] },
     installmentSaving: false, reminderSending: false, installmentActionError: '', installmentEditForm: { milestone: '', dueDate: '' }
@@ -180,6 +206,7 @@ export default {
     },
     locale() { return i18n.global.locale.value; },
     projectCreateRequestNonce() { return this.page.adminBuildingProjectCreateNonce; },
+    propertyCreateRequestNonce() { return this.page.adminBuildingPropertyCreateNonce; },
     paymentPlanCreateRequestNonce() { return this.page.adminPaymentPlanCreateNonce; },
     eligibleContracts() { return this.paymentContracts.filter(contract => !contract.hasActivePlan); },
     selectedContract() { return this.paymentContracts.find(contract => contract.contractId === this.paymentPlanForm.purchaseContractId) || null; },
@@ -199,6 +226,7 @@ export default {
     statusFilter() { this.resetAndLoad(); },
     locale() { if (this.summary) this.page.adminDataMetrics = this.toMetrics(this.summary); },
     projectCreateRequestNonce(value, previousValue) { if (value > previousValue) this.openProjectCreate(); },
+    propertyCreateRequestNonce(value, previousValue) { if (value > previousValue) this.openPreHandoverPropertyCreate(); },
     paymentPlanCreateRequestNonce(value, previousValue) { if (value > previousValue) this.openPaymentPlanCreate(); },
     selectedContract(contract) {
       if (contract && this.paymentPlanForm.installments.length === 1 && !this.paymentPlanForm.installments[0].amountDue) {
@@ -241,6 +269,38 @@ export default {
     paymentMethodLabel(value) { return ({ bank_transfer: this.$t('building.bankTransfer'), cheque: this.$t('building.cheque'), cash: this.$t('building.cash'), online_banking: this.$t('building.onlineBanking') })[value] || value || '—'; },
     confirmationLabel(value) { return ({ pending: this.$t('building.pendingFinanceConfirmation'), confirmed: this.$t('building.confirmed'), rejected: this.$t('building.rejected') })[value] || this.$t('building.notSubmitted'); },
     confirmationClass(value) { return value === 'confirmed' ? 'green' : value === 'rejected' ? 'red' : 'orange'; },
+    emptyPreHandoverPropertyForm() { return { ownerId: '', projectId: '', building: '', floorNo: '', unitNo: '', unitType: '', areaSqm: null, bedroomCount: null, purchasePrice: 0, expectedHandoverDate: '', ownershipPercent: 100, primary: true, startDate: new Date().toISOString().slice(0, 10) }; },
+    async openPreHandoverPropertyCreate() {
+      this.preHandoverPropertyForm = this.emptyPreHandoverPropertyForm();
+      this.preHandoverPropertyError = ''; this.propertyOptionsLoading = true;
+      this.$refs.preHandoverPropertyDialog?.showModal();
+      try {
+        const [owners, projects] = await Promise.all([fetchAdminOwners(), fetchAdminPropertyProjects()]);
+        this.propertyOwners = (owners || []).filter(owner => owner.status === 'active');
+        this.propertyProjects = projects || [];
+      } catch (error) { this.preHandoverPropertyError = error.message || this.$t('building.propertyOptionsLoadFailed'); }
+      finally { this.propertyOptionsLoading = false; }
+    },
+    closePreHandoverPropertyDialog() { this.$refs.preHandoverPropertyDialog?.close(); },
+    async savePreHandoverProperty() {
+      const form = this.preHandoverPropertyForm;
+      if (!form.ownerId || !form.projectId || !form.unitNo) { this.preHandoverPropertyError = this.$t('building.preHandoverPropertyRequired'); return; }
+      this.preHandoverPropertySaving = true; this.preHandoverPropertyError = '';
+      try {
+        await createAdminOwnerProperty(Number(form.ownerId), {
+          projectId: Number(form.projectId), building: form.building || null, floorNo: form.floorNo || null,
+          unitNo: form.unitNo, unitType: form.unitType || null, areaSqm: form.areaSqm || null,
+          bedroomCount: form.bedroomCount ?? null, listingStatus: 'available', assetStage: 'PRE_HANDOVER',
+          expectedHandoverDate: form.expectedHandoverDate || null, actualHandoverDate: null, services: [],
+          purchasePrice: Number(form.purchasePrice || 0), ownershipPercent: Number(form.ownershipPercent || 100),
+          primary: Boolean(form.primary), startDate: form.startDate || null
+        });
+        const selectedProject = this.propertyProjects.find(project => Number(project.id) === Number(form.projectId));
+        if (selectedProject?.name) this.page.adminBuildingProjects = [...new Set([...(this.page.adminBuildingProjects || []), selectedProject.name])].sort((a, b) => a.localeCompare(b));
+        this.closePreHandoverPropertyDialog(); this.showToast(this.$t('building.preHandoverPropertyCreated'));
+      } catch (error) { this.preHandoverPropertyError = error.message || this.$t('building.preHandoverPropertyCreateFailed'); }
+      finally { this.preHandoverPropertySaving = false; }
+    },
     openProjectCreate() {
       this.projectForm = { projectCode: '', name: '', address: '', city: '', countryCode: 'MY', status: 'active' };
       this.projectFormError = ''; this.$refs.projectDialog?.showModal();
@@ -338,7 +398,6 @@ export default {
         { icon: 'building', label: this.$t('building.contractTotal'), value: moneyValue(summary.propertyTotal), delta: this.$t('ui.liveDatabaseStatistics'), trend: '' },
         { icon: 'paid', label: this.$t('building.amountPaid'), value: moneyValue(summary.paidTotal), delta: this.$t('building.livePaymentPlan'), trend: 'up' },
         { icon: 'unpaid', label: this.$t('building.amountUnpaid'), value: moneyValue(summary.unpaidTotal), delta: this.$t('building.followUpPayments'), trend: summary.unpaidTotal > 0 ? 'down' : 'up' },
-        { icon: 'total', label: this.$t('building.paymentInstallments'), value: this.$t('building.installments', { count: summary.totalInstallments }), delta: this.$t('building.currentPaymentPlan'), trend: '' },
         { icon: 'paidCount', label: this.$t('building.amountPaid'), value: this.$t('building.installments', { count: summary.paidInstallments }), delta: this.$t('building.paymentCompleted'), trend: 'up' },
         { icon: 'remaining', label: this.$t('building.amountUnpaid'), value: this.$t('building.installments', { count: summary.remainingInstallments }), delta: this.$t('building.pendingInstallments'), trend: summary.remainingInstallments ? 'down' : 'up' },
         { icon: 'next', label: this.$t('building.amountDue'), value: moneyValue(summary.nextAmount), delta: this.$t('building.nearestUnpaid'), trend: 'down' },
@@ -353,3 +412,7 @@ export default {
   }
 };
 </script>
+
+<style scoped>
+.admin-pre-handover-property-dialog{width:min(760px,calc(100vw - 32px))}.admin-pre-handover-property-dialog form{max-height:min(84vh,760px);overflow:auto}.pre-handover-stage-note{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px;padding:11px 12px;border:1px solid #efd28d;border-radius:8px;background:#fff9ea;color:#70540e;font-size:12px}.pre-handover-stage-note span{padding:4px 8px;border-radius:999px;background:#fff0bf;font-weight:800}.pre-handover-stage-note small{color:#806f43}.property-primary-check{display:flex!important;grid-template-columns:auto 1fr;align-items:center;justify-content:start}.property-primary-check input{width:auto!important}@media(max-width:620px){.pre-handover-stage-note{grid-template-columns:1fr}.admin-pre-handover-property-dialog{width:calc(100vw - 20px)}}
+</style>

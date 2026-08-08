@@ -77,7 +77,11 @@ public interface AdminPropertyContractRecordMapper {
             SELECT l.id AS leaseId, l.rental_mandate_id AS rentalMandateId, l.lease_no AS leaseNo, l.tenant_id AS tenantId, t.full_name AS tenantName,
                    l.start_date AS startDate, l.end_date AS endDate, l.monthly_rent AS monthlyRent,
                    l.deposit_amount AS depositAmount, l.payment_day AS paymentDay, l.status,
-                   CASE WHEN l.contract_document_id IS NULL THEN FALSE ELSE TRUE END AS linked
+                   CASE WHEN l.contract_document_id IS NULL THEN FALSE ELSE TRUE END AS linked,
+                   CASE WHEN l.contract_document_id IS NULL THEN 'not_generated'
+                        WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.source_document_id=l.contract_document_id AND sr.status='signed') THEN 'signed'
+                        WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.source_document_id=l.contract_document_id AND sr.status IN ('pending','sent','viewed')) THEN 'pending'
+                        ELSE 'ready_to_sign' END AS signatureStatus
             FROM owner_units ou
             JOIN leases l ON l.unit_id=ou.unit_id
             JOIN tenants t ON t.id=l.tenant_id
@@ -198,6 +202,7 @@ public interface AdminPropertyContractRecordMapper {
         private Integer paymentDay;
         private String status;
         private boolean linked;
+        private String signatureStatus;
         public Long getLeaseId() { return leaseId; } public void setLeaseId(Long value) { leaseId=value; }
         public Long getRentalMandateId() { return rentalMandateId; } public void setRentalMandateId(Long value) { rentalMandateId=value; }
         public String getLeaseNo() { return leaseNo; } public void setLeaseNo(String value) { leaseNo=value; }
@@ -210,5 +215,6 @@ public interface AdminPropertyContractRecordMapper {
         public Integer getPaymentDay() { return paymentDay; } public void setPaymentDay(Integer value) { paymentDay=value; }
         public String getStatus() { return status; } public void setStatus(String value) { status=value; }
         public boolean isLinked() { return linked; } public void setLinked(boolean value) { linked=value; }
+        public String getSignatureStatus() { return signatureStatus; } public void setSignatureStatus(String value) { signatureStatus=value; }
     }
 }

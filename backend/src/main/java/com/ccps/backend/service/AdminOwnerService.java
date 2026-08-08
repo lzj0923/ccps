@@ -132,7 +132,7 @@ public class AdminOwnerService {
         }
 
         NewOwner owner = new NewOwner();
-        owner.setOwnerNo(trimToNull(request.ownerNo()));
+        owner.setOwnerNo(null);
         owner.setFullName(request.fullName().trim());
         owner.setIdentityNo(identityNo);
         owner.setPhone(trimToNull(request.mobilePhone() != null ? request.mobilePhone() : request.phone()));
@@ -148,6 +148,11 @@ public class AdminOwnerService {
         if (mapper.insertOwner(owner) != 1 || owner.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create owner");
         }
+        String generatedOwnerNo = String.format("%06d", owner.getId());
+        if (mapper.assignOwnerNo(owner.getId(), generatedOwnerNo) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to assign owner number");
+        }
+        owner.setOwnerNo(generatedOwnerNo);
 
         List<OwnerPropertyRow> rows = mapper.findOwnerById(owner.getId());
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Created owner could not be loaded");
@@ -165,7 +170,7 @@ public class AdminOwnerService {
         if (email != null && mapper.countOtherOwnersByEmail(ownerId, email) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner email already exists");
         String mobile = trimToNull(request.mobilePhone() != null ? request.mobilePhone() : request.phone());
-        if (mapper.updateOwner(ownerId, trimToNull(request.ownerNo()), request.fullName().trim(), identityNo,
+        if (mapper.updateOwner(ownerId, request.fullName().trim(), identityNo,
                 mobile, mobile, trimToNull(request.homePhone()), trimToNull(request.officePhone()), trimToNull(request.passportNo()), email, request.status()) != 1)
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
         List<OwnerPropertyRow> rows = mapper.findOwnerById(ownerId);

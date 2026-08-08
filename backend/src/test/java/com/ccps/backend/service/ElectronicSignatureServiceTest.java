@@ -75,7 +75,7 @@ class ElectronicSignatureServiceTest {
         document.setId(81L); document.setOriginalName("lease.pdf"); document.setStorageKey("12/original.pdf");
         document.setMimeType("application/pdf"); document.setChecksumSha256("source-hash");
         when(mapper.findLeaseDocument(12L)).thenReturn(document);
-        when(mapper.countSignedRequests(81L, "lease", 12L)).thenReturn(1);
+        when(mapper.countSignedRole(81L, "tenant")).thenReturn(1);
         ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example", "noreply@example.test",
                 "CCPS", "http://localhost:5173", tempDir.resolve("lease-contracts").toString(), tempDir.resolve("rental-mandates").toString(),
                 tempDir.resolve("signatures").toString(), Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
@@ -83,7 +83,40 @@ class ElectronicSignatureServiceTest {
         assertThatThrownBy(() -> service.startLease(7L, 12L,
                 new ElectronicSignatureStartRequest("李建偉", "tenant@example.test", 7)))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("already signed");
+                .hasMessageContaining("already completed");
+    }
+
+    @Test void startsTheCompanyPmaStepFromTheOwnerSignedPdf() throws Exception {
+        Path mandateRoot = tempDir.resolve("rental-mandates");
+        Path signatureRoot = tempDir.resolve("signatures");
+        Path ownerSigned = signatureRoot.resolve("101/signed-contract.pdf");
+        Files.createDirectories(ownerSigned.getParent());
+        try (var output = Files.newOutputStream(ownerSigned)) {
+            Document pdf = new Document(); PdfWriter.getInstance(pdf, output); pdf.open();
+            pdf.add(new Paragraph("Owner signed PMA")); pdf.close();
+        }
+        ElectronicSignatureMapper.DocumentRow root = new ElectronicSignatureMapper.DocumentRow();
+        root.setId(81L); root.setOriginalName("pma.pdf"); root.setStorageKey("12/pma.pdf");
+        root.setMimeType("application/pdf"); root.setChecksumSha256("root-hash");
+        root.setRelationType("property_management_agreement_draft");
+        ElectronicSignatureMapper.DocumentRow previous = new ElectronicSignatureMapper.DocumentRow();
+        previous.setId(92L); previous.setOriginalName("pma-owner-signed.pdf"); previous.setStorageKey("101/signed-contract.pdf");
+        previous.setMimeType("application/pdf"); previous.setChecksumSha256("owner-signed-hash");
+        when(mapper.findMandateDocument(12L, 81L)).thenReturn(root);
+        when(mapper.findSignedStepDocument(81L, 1)).thenReturn(previous);
+        AtomicReference<NewRequest> stored = new AtomicReference<>();
+        when(mapper.insertRequest(any())).thenAnswer(call -> { NewRequest row = call.getArgument(0); row.setId(102L); stored.set(row); return 1; });
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example", "noreply@example.test",
+                "CCPS", "http://localhost:5173", tempDir.resolve("lease-contracts").toString(), mandateRoot.toString(),
+                signatureRoot.toString(), Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
+
+        service.startMandateDocument(7L, 12L, 81L,
+                new ElectronicSignatureStartRequest("CCPS 公司", "company@example.test", 7, "company"));
+
+        assertThat(stored.get().getRootDocumentId()).isEqualTo(81L);
+        assertThat(stored.get().getSourceDocumentId()).isEqualTo(92L);
+        assertThat(stored.get().getSignerRole()).isEqualTo("company");
+        assertThat(stored.get().getSigningOrder()).isEqualTo(2);
     }
 
     @Test void signingCreatesSeparatePdfWithoutChangingTheOriginalContract() throws Exception {

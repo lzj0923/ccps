@@ -25,12 +25,17 @@ import org.springframework.mock.web.MockMultipartFile;
 import com.ccps.backend.dto.AdminLeaseCreateRequest;
 import com.ccps.backend.dto.AdminLeaseCloseRequest;
 import com.ccps.backend.dto.AdminLeaseUpdateRequest;
+import com.ccps.backend.dto.AdminLeaseRenewalRequest;
 import com.ccps.backend.dto.AdminLeaseTransferRequest;
 import com.ccps.backend.dto.AdminRentCollectionRequest;
+import com.ccps.backend.dto.AdminTenantDepositTransactionRequest;
 import com.ccps.backend.mapper.AdminTenancyMapper;
+import com.ccps.backend.mapper.AdminTenancyMapper.DepositAccountRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseContractContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseChangeContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewLease;
+import com.ccps.backend.mapper.AdminTenancyMapper.NewLeasePeriod;
+import com.ccps.backend.mapper.AdminTenancyMapper.LeasePeriodRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewSecurityDeposit;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewContractDocument;
 import com.ccps.backend.mapper.AdminTenancyMapper.ContractFile;
@@ -49,6 +54,11 @@ class AdminTenancyServiceTest {
     @BeforeEach void setUp() {
         service = new AdminTenancyService(mapper,
                 Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneOffset.UTC), tempDir);
+        org.mockito.Mockito.lenient().when(mapper.insertLeasePeriod(org.mockito.ArgumentMatchers.any(NewLeasePeriod.class))).thenAnswer(invocation -> {
+            NewLeasePeriod period = invocation.getArgument(0);
+            if (period.getId() == null) period.setId(700L + period.getPeriodNo());
+            return 1;
+        });
     }
 
     @Test void createsLeaseWithTheExplicitCurrentRentalMandate() {
@@ -244,6 +254,20 @@ class AdminTenancyServiceTest {
         verify(mapper).insertContractAudit(1L, 44L, 70L, 92L, "renewed.png", "replace_lease_contract");
     }
 
+    @Test void rejectsReplacingLeaseContractAfterSigningHasStarted() {
+        when(mapper.countLeaseRentalMandate(44L)).thenReturn(1);
+        LeaseContractContext context = new LeaseContractContext(); context.setLeaseId(44L);
+        context.setLeaseNo("LEASE-44"); context.setContractDocumentId(70L);
+        when(mapper.lockLeaseContract(44L)).thenReturn(context);
+        when(mapper.countStartedLeaseSignatures(44L, 70L)).thenReturn(1);
+
+        assertThatThrownBy(() -> service.uploadContract(1L, 44L,
+                new MockMultipartFile("file", "replacement.pdf", "application/pdf", "contract".getBytes())))
+                .hasMessageContaining("cannot be regenerated after signing has started");
+
+        verify(mapper, org.mockito.Mockito.never()).insertContractDocument(org.mockito.ArgumentMatchers.any());
+    }
+
     @Test void adminUploadsOfflineApprovedRentProof() {
         RentProofContext context = new RentProofContext(); context.setFinanceRecordId(18L);
         context.setTransactionNo("RENT-18");
@@ -368,6 +392,63 @@ class AdminTenancyServiceTest {
                 LocalDate.parse("2027-03-01"));
     }
 
+    @Test void exposesDepositBillsAccountsAndMoveOutSettlementStates() {
+        DepositAccountRow pending = depositAccount(1L, "active", "pending", "0.00", "0.00");
+        DepositAccountRow awaiting = depositAccount(2L, "expired", "confirmed", "6000.00", "6000.00");
+        when(mapper.findDepositAccounts()).thenReturn(java.util.List.of(pending, awaiting));
+
+        var response = service.findDepositAccounts(1, 20, null, null);
+
+        assertThat(response.summary().pendingCollectionCount()).isEqualTo(1);
+        assertThat(response.summary().awaitingSettlementCount()).isEqualTo(1);
+        assertThat(response.summary().totalHeld()).isEqualByComparingTo("6000.00");
+        assertThat(response.rows()).extracting(item -> item.accountStatus())
+                .containsExactly("pending_collection", "awaiting_settlement");
+    }
+
+    @Test void rejectsDepositSettlementWhileLeaseIsStillActive() {
+        LeaseChangeContext lease = activeLease();
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.findDepositAccount(44L)).thenReturn(depositAccount(44L, "active", "confirmed", "6000.00", "6000.00"));
+        when(mapper.findLeaseDepositBalance(44L)).thenReturn(new BigDecimal("6000.00"));
+
+        assertThatThrownBy(() -> service.createTenantDepositTransaction(1L, 44L,
+                new AdminTenantDepositTransactionRequest("refund", new BigDecimal("1000.00"),
+                        LocalDate.parse("2026-07-19"), "提前返还")))
+                .hasMessageContaining("after the lease has ended");
+    }
+
+    @Test void allowsDepositRefundWhenOwnerReserveWillBecomeNegative() {
+        LeaseChangeContext lease = activeLease(); lease.setStatus("expired");
+        DepositAccountRow account = depositAccount(44L, "expired", "confirmed", "6000.00", "6000.00");
+        account.setReserveAccountId(30L); account.setReserveBalance(new BigDecimal("500.00"));
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.findDepositAccount(44L)).thenReturn(account);
+        when(mapper.findLeaseDepositBalance(44L)).thenReturn(new BigDecimal("6000.00"));
+        when(mapper.insertTenantDepositRefundFinance(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    var transaction = invocation.getArgument(0,
+                            AdminTenancyMapper.NewTenantDepositTransaction.class);
+                    transaction.setFinanceRecordId(91L);
+                    return 1;
+                });
+        when(mapper.insertTenantDepositRefundCashflow(org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        when(mapper.insertTenantDepositTransaction(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    var transaction = invocation.getArgument(0,
+                            AdminTenancyMapper.NewTenantDepositTransaction.class);
+                    transaction.setId(92L);
+                    return 1;
+                });
+
+        var result = service.createTenantDepositTransaction(1L, 44L,
+                new AdminTenantDepositTransactionRequest("refund", new BigDecimal("1000.00"),
+                        LocalDate.parse("2026-07-19"), "退租返还"));
+
+        assertThat(result.id()).isEqualTo(92L);
+        verify(mapper).insertTenantDepositRefundFinance(org.mockito.ArgumentMatchers.any());
+    }
+
     @Test void editsLeaseTenantAndUnitWithOperationalValidation() {
         LeaseChangeContext lease = activeLease();
         when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
@@ -427,6 +508,53 @@ class AdminTenancyServiceTest {
                 LocalDate.parse("2026-07-19"), "early_termination", "租客提前退租");
     }
 
+    @Test void renewsTheSameLeaseByAppendingASecondPeriod() {
+        LeaseChangeContext lease = activeLease();
+        LeasePeriodRow latest = leasePeriod(1, "2026-01-01", "2026-12-31");
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.lockLatestLeasePeriod(44L)).thenReturn(latest);
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2027-01-01"), LocalDate.parse("2027-12-31"))).thenReturn(1);
+        when(mapper.extendLeaseForRenewal(44L, LocalDate.parse("2026-12-31"), LocalDate.parse("2027-12-31"),
+                new BigDecimal("3200.00"), new BigDecimal("6000.00"), 5, "daily_prorated")).thenReturn(1);
+
+        var result = service.renewLease(1L, 44L, new AdminLeaseRenewalRequest(LocalDate.parse("2027-01-01"),
+                LocalDate.parse("2027-12-31"), new BigDecimal("3200.00"), new BigDecimal("6000.00"), 5,
+                "daily_prorated"));
+
+        assertThat(result.leaseId()).isEqualTo(44L);
+        assertThat(result.periodNo()).isEqualTo(2);
+        verify(mapper, org.mockito.Mockito.never()).insertLease(org.mockito.ArgumentMatchers.any(NewLease.class));
+        verify(mapper).insertLeaseRenewalAudit(1L, 44L, result.id(), 2, LocalDate.parse("2026-12-31"),
+                LocalDate.parse("2027-01-01"), LocalDate.parse("2027-12-31"), new BigDecimal("3200.00"),
+                new BigDecimal("6000.00"), 5);
+    }
+
+    @Test void continuousRenewalAppendsTheNextPeriodNumber() {
+        LeaseChangeContext lease = activeLease();
+        lease.setEndDate(LocalDate.parse("2027-12-31"));
+        when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
+        when(mapper.lockLatestLeasePeriod(44L)).thenReturn(leasePeriod(2, "2027-01-01", "2027-12-31"));
+        when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2028-01-01"), LocalDate.parse("2028-12-31"))).thenReturn(1);
+        when(mapper.extendLeaseForRenewal(44L, LocalDate.parse("2027-12-31"), LocalDate.parse("2028-12-31"),
+                new BigDecimal("3400.00"), new BigDecimal("6000.00"), 5, "daily_prorated")).thenReturn(1);
+
+        var result = service.renewLease(1L, 44L, new AdminLeaseRenewalRequest(LocalDate.parse("2028-01-01"),
+                LocalDate.parse("2028-12-31"), new BigDecimal("3400.00"), new BigDecimal("6000.00"), 5,
+                "daily_prorated"));
+
+        assertThat(result.periodNo()).isEqualTo(3);
+    }
+
+    @Test void rejectsRenewalThatLeavesAGapBetweenPeriods() {
+        when(mapper.lockLeaseForChange(44L)).thenReturn(activeLease());
+        when(mapper.lockLatestLeasePeriod(44L)).thenReturn(leasePeriod(1, "2026-01-01", "2026-12-31"));
+
+        assertThatThrownBy(() -> service.renewLease(1L, 44L, new AdminLeaseRenewalRequest(
+                LocalDate.parse("2027-01-02"), LocalDate.parse("2027-12-31"), new BigDecimal("3200.00"),
+                new BigDecimal("6000.00"), 5, "daily_prorated")))
+                .hasMessageContaining("day after");
+    }
+
     @Test void rejectsLeaseWhenActiveRentalMandateIsMissing() {
         when(mapper.countActiveTenant(5L)).thenReturn(1);
         when(mapper.countActiveRentalMandate(8L, LocalDate.parse("2026-07-01"),
@@ -445,6 +573,28 @@ class AdminTenancyServiceTest {
         lease.setMonthlyRent(new BigDecimal("3000.00")); lease.setDepositAmount(new BigDecimal("6000.00"));
         lease.setPaymentDay(5); lease.setStatus("active"); lease.setProjectName("測試建案"); lease.setUnitNo("A-01-01");
         return lease;
+    }
+
+    private LeasePeriodRow leasePeriod(int periodNo, String start, String end) {
+        LeasePeriodRow period = new LeasePeriodRow();
+        period.setId(700L + periodNo); period.setLeaseId(44L); period.setPeriodNo(periodNo);
+        period.setStartDate(LocalDate.parse(start)); period.setEndDate(LocalDate.parse(end));
+        period.setMonthlyRent(new BigDecimal("3000.00")); period.setDepositAmount(new BigDecimal("6000.00"));
+        period.setPaymentDay(5); period.setRentCalculationMethod("daily_prorated");
+        return period;
+    }
+
+    private DepositAccountRow depositAccount(Long leaseId, String leaseStatus, String confirmationStatus,
+            String postedBalance, String availableBalance) {
+        DepositAccountRow row = new DepositAccountRow();
+        row.setLeaseId(leaseId); row.setLeaseNo("LEASE-" + leaseId); row.setTenantId(5L); row.setTenantName("测试租客");
+        row.setProjectName("测试建案"); row.setUnitNo("A-01"); row.setLeaseStatus(leaseStatus);
+        row.setStartDate(LocalDate.parse("2026-01-01")); row.setEndDate(LocalDate.parse("2026-06-30"));
+        row.setExpectedDeposit(new BigDecimal("6000.00")); row.setBillAmount(new BigDecimal("6000.00"));
+        row.setDepositEntryStatus(confirmationStatus); row.setConfirmationStatus(confirmationStatus);
+        row.setPostedBalance(new BigDecimal(postedBalance)); row.setAvailableBalance(new BigDecimal(availableBalance));
+        row.setPendingSettlementCount(0L); row.setReserveBalance(new BigDecimal("10000.00"));
+        return row;
     }
 
     private void stubSecurityDepositWrites() {

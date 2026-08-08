@@ -44,6 +44,7 @@ public class AdminBuildingPaymentService {
         project.setProjectCode(projectCode);
         project.setName(request.name().trim());
         project.setAddress(normalize(request.address()));
+        project.setState(normalize(request.state()));
         project.setCity(normalize(request.city()));
         project.setCountryCode(request.countryCode().trim().toUpperCase());
         project.setStatus(request.status());

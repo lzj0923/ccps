@@ -33,6 +33,9 @@ public class Projects implements Serializable {
     @TableField("address")
     private String address;
 
+    @TableField("state_name")
+    private String state;
+
     @TableField("city")
     private String city;
 
@@ -78,6 +81,14 @@ public class Projects implements Serializable {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public void setState(String state) {
+        this.state = state;
     }
 
     public String getCity() {
@@ -127,6 +138,7 @@ public class Projects implements Serializable {
             ", projectCode = " + projectCode +
             ", name = " + name +
             ", address = " + address +
+            ", state = " + state +
             ", city = " + city +
             ", countryCode = " + countryCode +
             ", status = " + status +

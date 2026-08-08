@@ -6,7 +6,7 @@ const sameId = (left, right) => hasValue(left) && hasValue(right) && String(left
 const statusOf = value => String(value || '').toLowerCase();
 const CLOSED_LEASE_STATUSES = new Set(['terminated', 'transferred', 'completed', 'cancelled']);
 
-export const reportBelongsToMandate = (report, mandateOrId) => {
+export const reportBelongsToMandate = (report, mandateOrId, nextMandate = null) => {
   const mandateId = typeof mandateOrId === 'object' ? mandateOrId?.id : mandateOrId;
   if (sameId(report?.mandateId ?? report?.rentalMandateId, mandateId)) return true;
   try {
@@ -17,8 +17,10 @@ export const reportBelongsToMandate = (report, mandateOrId) => {
   }
   const mandateCreatedAt = typeof mandateOrId === 'object' ? mandateOrId?.createdAt : null;
   const reportCreatedAt = report?.createdAt || report?.updatedAt || report?.reportDate;
+  const nextMandateCreatedAt = nextMandate?.createdAt || nextMandate?.startDate;
   return Boolean(mandateCreatedAt && reportCreatedAt
-    && new Date(reportCreatedAt).getTime() >= new Date(mandateCreatedAt).getTime());
+    && new Date(reportCreatedAt).getTime() >= new Date(mandateCreatedAt).getTime()
+    && (!nextMandateCreatedAt || new Date(reportCreatedAt).getTime() < new Date(nextMandateCreatedAt).getTime()));
 };
 
 const belongsTo = (record, key, id) => sameId(record?.[key], id)
@@ -35,14 +37,10 @@ const stage = (key, status, ownerRole, missingItems, primaryAction, blockingReas
   blockingReasonKey,
 });
 
-const isSigned = record => statusOf(record?.status) === 'signed'
-  || statusOf(record?.status) === 'completed'
-  || hasValue(record?.signedDate);
-
 export const isAuthorizationSignedDocument = document => {
   const relationType = statusOf(document?.relationType);
   const documentType = statusOf(document?.documentType);
-  return ['signed_contract', 'authorization_signed', 'authorization'].includes(relationType)
+  return ['authorization_signed', 'authorization', 'management_authorization_signed'].includes(relationType)
     || (relationType === 'authorization' && documentType === 'signed_contract');
 };
 
@@ -62,9 +60,6 @@ const scopedDocuments = (documents, mandateId) => asArray(documents)
 const scopedLeases = (leases, mandateId) => asArray(leases)
   .filter(lease => sameId(lease?.rentalMandateId ?? lease?.mandateId, mandateId));
 
-const scopedContracts = (contracts, leaseId) => asArray(contracts)
-  .filter(contract => sameId(contract?.leaseId, leaseId));
-
 const scopedInvoices = (invoices, leaseId) => asArray(invoices)
   .filter(invoice => sameId(invoice?.leaseId, leaseId));
 
@@ -83,16 +78,22 @@ const reportBelongsToLease = (report, leaseId, type) => {
 };
 
 export function buildRentalWorkbench({ property = {}, mandates = [], workspace = {}, documents = [], invoices = [], payments = {} } = {}) {
+  const propertyOperating = statusOf(property?.assetStage) === 'operating';
   const currentMandate = selectCurrentRentalMandate({ property, mandates });
   const mandateDocuments = currentMandate ? scopedDocuments(documents, currentMandate.id) : [];
-  const currentHandoverReports = currentMandate
-    ? asArray(workspace?.handovers).filter(report => reportBelongsToMandate(report, currentMandate))
-    : [];
-  const handoverReportReady = !currentMandate || currentHandoverReports.length > 0;
-
-  const authorizationDraft = mandateDocuments.some(document =>
-    ['authorization_draft', 'authorization'].includes(document?.relationType));
   const authorizationSigned = mandateDocuments.some(isAuthorizationSignedDocument);
+  const authorizationDocument = mandateDocuments.find(document =>
+    ['authorization', 'management_authorization_draft'].includes(statusOf(document?.relationType))) || null;
+  const authorizationRequestStatus = statusOf(authorizationDocument?.signatureStatus);
+  const authorizationSigning = {
+    status: authorizationSigned ? 'signed' : (authorizationRequestStatus || 'not_started'),
+    documentId: authorizationDocument?.id || null,
+    signerName: authorizationDocument?.signatureSignerName || '',
+    signerEmail: authorizationDocument?.signatureSignerEmail || '',
+    requestedAt: authorizationDocument?.signatureRequestedAt || null,
+    expiresAt: authorizationDocument?.signatureExpiresAt || null,
+    signedAt: authorizationDocument?.signatureSignedAt || null,
+  };
   const mandateActive = statusOf(currentMandate?.status) === 'active';
 
   const latestMandate = asArray(mandates)
@@ -110,14 +111,12 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
   const latestClosedLease = closureLeases
     .filter(lease => CLOSED_LEASE_STATUSES.has(statusOf(lease?.status)))
     .sort((left, right) => String(right?.endDate || right?.startDate || '').localeCompare(String(left?.endDate || left?.startDate || '')))[0] || null;
+  const cycleLease = currentLease || latestClosedLease;
   const currentLeaseId = currentLease?.id ?? currentLease?.leaseId;
-  const leaseContracts = currentLease ? scopedContracts(workspace?.contracts, currentLeaseId) : [];
   const currentTenant = workspace?.tenant || workspace?.currentTenant || null;
-  const tenantReady = Boolean(currentLease?.tenantId || currentLease?.tenantName || currentTenant?.id || workspace?.tenantId);
-  const otrReady = leaseContracts.some(contract => contract?.contractType === 'O_LEASE_RESERVATION' && isSigned(contract));
-  const leaseReady = Boolean(currentLease);
-  const leaseContractReady = leaseContracts.some(contract => contract?.contractType === 'L_LEASE' && isSigned(contract));
-  const leasingReady = tenantReady && otrReady && leaseReady && leaseContractReady;
+  const tenantReady = Boolean(cycleLease?.tenantId || cycleLease?.tenantName || currentTenant?.id || workspace?.tenantId);
+  const leaseReady = Boolean(cycleLease);
+  const leasingReady = tenantReady && leaseReady;
   const currentInvoices = currentLease ? scopedInvoices(invoices, currentLeaseId) : [];
   const invoiceIds = new Set(currentInvoices.map(invoice => String(invoice.id ?? invoice.invoiceId)));
   const currentPayments = currentLease ? scopedPayments(payments, currentLeaseId, invoiceIds) : [];
@@ -125,10 +124,9 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
   const firstReceiptReady = Boolean(firstInvoice && Number(firstInvoice.amountDue || 0) > 0
     && Number(firstInvoice.amountPaid || 0) >= Number(firstInvoice.amountDue || 0)
     && currentPayments.some(payment => statusOf(payment?.confirmationStatus) === 'confirmed'));
-  const handoverCompleted = (workspace?.handover?.status === 'completed'
-    && (!currentMandate || sameId(workspace.handover.mandateId, currentMandate.id)))
-    || currentHandoverReports.some(item => item?.completed === true || statusOf(item?.status) === 'completed');
-  const handoverReady = handoverReportReady && handoverCompleted;
+  const handoverCompleted = workspace?.handover?.status === 'completed'
+    && (!currentMandate || sameId(workspace.handover.mandateId, currentMandate.id));
+  const moveInReady = handoverCompleted || Boolean(latestClosedLease);
   const finalHandoverReportReady = latestClosedLease
     ? asArray(workspace?.handovers).some(report => reportBelongsToLease(report, latestClosedLease.id ?? latestClosedLease.leaseId, 'move_out'))
     : false;
@@ -137,64 +135,79 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
       leaseId: latestClosedLease.id ?? latestClosedLease.leaseId,
       endDate: latestClosedLease.endDate || null,
       tenantName: latestClosedLease.tenantName || null,
-      status: finalHandoverReportReady ? 'completed' : 'awaiting_handover_report',
+      status: 'completed',
+      handoverReportReady: finalHandoverReportReady,
       reason: statusOf(latestClosedLease.status) === 'transferred'
         ? 'transfer'
         : statusOf(latestClosedLease.status) === 'terminated'
           ? 'early_termination'
           : 'normal_expiry',
-      missingItems: finalHandoverReportReady ? [] : ['lease_end_handover_report'],
+      missingItems: [],
     }
-    : { leaseId: null, endDate: null, tenantName: null, status: currentLease ? 'active' : 'not_started', reason: null, missingItems: [] };
+    : { leaseId: null, endDate: null, tenantName: null, status: currentLease ? 'active' : 'not_started', handoverReportReady: false, reason: null, missingItems: [] };
 
   const stages = [
     stage(
+      'propertySetup',
+      propertyOperating ? 'completed' : 'in_progress',
+      'admin',
+      propertyOperating ? [] : ['property_handover'],
+      propertyOperating ? null : action('complete_handover', { type: 'property', tab: 'summary' }),
+    ),
+    stage(
       'mandateAuthorization',
-      !currentMandate ? 'pending'
-        : !authorizationDraft ? 'in_progress'
-          : !authorizationSigned ? 'blocked'
-            : mandateActive ? 'completed' : 'in_progress',
+      !propertyOperating ? 'pending' : !currentMandate ? 'in_progress' : mandateActive ? 'completed' : 'in_progress',
       'business',
-      !currentMandate ? ['rental_mandate'] : !authorizationDraft ? ['authorization_draft'] : !authorizationSigned ? ['authorization_signature'] : !mandateActive ? ['mandate_review'] : [],
-      !currentMandate
+      !propertyOperating ? ['property_handover'] : !currentMandate ? ['rental_mandate'] : !mandateActive ? ['mandate_activation'] : [],
+      !propertyOperating
+        ? action('complete_handover', { type: 'property', tab: 'summary' })
+        : !currentMandate
         ? action('create_mandate', { type: 'rentalMandate', action: 'create' })
-        : !authorizationDraft
-          ? action('generate_authorization', { type: 'rentalMandate', action: 'authorization' })
-          : !authorizationSigned
-            ? action('view_signing_status', { type: 'rentalMandate', action: 'sign' })
-            : action('review_mandate', { type: 'rentalMandate', action: 'review' }),
-      currentMandate && authorizationDraft && !authorizationSigned ? 'authorization_signing_required' : null,
+        : null,
     ),
     stage(
       'leasingSigning',
       !mandateActive ? 'pending' : leasingReady ? 'completed' : 'in_progress',
       'business',
-      !mandateActive ? ['mandate_activation'] : !tenantReady ? ['tenant'] : !leaseReady ? ['lease'] : !otrReady ? ['otr_offer'] : !leaseContractReady ? ['lease_contract_signature'] : [],
+      !mandateActive ? ['mandate_activation'] : !tenantReady ? ['tenant'] : !leaseReady ? ['lease'] : [],
       !mandateActive
-        ? action('review_mandate', { type: 'rentalMandate', action: 'review' })
+        ? null
         : !tenantReady
           ? action('create_tenant', { type: 'tenancy', action: 'tenant-create' })
           : !leaseReady
             ? action('create_lease', { type: 'tenancy', action: 'lease-create' })
-          : !otrReady
-            ? action('generate_otr', { type: 'tenancy', action: 'otr' })
-            : action('sign_lease_contract', { type: 'tenancy', action: 'lease-contract' }),
+            : null,
     ),
     stage(
       'moveInCollection',
-      !leaseContractReady ? 'pending' : handoverReady ? 'completed' : 'in_progress',
+      !leaseReady ? 'pending' : moveInReady ? 'completed' : 'in_progress',
       'business',
-      !leaseContractReady ? ['lease_contract_signature'] : !handoverReportReady ? ['handover_report'] : !handoverReady ? ['handover'] : [],
-      !leaseContractReady
-        ? action('sign_lease_contract', { type: 'tenancy', action: 'lease-contract' })
-        : !handoverReady
+      !leaseReady ? ['lease'] : !moveInReady ? ['handover'] : [],
+      !leaseReady
+        ? action('create_lease', { type: 'tenancy', action: 'lease-create' })
+        : !moveInReady
           ? action('complete_handover', { type: 'property', tab: 'summary' })
           : null,
+    ),
+    stage(
+      'rentalOperations',
+      !moveInReady ? 'pending' : latestClosedLease ? 'completed' : currentLease ? 'in_progress' : 'pending',
+      'admin',
+      !moveInReady ? ['handover'] : [],
+      currentLease && moveInReady ? action('open_operations_center', { type: 'property', tab: 'operations' }) : null,
+    ),
+    stage(
+      'leaseClosure',
+      latestClosedLease ? 'completed' : 'pending',
+      'business',
+      latestClosedLease ? [] : !currentLease ? ['lease'] : ['lease_closure'],
+      currentLease ? action('close_lease', { type: 'tenancy', action: 'close' }) : null,
     ),
   ];
 
   return {
     currentMandate,
+    authorizationSigning,
     currentLease,
     currentInvoices,
     firstInvoice,

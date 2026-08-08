@@ -37,7 +37,7 @@ export default {
     const currentYear = new Date().getFullYear();
     const route = resolveRoute();
     const systemMode = route.mode === 'admin' ? 'admin' : 'owner';
-    const defaultPage = route.moduleId || (systemMode === 'admin' ? 'adminOwners' : 'myProperties');
+    const defaultPage = route.moduleId || (systemMode === 'admin' ? 'adminDashboard' : 'myProperties');
     const startPage = route.moduleId;
     const requestedModule = modules.find(module => module.id === startPage);
     const validStartPage = requestedModule && requestedModule.shell === `${systemMode}-shell` ? startPage : defaultPage;
@@ -103,6 +103,7 @@ export default {
       adminPropertyCreateNonce: 0,
       adminAccountCreateNonce: 0,
       adminBuildingProjectCreateNonce: 0,
+      adminBuildingPropertyCreateNonce: 0,
       adminPaymentPlanCreateNonce: 0,
       adminFinanceRefreshNonce: 0,
       adminFinanceBatchNonce: 0,

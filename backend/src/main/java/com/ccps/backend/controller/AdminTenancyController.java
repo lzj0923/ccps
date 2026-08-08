@@ -25,9 +25,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminLeaseCreateRequest;
+import com.ccps.backend.dto.AdminDepositAccountDetailResponse;
+import com.ccps.backend.dto.AdminDepositAccountResponse;
 import com.ccps.backend.dto.AdminLeaseCloseRequest;
 import com.ccps.backend.dto.AdminLeaseInvoiceCreateRequest;
 import com.ccps.backend.dto.AdminLeaseRentInvoiceResponse;
+import com.ccps.backend.dto.AdminLeasePeriodResponse;
+import com.ccps.backend.dto.AdminLeaseRenewalRequest;
 import com.ccps.backend.dto.AdminLeaseUpdateRequest;
 import com.ccps.backend.dto.AdminLeaseTransferRequest;
 import com.ccps.backend.dto.AdminRentFinanceResponse;
@@ -39,6 +43,7 @@ import com.ccps.backend.dto.AdminTenancyResponse;
 import com.ccps.backend.dto.AdminTenantCreateRequest;
 import com.ccps.backend.dto.AdminTenantDirectoryResponse;
 import com.ccps.backend.dto.AdminTenantDetailResponse;
+import com.ccps.backend.dto.AdminTenantDepositTransactionRequest;
 import com.ccps.backend.service.AdminTenancyService;
 import com.ccps.backend.service.AdminTenancyService.Download;
 
@@ -118,6 +123,25 @@ public class AdminTenancyController {
         return service.findTenantDetail(tenantId);
     }
 
+    @GetMapping("/deposits")
+    public AdminDepositAccountResponse deposits(@RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status) {
+        return service.findDepositAccounts(page, pageSize, keyword, status);
+    }
+
+    @GetMapping("/deposits/{leaseId}")
+    public AdminDepositAccountDetailResponse deposit(@PathVariable Long leaseId) {
+        return service.findDepositAccount(leaseId);
+    }
+
+    @PostMapping("/leases/{leaseId}/deposit-transactions")
+    public AdminRecordCreateResponse createDepositTransaction(@PathVariable Long leaseId,
+            @Valid @RequestBody AdminTenantDepositTransactionRequest payload, HttpServletRequest request) {
+        return service.createTenantDepositTransaction(AuthInterceptor.userId(request), leaseId, payload);
+    }
+
     @PutMapping("/tenants/{tenantId}")
     public ResponseEntity<Void> updateTenant(@PathVariable Long tenantId,@Valid @RequestBody AdminTenantCreateRequest request) {
         service.updateTenant(tenantId,request);return ResponseEntity.noContent().build();
@@ -146,6 +170,40 @@ public class AdminTenancyController {
             @Valid @RequestBody AdminLeaseUpdateRequest payload, HttpServletRequest request) {
         service.updateLease(AuthInterceptor.userId(request), leaseId, payload);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/leases/{leaseId}/periods")
+    public List<AdminLeasePeriodResponse> leasePeriods(@PathVariable Long leaseId) {
+        return service.leasePeriods(leaseId);
+    }
+
+    @PostMapping("/leases/{leaseId}/renewals")
+    public ResponseEntity<AdminLeasePeriodResponse> renewLease(@PathVariable Long leaseId,
+            @Valid @RequestBody AdminLeaseRenewalRequest payload, HttpServletRequest request) {
+        AdminLeasePeriodResponse period = service.renewLease(AuthInterceptor.userId(request), leaseId, payload);
+        return ResponseEntity.created(URI.create("/api/admin/tenancy/leases/" + leaseId
+                + "/renewals/" + period.id())).body(period);
+    }
+
+    @PostMapping(value = "/leases/{leaseId}/renewals/{periodId}/contract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Long>> uploadRenewalContract(@PathVariable Long leaseId,
+            @PathVariable Long periodId, @RequestParam("file") MultipartFile file, HttpServletRequest request) {
+        Long id = service.uploadRenewalContract(AuthInterceptor.userId(request), leaseId, periodId, file);
+        return ResponseEntity.ok(Map.of("id", id));
+    }
+
+    @GetMapping("/leases/{leaseId}/renewals/{periodId}/contract")
+    public ResponseEntity<FileSystemResource> renewalContract(@PathVariable Long leaseId,
+            @PathVariable Long periodId, @RequestParam(defaultValue = "false") boolean download) {
+        Download file = service.downloadRenewalContract(leaseId, periodId);
+        MediaType mediaType;
+        try { mediaType = MediaType.parseMediaType(file.mimeType()); }
+        catch (IllegalArgumentException ignored) { mediaType = MediaType.APPLICATION_OCTET_STREAM; }
+        ContentDisposition disposition = ContentDisposition.builder(download ? "attachment" : "inline")
+                .filename(file.originalName(), StandardCharsets.UTF_8).build();
+        return ResponseEntity.ok().contentType(mediaType).contentLength(file.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(new FileSystemResource(file.path()));
     }
 
     @PostMapping("/leases/{leaseId}/close")

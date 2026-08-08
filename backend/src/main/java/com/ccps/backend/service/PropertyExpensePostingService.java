@@ -14,9 +14,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 import com.ccps.backend.mapper.PropertyExpensePostingMapper;
 import com.ccps.backend.mapper.PropertyExpensePostingMapper.FinanceWrite;
+import com.ccps.backend.mapper.PropertyExpensePostingMapper.MandateFeeRow;
 import com.ccps.backend.mapper.PropertyExpensePostingMapper.PostingRow;
 import com.ccps.backend.mapper.PropertyExpensePostingMapper.ProfileRow;
 import com.ccps.backend.mapper.PropertyExpensePostingMapper.PropertyContext;
@@ -44,9 +47,27 @@ public class PropertyExpensePostingService {
         for (Charge charge : charges(profile,today)) post(ownerUnitId,charge,actorId,today);
     }
 
+    @Transactional
+    public void syncMandateFee(Long ownerUnitId,Long mandateId,BigDecimal amount,Long actorId,LocalDate occurredOn) {
+        if (ownerUnitId==null||mandateId==null||amount==null||occurredOn==null) return;
+        post(ownerUnitId,new Charge("rental-mandate-"+mandateId,"代管服务费",money(amount),"service_fee",
+                YearMonth.from(occurredOn).toString()),actorId,occurredOn);
+    }
+
     @Scheduled(cron="${ccps.property-expenses.cron:0 20 0 * * *}")
     @Transactional
     public void postDueExpenses() {
+        postAllDueExpenses();
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void postDueExpensesOnStartup() {
+        postAllDueExpenses();
+    }
+
+    private void postAllDueExpenses() {
+        LocalDate today=LocalDate.now(clock);
         for (ProfileRow row : mapper.findProfiles()) {
             try {
                 Map<String,Object> profile=objectMapper.readValue(row.getProfileJson(),new TypeReference<>(){});
@@ -54,6 +75,10 @@ public class PropertyExpensePostingService {
             } catch (Exception ignored) {
                 // One malformed legacy profile must not stop the remaining properties.
             }
+        }
+        List<MandateFeeRow> mandateFees=mapper.findActiveMandateFees(today);
+        if (mandateFees!=null) for (MandateFeeRow row : mandateFees) {
+            syncMandateFee(row.getOwnerUnitId(),row.getMandateId(),row.getManagementFee(),null,today);
         }
     }
 

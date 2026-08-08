@@ -2,6 +2,7 @@ package com.ccps.backend.mapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -160,6 +161,22 @@ public interface AdminReserveManagementMapper {
     @Insert("INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,after_data) VALUES (#{actorId},'create_reserve_refund','finance_record',#{financeRecordId},JSON_OBJECT('reserveAccountId',#{accountId},'amount',#{amount},'note',#{note}))")
     int insertReserveRefundAudit(@Param("actorId") Long actorId,@Param("financeRecordId") Long financeRecordId,@Param("accountId") Long accountId,@Param("amount") BigDecimal amount,@Param("note") String note);
 
+    @Select("SELECT rr.id,rr.reconciliation_month,rr.system_balance,rr.finance_balance,rr.difference_amount,rr.status,rr.note,u.display_name AS confirmed_by_name,rr.confirmed_at FROM reserve_reconciliations rr LEFT JOIN users u ON u.id=rr.confirmed_by ORDER BY rr.reconciliation_month DESC LIMIT 24")
+    List<ReconciliationRow> findReconciliations();
+
+    @Select("SELECT COALESCE(SUM(current_balance),0) FROM reserve_accounts WHERE status='active'")
+    BigDecimal findCurrentTotalBalance();
+
+    @Insert("INSERT INTO reserve_reconciliations (reconciliation_month,system_balance,finance_balance,difference_amount,status,note,confirmed_by,confirmed_at) VALUES (#{month},#{systemBalance},#{financeBalance},#{difference},#{status},#{note},#{actorId},CASE WHEN #{status}='confirmed' THEN CURRENT_TIMESTAMP ELSE NULL END) ON DUPLICATE KEY UPDATE system_balance=VALUES(system_balance),finance_balance=VALUES(finance_balance),difference_amount=VALUES(difference_amount),status=VALUES(status),note=VALUES(note),confirmed_by=VALUES(confirmed_by),confirmed_at=CASE WHEN VALUES(status)='confirmed' THEN CURRENT_TIMESTAMP ELSE NULL END")
+    int saveReconciliation(@Param("month") LocalDate month,@Param("systemBalance") BigDecimal systemBalance,
+            @Param("financeBalance") BigDecimal financeBalance,@Param("difference") BigDecimal difference,
+            @Param("status") String status,@Param("note") String note,@Param("actorId") Long actorId);
+
+    @Insert("INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,after_data) VALUES (#{actorId},'save_reserve_reconciliation','reserve_reconciliation',NULL,JSON_OBJECT('month',#{month},'systemBalance',#{systemBalance},'financeBalance',#{financeBalance},'difference',#{difference},'status',#{status},'note',#{note}))")
+    int insertReconciliationAudit(@Param("actorId") Long actorId,@Param("month") LocalDate month,
+            @Param("systemBalance") BigDecimal systemBalance,@Param("financeBalance") BigDecimal financeBalance,
+            @Param("difference") BigDecimal difference,@Param("status") String status,@Param("note") String note);
+
     class SummaryRow {
         private BigDecimal totalBalance, minimumBalance, monthlyTopups, monthlyDebits, pendingTopupAmount;
         private Long accountCount, lowBalanceCount, pendingTopupCount;
@@ -209,5 +226,19 @@ public interface AdminReserveManagementMapper {
         public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String value){paymentMethod=value;}
         public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal value){amount=value;}
         public java.time.LocalDate getPaymentDate(){return paymentDate;} public void setPaymentDate(java.time.LocalDate value){paymentDate=value;}
+    }
+
+    class ReconciliationRow {
+        private Long id; private LocalDate reconciliationMonth; private BigDecimal systemBalance,financeBalance,differenceAmount;
+        private String status,note,confirmedByName; private LocalDateTime confirmedAt;
+        public Long getId(){return id;} public void setId(Long v){id=v;}
+        public LocalDate getReconciliationMonth(){return reconciliationMonth;} public void setReconciliationMonth(LocalDate v){reconciliationMonth=v;}
+        public BigDecimal getSystemBalance(){return systemBalance;} public void setSystemBalance(BigDecimal v){systemBalance=v;}
+        public BigDecimal getFinanceBalance(){return financeBalance;} public void setFinanceBalance(BigDecimal v){financeBalance=v;}
+        public BigDecimal getDifferenceAmount(){return differenceAmount;} public void setDifferenceAmount(BigDecimal v){differenceAmount=v;}
+        public String getStatus(){return status;} public void setStatus(String v){status=v;}
+        public String getNote(){return note;} public void setNote(String v){note=v;}
+        public String getConfirmedByName(){return confirmedByName;} public void setConfirmedByName(String v){confirmedByName=v;}
+        public LocalDateTime getConfirmedAt(){return confirmedAt;} public void setConfirmedAt(LocalDateTime v){confirmedAt=v;}
     }
 }

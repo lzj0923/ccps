@@ -52,6 +52,30 @@ class AdminTenancyMapperSqlTest {
         assertThat(collectionSql).contains("CURRENT_DATE &gt; GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY))");
     }
 
+    @Test
+    void tenantDepositLedgerRemainsCompatibleWithMysql57() throws Exception {
+        String depositSql = selectSql("findTenantDepositTransactions");
+
+        assertThat(depositSql)
+                .doesNotContain(" OVER ")
+                .contains("prior.tenant_id = tdt.tenant_id",
+                        "prior.occurred_on < tdt.occurred_on",
+                        "prior.id <= tdt.id");
+    }
+
+    @Test
+    void tenantDirectoryIncludesTheCurrentLeaseDepositBalanceAndFinanceStatus() throws Exception {
+        String directorySql = selectSql("findTenantDirectoryPage");
+
+        assertThat(directorySql).contains("AS current_deposit_amount",
+                "tenant_deposit_transactions",
+                "tdt.status IN ('posted','pending')",
+                "AS current_deposit_balance",
+                "AS current_deposit_status",
+                "LEFT JOIN security_deposit_entries",
+                "LEFT JOIN finance_records");
+    }
+
     private String selectSql(String methodName) throws Exception {
         Method method = java.util.Arrays.stream(AdminTenancyMapper.class.getDeclaredMethods())
                 .filter(candidate -> candidate.getName().equals(methodName))

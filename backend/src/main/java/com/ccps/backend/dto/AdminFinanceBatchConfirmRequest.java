@@ -7,5 +7,9 @@ import jakarta.validation.constraints.Size;
 
 public record AdminFinanceBatchConfirmRequest(
         @NotEmpty @Size(max = 100) List<Long> ids,
-        @Size(max = 500) String note) {
+        @Size(max = 500) String note,
+        @Size(max = 120) String referenceNo) {
+    public AdminFinanceBatchConfirmRequest(List<Long> ids, String note) {
+        this(ids, note, null);
+    }
 }

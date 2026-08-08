@@ -69,7 +69,8 @@ class TenancyAgreementWordServiceTest {
             after = stream.readAllBytes();
         }
         assertEquals(hash(before), hash(after));
-        assertEquals("Tenancy-Agreement-F-16-06.docx", service.fileName(Map.of("caseNo", "LS/2026/001", "unitNo", "F-16-06")));
+        assertEquals("李四-翻斗花园-F-16-06-租赁合同-LS-2026-001.docx", service.fileName(Map.of(
+                "landlordName", "张三", "tenantName", "李四", "projectName", "翻斗花园", "caseNo", "LS/2026/001", "unitNo", "F-16-06")));
     }
 
     private String entry(byte[] docx, String name) throws Exception {

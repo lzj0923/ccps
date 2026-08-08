@@ -50,7 +50,7 @@ class AdminPropertyWorkspaceServiceTest {
                 LocalDate.of(2024, 6, 18), null, "active");
         AdminPropertyLeaseOptionResponse lease = new AdminPropertyLeaseOptionResponse(88L, null, "LS-88", 9L,
                 "租客甲", LocalDate.of(2026, 7, 1), LocalDate.of(2027, 6, 30), new BigDecimal("2600"),
-                new BigDecimal("5200"), 5, "active", false);
+                new BigDecimal("5200"), 5, "active", false, "not_generated");
 
         when(ownerService.findPropertyReference(120L)).thenReturn(new PropertyReference(7L, 12L));
         when(ownerService.findProperty(7L, 12L)).thenReturn(property);

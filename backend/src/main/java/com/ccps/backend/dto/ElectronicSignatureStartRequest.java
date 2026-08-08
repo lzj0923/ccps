@@ -9,4 +9,9 @@ public record ElectronicSignatureStartRequest(
         @NotBlank(message = "Signer name is required") String signerName,
         @NotBlank(message = "Signer email is required") @Email(message = "Signer email is invalid") String signerEmail,
         @Min(value = 1, message = "Expiry must be at least one day") @Max(value = 30, message = "Expiry cannot exceed 30 days")
-        Integer expiresInDays) { }
+        Integer expiresInDays,
+        String signerRole) {
+    public ElectronicSignatureStartRequest(String signerName, String signerEmail, Integer expiresInDays) {
+        this(signerName, signerEmail, expiresInDays, null);
+    }
+}

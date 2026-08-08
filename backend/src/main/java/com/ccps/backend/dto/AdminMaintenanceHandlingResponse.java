@@ -8,6 +8,7 @@ public record AdminMaintenanceHandlingResponse(
         BigDecimal reserveBalance,
         BigDecimal reserveDeductedAmount,
         boolean reserveAccountAvailable,
+        boolean directPaymentAllowed,
         int beforePhotoCount,
         int afterPhotoCount) {
 }

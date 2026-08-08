@@ -90,47 +90,11 @@ public interface AdminRentalMandateMapper {
     @Select("SELECT COUNT(*) FROM users WHERE id = #{userId} AND status = 'active'")
     int countActiveUser(@Param("userId") Long userId);
 
-    @Select("""
-      SELECT
-        (SELECT COUNT(*)
-         FROM document_links dl
-         JOIN documents d ON d.id = dl.document_id
-         WHERE dl.entity_type = 'rental_mandate'
-           AND dl.entity_id = #{mandateId}
-           AND dl.relation_type = 'authorization'
-           AND d.status NOT IN ('voided','superseded'))
-        +
-        (SELECT COUNT(*)
-         FROM document_links signed_link
-         JOIN electronic_signature_requests esr ON esr.signed_document_id = signed_link.document_id
-         JOIN document_links source_link ON source_link.document_id = esr.source_document_id
-         WHERE signed_link.entity_type = 'rental_mandate'
-           AND signed_link.entity_id = #{mandateId}
-           AND signed_link.relation_type = 'signed_contract'
-           AND esr.entity_type = 'rental_mandate'
-           AND esr.entity_id = #{mandateId}
-           AND esr.status = 'signed'
-           AND (SELECT status FROM documents WHERE id = esr.signed_document_id) NOT IN ('voided','superseded')
-           AND source_link.entity_type = 'rental_mandate'
-           AND source_link.entity_id = #{mandateId}
-           AND source_link.relation_type IN ('authorization','authorization_draft'))
-        +
-        (SELECT COUNT(*)
-         FROM document_links signed_document_link
-         JOIN documents signed_document ON signed_document.id = signed_document_link.document_id
-         WHERE signed_document_link.entity_type = 'rental_mandate'
-           AND signed_document_link.entity_id = #{mandateId}
-           AND signed_document_link.relation_type = 'signed_contract'
-           AND signed_document.document_type = 'signed_contract'
-           AND signed_document.status NOT IN ('voided','superseded'))
-    """)
-    int countAuthorizationDocuments(@Param("mandateId") Long mandateId);
-
     @Insert("""
             INSERT INTO rental_mandates (owner_unit_id, mandate_no, mandate_type, start_date, end_date,
               management_fee, commission_percent, responsible_user_id, status, created_by)
             VALUES (#{ownerUnitId}, #{mandateNo}, #{mandateType}, #{startDate}, #{endDate},
-              #{managementFee}, #{commissionPercent}, #{responsibleUserId}, 'draft', #{createdBy})
+              #{managementFee}, #{commissionPercent}, #{responsibleUserId}, 'active', #{createdBy})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertMandate(NewMandate mandate);
@@ -180,6 +144,22 @@ public interface AdminRentalMandateMapper {
             WHERE rm.id = #{id} AND ous.service_type = 'RENTAL'
             """)
     int updateRentalService(@Param("id") Long id, @Param("status") String status);
+
+    @Update("""
+            UPDATE finance_records fr
+            JOIN rental_mandates rm ON rm.id = #{mandateId}
+            JOIN owner_units ou ON ou.id = rm.owner_unit_id
+              AND ou.owner_id = fr.owner_id AND ou.unit_id = fr.unit_id
+            SET fr.payment_status = 'voided', fr.confirmation_status = 'rejected',
+                fr.sync_status = 'not_synced', fr.sync_batch_id = NULL,
+                fr.confirmed_by = #{actorId}, fr.confirmed_at = CURRENT_TIMESTAMP
+            WHERE fr.record_type = 'property_expense'
+              AND fr.payment_method = 'direct_payment'
+              AND fr.payment_status = 'unpaid'
+              AND fr.confirmation_status = 'pending'
+            """)
+    int withdrawPendingDirectPayments(@Param("mandateId") Long mandateId,
+            @Param("actorId") Long actorId);
 
     @Insert("INSERT INTO rental_mandate_status_history (mandate_id, from_status, to_status, reason, changed_by) VALUES (#{mandateId}, #{fromStatus}, #{toStatus}, #{reason}, #{changedBy})")
     int insertHistory(@Param("mandateId") Long mandateId, @Param("fromStatus") String fromStatus,

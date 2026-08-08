@@ -43,7 +43,16 @@ const modules = [
     )
   },
   {
-    id: "rentIncome", shell: "owner-shell", code: "03", name: "租金收入", avatar: true,
+    id: "ownerFinance", shell: "owner-shell", code: "03", name: "財務中心", avatar: false,
+    title: "財務中心", category: "OWNER FINANCE", hero: "業主端財務總覽",
+    hint: "集中查看本月收入、支出、結餘、預備金與最近金額流水。",
+    table: "最近金額流水", searchHint: "搜尋房產、說明或金額",
+    primaryAction: "查看租金收入", secondaryAction: "查看收支維修",
+    flowTitle: "業主財務中心", flowHint: "租金收入、收支維修和預備金集中管理。",
+    quickActions: ["租金收入", "收支維修", "預備金"]
+  },
+  {
+    id: "rentIncome", shell: "owner-shell", code: "03.1", name: "租金收入", avatar: true,
     title: "租金收入", category: "RENTAL INCOME", hero: "業主端租金收入查詢",
     hint: "全面掌握租金收入情況，輕鬆管理您的資產收益。",
     table: "租金收入列表", searchHint: "搜尋租客、月份、收款狀態",
@@ -61,7 +70,7 @@ const modules = [
     )
   },
   {
-    id: "ownerExpenses", shell: "owner-shell", code: "04", name: "收支維修", avatar: false,
+    id: "ownerExpenses", shell: "owner-shell", code: "03.2", name: "收支維修", avatar: false,
     title: "收支維修", category: "INCOME AND EXPENSE", hero: "業主端收入支出查詢",
     hint: "查看您的房產收支明細與維修記錄，掌握財務與維修狀態。",
     table: "收入與支出明細", searchHint: "搜尋支出、憑證、單位",
@@ -79,7 +88,7 @@ const modules = [
     )
   },
   {
-    id: "ownerReserve", shell: "owner-shell", code: "05", name: "預備金", avatar: false,
+    id: "ownerReserve", shell: "owner-shell", code: "03.3", name: "預備金", avatar: false,
     title: "預備金與通知", category: "RESERVE AND NOTICE", hero: "業主端預備金與提醒中心",
     hint: "實時查看預備金餘額與交易明細，獲取最新通知與重要文件。",
     table: "預備金與通知紀錄", searchHint: "搜尋充值、扣款、通知",
@@ -133,6 +142,24 @@ const modules = [
     )
   },
   {
+    id: "adminSmartDashboard", shell: "admin-shell", code: "-01", name: "智慧大屏", avatar: false,
+    title: "智慧大屏", category: "SMART PORTFOLIO BOARD", hero: "集中查看马来西亚各州属的房产与出租经营数据。",
+    hint: "地图和指标均来自当前数据库实时汇总。", table: "地区经营地图", searchHint: "搜索州属",
+    primaryAction: "重新载入", secondaryAction: ""
+  },
+  {
+    id: "adminDashboard", shell: "admin-shell", code: "00", name: "管理总览", avatar: false,
+    title: "管理总览", category: "ADMIN DASHBOARD", hero: "按区域查看在管房产、入住率、租金、租客押金与备用金。",
+    hint: "数据来自当前数据库实时汇总。", table: "区域经营概览", searchHint: "搜索区域",
+    primaryAction: "重新载入", secondaryAction: ""
+  },
+  {
+    id: "adminProjects", shell: "admin-shell", code: "00.5", name: "建案管理", avatar: false,
+    title: "建案管理", category: "ADMIN PROJECT", hero: "集中建立與維護建案主資料。",
+    hint: "建案資料會同步供房產、房款及租賃模組使用。", table: "建案列表", searchHint: "搜尋建案編碼、名稱、城市或地址",
+    primaryAction: "", secondaryAction: ""
+  },
+  {
     id: "adminOwners", shell: "admin-shell", code: "01", name: "業主管理", avatar: true,
     title: "業主管理", category: "ADMIN OWNER", hero: "登記與維護所有業主資料。",
     hint: "查看全部業主、聯絡資料、帳號狀態與名下房產數量。",
@@ -164,6 +191,18 @@ const modules = [
     hint: "集中查看出租委託、租客、租約、收款及後續營運進度。",
     table: "房產流程", searchHint: "搜尋建案 / 單位 / 業主", primaryAction: "選擇房產", secondaryAction: "重新載入",
     flowTitle: "房產出租流程", flowHint: "每個步驟都能直接進入對應功能。", quickActions: [], detailBlocks: []
+  },
+  {
+    id: "adminRentalSigning", shell: "admin-shell", code: "02.6", name: "附件签约", avatar: false,
+    title: "附件签约", category: "ADMIN RENTAL SIGNING", hero: "集中生成出租附件并处理电子签署。",
+    hint: "授权书、OTR 与租赁合同在此生成、签署和归档。", table: "附件签约", searchHint: "搜索文件、委托编号或房产",
+    primaryAction: "", secondaryAction: ""
+  },
+  {
+    id: "adminDeposits", shell: "admin-shell", code: "02.7", name: "押金管理", avatar: false,
+    title: "押金管理", category: "ADMIN RENTAL DEPOSITS", hero: "独立管理租约押金余额与全部异动。",
+    hint: "集中处理押金代付、归还、退款、没收和余额调整。", table: "押金账户", searchHint: "搜索租客、租约或房产",
+    primaryAction: "", secondaryAction: ""
   },
   {
     id: "adminTenantDirectory", shell: "admin-shell", code: "02.8", name: "租客管理", avatar: true,
@@ -276,6 +315,13 @@ const modules = [
     primaryAction: "", secondaryAction: "",
     flowTitle: "操作追蹤流程", flowHint: "每次受記錄的資料異動，都保留操作者、時間與修改前後內容。"
   },
+  {
+    id: "adminSystemBackup", shell: "admin-shell", code: "11", name: "備份與恢復", avatar: false,
+    title: "備份與恢復", category: "SYSTEM BACKUP", hero: "備份資料庫與全部上傳文件，並在需要時安全恢復整個系統。",
+    hint: "恢復前會自動產生安全備份，避免誤操作後無法回退。",
+    table: "備份記錄", searchHint: "搜尋備份文件",
+    primaryAction: "", secondaryAction: ""
+  },
 ];
 
 const featureMap = {
@@ -287,6 +333,8 @@ const featureMap = {
   ownerNotice: [["F1", "通知分類", ["房款收款通知", "租金收款通知", "合約文件到期提醒"]], ["F2", "發送管道", ["Email", "LINE", "系統內通知"]], ["F3", "通知狀態", ["已讀 / 未讀", "發送成功", "失敗原因"]]],
   ownerDocuments: [["G1", "文件分類", ["買賣合約", "租約", "付款憑證"]], ["G2", "狀態追蹤", ["已上傳", "待補件", "即將到期"]], ["G3", "操作", ["上傳", "下載", "到期提醒"]]],
   adminAccounts: [["A1", "帳號資料", ["管理員與業主登入帳號", "帳號狀態", "關聯業主"]], ["A2", "安全管理", ["密碼加密", "重設密碼", "獨立登入入口"]], ["A3", "操作", ["新增", "修改", "停用或刪除"]]],
+  adminProjects: [],
+  adminRentalSigning: [],
   adminOwners: [["H1", "業主資料", ["登記業主基本資料", "管理名下單位", "上傳合約文件"]], ["H2", "房產概覽", ["房產總價", "已繳 / 未繳", "預備金狀態"]], ["H3", "文件狀態", ["買賣合約", "身份文件", "付款憑證"]]],
   adminProperties: [["P1", "房產主檔", ["建案與單位", "房型與面積", "交房狀態"]], ["P2", "業主關聯", ["所屬業主", "持有比例", "持有日期"]], ["P3", "財務狀態", ["房產總價", "已繳金額", "未繳金額"]]],
   adminTenantDirectory: [],
@@ -309,6 +357,8 @@ const workflowMap = {
   ownerReserve: ["設定標準", "充值", "扣款", "計算餘額", "不足提醒"],
   ownerNotice: ["觸發規則", "發送通知", "業主讀取", "失敗重發", "留存紀錄"],
   ownerDocuments: ["上傳文件", "審核", "分類", "到期提醒", "業主下載"],
+  adminProjects: [],
+  adminRentalSigning: [],
   adminOwners: ["新增業主", "綁定房產", "上傳文件", "檢查狀態", "同步業主端"],
   adminProperties: ["新增房產", "綁定業主", "維護資料", "檢查狀態", "查看房款"],
   adminTenantDirectory: ["維護資料", "建立租客", "管理狀態"],
@@ -331,6 +381,8 @@ const reminderMap = {
   ownerReserve: ["預備金不足", "扣款通知", "補繳提醒"],
   ownerNotice: ["Email 發送失敗", "LINE 通知失敗", "重複發送待確認"],
   ownerDocuments: ["合約文件到期", "文件待補件", "文件審核完成"],
+  adminProjects: [],
+  adminRentalSigning: [],
   adminOwners: ["屋主資料缺失", "合約文件即將到期", "付款憑證待補件"],
   adminProperties: ["房產資料缺失", "未綁定業主", "交房狀態待更新"],
   adminTenants: ["租金收款通知", "租約到期提醒", "租客文件缺失"],
@@ -414,8 +466,10 @@ const adminKpis = {
 };
 
 const rows = {
+  adminProjects: [],
   adminAccounts: [],
   adminProcess: [],
+  adminRentalSigning: [],
   myProperties: [["Pavilion Square", "A-28-05", "2 Bedroom", "1,088 sq.ft", "1,300,000.00", "1,200,000.00", "100,000.00", "正常"], ["CCP Residence", "B-12-07", "Studio", "680 sq.ft", "850,000.00", "600,000.00", "250,000.00", "待確認"], ["CCPS Heights", "A-19-09", "Investment", "1,240 sq.ft", "3,180,000.00", "3,030,000.00", "150,000.00", "出租中"]],
   ownerPayment: [["A-28-05", "第 10 期", "100,000.00", "2025-04-15", "已完成", "已完成", "RC-250410"], ["A-28-05", "第 11 期", "100,000.00", "2025-05-15", "已完成", "已完成", "RC-250515"], ["A-28-05", "第 12 期", "100,000.00", "2025-06-15", "待確認", "待確認", "RC-250615"]],
   rentIncome: [["Mohd Hakim", "A-28-05", "2025-05", "4,800.00", "已完成", "2025-05-03", "正常"], ["Rachel Lee", "A-19-09", "2025-05", "5,200.00", "待確認", "2025-05-06", "待處理"], ["Chen Yi Fan", "B-12-07", "2025-05", "3,200.00", "已完成", "2025-05-02", "正常"]],
@@ -439,6 +493,7 @@ rows.adminRentalMandates = [];
 rows.adminAudit = [];
 
 const headers = {
+  adminProjects: [],
   adminAccounts: ["登入帳號", "顯示名稱", "手機號", "帳號類型", "關聯業主", "狀態", "操作"],
   myProperties: ["建案", "單位", "房型", "面積", "房產階段", "營運服務", "房產總價", "已繳金額", "未繳金額", "付款狀態", "操作"],
   ownerPayment: ["單位", "期數", "應繳金額", "到期日", "付款憑證", "財務確認", "收據編號", "操作"],
@@ -450,6 +505,7 @@ const headers = {
   adminOwners: ["業主姓名", "手機號", "建案/項目", "單位編號", "房產狀態", "房產總價", "已繳金額", "未繳金額", "文件狀態", "操作"],
   adminProperties: ["建案／項目", "單位編號", "業主", "房型", "房產階段", "房產總價", "已繳金額", "未繳金額", "操作"],
   adminProcess: [],
+  adminRentalSigning: [],
   adminTenantDirectory: [],
   adminTenants: ["租客姓名", "單位編號", "月租", "租期", "本月租金", "已收/未收", "合約到期", "入住狀態", "操作"],
   adminMaintenance: ["支出/工單", "分類", "單位", "供應商", "金額", "憑證", "支付狀態", "處理進度", "操作"],

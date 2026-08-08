@@ -1,5 +1,5 @@
 const computedKeys = [
-  'currentModule', 'currentId', 'adminModules', 'adminNavGroups', 'ownerModules', 'currentHeaders', 'currentRows',
+  'currentModule', 'currentId', 'adminModules', 'adminPrimaryModules', 'adminNavGroups', 'ownerModules', 'currentHeaders', 'currentRows',
   'currentReport', 'dateRange', 'modalConfirmText', 'filteredRows', 'currentReminders', 'pagedOwnerRows',
   'selectedRow', 'currentMetrics', 'ownerMetrics', 'ownerSummaryCards', 'detailName', 'detailSubline',
   'detailStatus', 'detailTotal', 'detailPaid', 'detailPending', 'detailProgress', 'kanbanColumns',

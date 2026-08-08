@@ -136,12 +136,14 @@ public interface OwnerDashboardMapper {
             LEFT JOIN reserve_accounts ra ON ra.owner_unit_id = ou.id AND ra.status = 'active'
             LEFT JOIN (
               SELECT ce.unit_id,
-                     COALESCE(SUM(CASE WHEN ce.direction = 'income' THEN fr.amount ELSE 0 END), 0) AS monthly_income,
+                     COALESCE(SUM(CASE WHEN ce.direction = 'income' AND fr.record_type <> 'security_deposit'
+                                       THEN fr.amount ELSE 0 END), 0) AS monthly_income,
                      COALESCE(SUM(CASE WHEN ce.direction = 'expense' THEN fr.amount ELSE 0 END), 0) AS monthly_expense
               FROM cashflow_entries ce
               JOIN finance_records fr ON fr.id = ce.finance_record_id
               WHERE ce.occurred_on >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
                 AND ce.occurred_on < DATE_ADD(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 1 MONTH)
+                AND fr.payment_status <> 'voided'
               GROUP BY ce.unit_id
             ) cashflow ON cashflow.unit_id = ou.unit_id
             LEFT JOIN (

@@ -7,7 +7,6 @@ const source = readFileSync(new URL('../src/components/AdminPropertyProcessWorks
 test('process center uses the current rental workbench model', () => {
   assert.match(source, /buildRentalWorkbench/);
   assert.match(source, /fetchAdminPropertyPhotos/);
-  assert.match(source, /fetchAdminRentalMandateDocuments/);
   assert.match(source, /fetchAdminLeaseRentInvoices/);
   assert.match(source, /fetchAdminLeasePayments/);
   assert.match(source, /workspaceRelated/);
@@ -22,16 +21,14 @@ test('process center uses the current rental workbench model', () => {
   assert.match(source, /rental-action-panel/);
   assert.match(source, /submitAction/);
   assert.match(source, /createAdminRentalMandate/);
-  assert.match(source, /generateAdminContractTemplate/);
-  assert.match(source, /startAdminMandateDocumentSignature/);
-  assert.match(source, /reviewAdminRentalMandate/);
+  assert.doesNotMatch(source, /reviewAdminRentalMandate/);
+  assert.doesNotMatch(source, /activeAction === 'review_mandate'/);
   assert.match(source, /createAdminTenant/);
   assert.match(source, /createAdminLease/);
   assert.match(source, /closeAdminLease/);
   assert.match(source, /createAdminLeaseFirstInvoice/);
   assert.match(source, /create_first_invoice/);
-  assert.match(source, /'create_first_invoice', 'confirm_first_receipt'/);
-  assert.match(source, /createAdminPropertyContractRecord/);
+  assert.doesNotMatch(source, /confirm_first_receipt/);
   assert.match(source, /confirmAdminRentCollection/);
   assert.match(source, /saveAdminPropertyWorkspaceBasic/);
   assert.match(source, /saveAdminPropertyHandover/);
@@ -53,13 +50,10 @@ test('process center uses the current rental workbench model', () => {
   assert.match(source, /:disabled="!canPerformStageAction/);
 });
 
-test('generated files are scoped to the selected stage and support current rental downloads', () => {
-  assert.match(source, /filterGeneratedFilesByStage/);
-  assert.match(source, /generatedFilesStage\?\.key/);
-  assert.match(source, /downloadAdminPropertyContractRecord/);
-  assert.match(source, /fetchAdminLeaseContract/);
-  assert.match(source, /fetchAdminRentReceipt/);
-  assert.match(source, /fetchAdminRentProof/);
+test('keeps rental attachment browsing outside the process center', () => {
+  assert.doesNotMatch(source, /viewGeneratedFiles/);
+  assert.doesNotMatch(source, /generatedFilesOpen/);
+  assert.doesNotMatch(source, /downloadGeneratedFile/);
 });
 
 test('normalizes lease-scoped invoice IDs before evaluating the current rental', () => {
@@ -67,17 +61,18 @@ test('normalizes lease-scoped invoice IDs before evaluating the current rental',
   assert.match(source, /leaseId:\s*leaseId/);
 });
 
-test('confirms the current invoice using the API invoiceId', () => {
-  assert.match(source, /const invoiceId = invoice\?\.id \|\| invoice\?\.invoiceId/);
-  assert.match(source, /confirmAdminRentCollection\(invoiceId/);
+test('confirms collection from the specific unpaid invoice row instead of a global first-receipt action', () => {
+  assert.doesNotMatch(source, /confirm_first_receipt/);
+  assert.match(source, /v-if="!operationsInvoicePaid"[^>]*@click="openOperationsForm\('receipt'\)"/);
+  assert.match(source, /confirmAdminRentCollection/);
 });
 
-test('keeps rent collection outside the four-stage rental workflow', () => {
+test('keeps rent collection outside the system rental workflow', () => {
   assert.match(source, /rental-operations-panel/);
   assert.match(source, /rentalWorkbench\.dailyOperations/);
   assert.match(source, /openOperationsAction/);
   assert.match(source, /create_first_invoice/);
-  assert.match(source, /confirm_first_receipt/);
+  assert.doesNotMatch(source, /confirm_first_receipt/);
 });
 
 test('provides a lease closure action followed by a move-out handover report', () => {
@@ -103,9 +98,13 @@ test('allows selecting an existing tenant before creating a new tenant', () => {
   assert.match(source, /use_existing_tenant/);
 });
 
-test('process center shows four current rental stages without pagination', () => {
-  assert.match(source, /v-for="stage in rentalWorkbench\.stages"/);
-  assert.match(source, /rentalWorkbench\.stages/);
+test('process center switches one detail page from the selected journey step', () => {
+  assert.match(source, /@click="selectJourneyStep\(step\)"/);
+  assert.match(source, /selectedJourneyStep\?\.key === step\.key/);
+  assert.match(source, /selectedJourneyStep\.key === 'propertySetup'/);
+  assert.match(source, /selectedJourneyStep\.key === 'billingOperations'/);
+  assert.match(source, /selectedJourneyStep\.key === 'leaseClosure'/);
+  assert.doesNotMatch(source, /v-for="stage in rentalWorkbench\.stages"/);
   assert.doesNotMatch(source, /paginateProcessSteps/);
   assert.doesNotMatch(source, /process-pagination/);
 });
@@ -181,39 +180,39 @@ test('keeps the category menu options available independently of checklist rows'
 });
 
 test('process center keeps the workflow list inside the panel padding', () => {
-  assert.match(source, /\.process-center-main\{[^}]*padding:20px/);
+  assert.match(source, /\.process-center-main\{[^}]*padding:16px/);
 });
 
-test('property picker list expands through the picker horizontal padding', () => {
-    assert.match(source, /\.process-property-picker\{[^}]*grid-template-rows:auto auto auto/);
-  assert.match(source, /\.process-property-picker\{[^}]*align-self:start/);
-  assert.match(source, /\.process-property-picker\{[^}]*height:auto/);
-  assert.match(source, /\.process-picker-head\{[^}]*margin:0 16px/);
-  assert.match(source, /\.process-property-picker>input\{[^}]*margin:0 16px/);
-  assert.match(source, /\.process-property-list\{[^}]*width:100%/);
-  assert.match(source, /\.process-property-list\{[^}]*height:auto/);
-  assert.match(source, /\.process-property-list\{[^}]*max-height:calc\(100vh - 290px\)/);
+test('uses the left context rail for selecting one of multiple properties', () => {
+  assert.match(source, /<div class="process-shell">/);
+  assert.match(source, /<aside class="process-context-rail">/);
+  assert.match(source, /v-if="properties\.length > 1" v-model\.trim="search"/);
+  assert.match(source, /v-for="property in filteredProperties"/);
+  assert.match(source, /@click="selectProperty\(property\)"/);
+  assert.match(source, /\.process-shell\{[^}]*grid-template-columns:250px minmax\(0,1fr\)/);
+  assert.match(source, /class="process-start-button process-rail-start"/);
+  assert.doesNotMatch(source, /<div class="process-center-count">/);
 });
 
-test('keeps the four-stage workbench visible inside the viewport', () => {
-  assert.match(source, /\.process-center-layout\{[^}]*height:calc\(100vh - 190px\)/);
+test('uses the page scrollbar instead of a nested workbench scrollbar', () => {
+  assert.match(source, /\.process-center-layout\{[^}]*height:auto/);
   assert.match(source, /\.process-center-layout\{[^}]*min-height:0/);
-  assert.match(source, /\.process-center-main\{[^}]*height:100%/);
-  assert.match(source, /\.process-center-main\{[^}]*overflow-y:auto/);
+  assert.match(source, /\.process-center-main\{[^}]*height:auto/);
+  assert.match(source, /\.process-center-main\{[^}]*overflow:visible/);
   assert.doesNotMatch(source, /process-pagination/);
 });
 
 test('keeps process content away from the page and panel edges', () => {
-  assert.match(source, /\.property-process-center\{[^}]*padding:16px 20px 28px/);
-  assert.match(source, /\.process-center-main\{[^}]*padding:20px/);
+  assert.match(source, /\.property-process-center\{[^}]*padding:14px 20px 24px/);
+  assert.match(source, /\.process-center-main\{[^}]*padding:16px/);
   assert.match(source, /\.process-property-list\{[^}]*padding:0 16px/);
 });
 
-test('gives workflow cards comfortable outer and inner spacing', () => {
-  assert.match(source, /\.process-center-main\{[^}]*padding:20px(?! 0)/);
-  assert.match(source, /\.rental-current-task\{[^}]*margin:18px 0/);
-  assert.match(source, /\.rental-stage-list\{[^}]*gap:12px/);
-  assert.match(source, /\.rental-stage-card\{[^}]*padding:16px 18px/);
+test('keeps the current task and workflow cards compact', () => {
+  assert.match(source, /\.rental-current-task\{[^}]*margin:12px 0 14px/);
+  assert.match(source, /\.rental-current-task\{[^}]*padding:12px 14px/);
+  assert.match(source, /\.rental-stage-list\{[^}]*gap:8px/);
+  assert.match(source, /\.rental-stage-card\{[^}]*padding:11px 14px/);
 });
 
 test('uses unit id for the selected property workspace and detail route', () => {
@@ -272,18 +271,78 @@ test('loads reusable thumbnails through authenticated blob previews', () => {
   assert.match(source, /@error="loadReusablePhotoPreview\(photo\)"/);
 });
 
-test('renames the workspace and replaces history navigation with inline generated files', () => {
-  assert.match(source, /viewGeneratedFiles/);
-  assert.match(source, /generatedFilesOpen/);
-  assert.match(source, /downloadGeneratedFile/);
+test('selected stage page exposes its workflow action without attachment shortcuts', () => {
+  assert.match(source, /selectedSystemStage\?\.primaryAction/);
+  assert.match(source, /@click="openStage\(selectedSystemStage\)"/);
+  assert.doesNotMatch(source, /generated-files-link/);
   assert.doesNotMatch(source, /class="history-link"/);
-  assert.doesNotMatch(source, /openHistory\(stage\)/);
 });
 
-test('de-emphasizes generated files as a secondary stage action', () => {
-  assert.match(source, /\.rental-stage-actions \.generated-files-link\{[^}]*background:#fff/);
-  assert.match(source, /\.rental-stage-actions \.generated-files-link\{[^}]*border:1px solid/);
-  assert.match(source, /\.rental-stage-actions \.generated-files-link\{[^}]*color:#547083/);
+test('starts a complete rental journey from project, owner, and property setup', () => {
+  assert.match(source, /开始新租房流程/);
+  assert.match(source, /process-journey-track/);
+  assert.match(source, /openSetupWizard/);
+  assert.match(source, /createAdminProject/);
+  assert.match(source, /createAdminOwner/);
+  assert.match(source, /createAdminOwnerProperty/);
+  assert.match(source, /setupStep === 1/);
+  assert.match(source, /建立并进入流程/);
+});
+
+test('new rental flow only accepts handed-over properties', () => {
+  assert.doesNotMatch(source, /<option value="PRE_HANDOVER">未交房<\/option>/);
+  assert.doesNotMatch(source, /setupPropertyForm\.assetStage === 'PRE_HANDOVER'/);
+  assert.match(source, /setupPropertyForm:\s*\{[^}]*assetStage:\s*'OPERATING'/);
+  assert.match(source, /实际交房日期<input v-model="setupPropertyForm\.actualHandoverDate"/);
+  assert.match(source, /if \(!this\.setupPropertyForm\.actualHandoverDate\)/);
+});
+
+test('journey navigation combines project owner property and handover into one preparation step', () => {
+  assert.doesNotMatch(source, /key:\s*'projectRecord'/);
+  assert.doesNotMatch(source, /key:\s*'ownerRecord'/);
+  assert.doesNotMatch(source, /key:\s*'propertyRecord'/);
+  assert.match(source, /item\.key === 'propertySetup' \? '房产准备'/);
+  assert.match(source, /selectedJourneyStep\.key === 'propertySetup'/);
+  assert.match(source, /<span>建案<\/span>/);
+  assert.match(source, /<span>业主<\/span>/);
+  assert.match(source, /<span>房产单位<\/span>/);
+  assert.match(source, /<span>交房状态<\/span>/);
+  assert.match(source, /isRentalControlEligible\(property\).*=== 'OPERATING'/);
+  assert.match(source, /从房产准备到结束租约/);
+});
+
+test('journey navigation splits later work into tenant lease billing and maintenance steps', () => {
+  assert.match(source, /key:\s*'tenantSetup'/);
+  assert.match(source, /key:\s*'leaseSetup'/);
+  assert.match(source, /key:\s*'billingOperations'/);
+  assert.match(source, /key:\s*'maintenanceOperations'/);
+  assert.match(source, /openOperationsCenter\('billing'\)/);
+  assert.match(source, /openOperationsCenter\('maintenance'\)/);
+  assert.match(source, /grid-template-columns:repeat\(8,minmax\(112px,1fr\)\)/);
+});
+
+test('keeps deposit management outside the rental journey', () => {
+  assert.doesNotMatch(source, /key:\s*'depositManagement'/);
+  assert.doesNotMatch(source, /openOperationsCenter\('deposit'\)/);
+  assert.doesNotMatch(source, /operationsTab === 'deposit'/);
+  assert.doesNotMatch(source, /createAdminTenantDepositTransaction/);
+  assert.doesNotMatch(source, /operationsDepositTransactions/);
+});
+
+test('renders the journey overview as compact status tiles with one current-stage summary', () => {
+  assert.match(source, /journeyCompletedCount/);
+  assert.match(source, /journeyCurrentStep/);
+  assert.match(source, /当前 · \{\{ journeyCurrentStep\.title \}\}/);
+  assert.match(source, /step\.status === 'completed' \? '✓' : index \+ 1/);
+  assert.match(source, /\.process-journey-track button\{[^}]*border:1px solid/);
+  assert.match(source, /\.process-journey-track button\.active\{[^}]*border-color:#0b8f96/);
+});
+
+test('exposes system stages through rental operations and lease closure', () => {
+  assert.match(source, /open_operations_center/);
+  assert.match(source, /close_lease/);
+  assert.match(source, /openOperationsCenter/);
+  assert.match(source, /submitCloseLease/);
 });
 
 test('saves newly selected photos back to property photos even before a lease exists', () => {
@@ -293,11 +352,15 @@ test('saves newly selected photos back to property photos even before a lease ex
   assert.doesNotMatch(source, /if \(leaseId\) await Promise\.all\(photos\.map/);
 });
 
-test('refreshes the current mandate documents before resending authorization signing', () => {
-  assert.match(source, /refreshAuthorizationState/);
-  assert.match(source, /await this\.refreshAuthorizationState\(\)/);
-  assert.match(source, /isAuthorizationSignedDocument\(item\)/);
-  assert.doesNotMatch(source, /currentTask\?\.key !== 'mandateAuthorization'/);
+test('keeps the system process independent from all signing documents', () => {
+  assert.doesNotMatch(source, /fetchAdminRentalMandateDocuments/);
+  assert.doesNotMatch(source, /mandateDocuments/);
+  assert.doesNotMatch(source, /RENTAL_SIGNING_ACTIONS/);
+  assert.doesNotMatch(source, /\/admin\/rental-signing/);
+  assert.doesNotMatch(source, /generateAdminContractTemplate/);
+  assert.doesNotMatch(source, /startAdminMandateDocumentSignature/);
+  assert.doesNotMatch(source, /createAdminPropertyContractRecord/);
+  assert.doesNotMatch(source, /startAdminLeaseSignature/);
 });
 
 test('keeps lease dates inside the current rental mandate and explains the limit', () => {
@@ -315,11 +378,26 @@ test('opens the daily operations workbench with a lease-scoped monthly snapshot'
   assert.doesNotMatch(source, /operationsWorkspace\?\.billing \|\| this\.rentalWorkbench\.dailyOperations\.currentInvoice/);
 });
 
-test('completes monthly invoice, payment, charge, and work-order actions inside operations center', () => {
-  assert.match(source, /openOperationsForm\(operationsInvoice \? 'receipt' : 'invoice'\)/);
+test('creates invoices, confirms an unpaid invoice row, and manages charges and work orders inside operations center', () => {
+  assert.match(source, /v-if="!operationsInvoice"[^>]*@click="openOperationsForm\('invoice'\)"/);
   assert.match(source, /createAdminLeaseFirstInvoice/);
   assert.match(source, /confirmAdminRentCollection/);
   assert.match(source, /createAdminPropertyOperationsCharge/);
   assert.match(source, /createAdminPropertyOperationsWorkOrder/);
   assert.match(source, /leaseId, requestedAt/);
+});
+
+test('daily operations center covers rent, expenses, expense review, maintenance, and lease work', () => {
+  assert.match(source, /operationsTab === 'billing'/);
+  assert.match(source, /operationsTab === 'expenses'/);
+  assert.match(source, /operationsTab === 'expenseReview'/);
+  assert.match(source, /operationsTab === 'maintenance'/);
+  assert.match(source, /operationsTab === 'lease'/);
+  assert.match(source, /createAdminExpense/);
+  assert.match(source, /updateAdminExpense/);
+  assert.match(source, /deleteAdminExpense/);
+  assert.match(source, /confirmAdminFinanceReview/);
+  assert.match(source, /rejectAdminFinanceReview/);
+  assert.match(source, /sendAdminRentReminder/);
+  assert.match(source, /completeAdminMaintenance/);
 });

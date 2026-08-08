@@ -19,6 +19,17 @@ public interface PropertyExpensePostingMapper {
     @Select("SELECT owner_unit_id AS ownerUnitId,profile_json AS profileJson FROM property_basic_profiles")
     List<ProfileRow> findProfiles();
 
+    @Select("""
+            SELECT id AS mandateId, owner_unit_id AS ownerUnitId, management_fee AS managementFee
+            FROM rental_mandates
+            WHERE status = 'active'
+              AND management_fee > 0
+              AND start_date <= #{today}
+              AND (end_date IS NULL OR end_date >= #{today})
+            ORDER BY id
+            """)
+    List<MandateFeeRow> findActiveMandateFees(@Param("today") LocalDate today);
+
     @Select("SELECT pep.finance_record_id AS financeRecordId,fr.confirmation_status AS confirmationStatus FROM property_expense_postings pep JOIN finance_records fr ON fr.id=pep.finance_record_id WHERE pep.owner_unit_id=#{ownerUnitId} AND pep.charge_key=#{chargeKey} AND pep.period_key=#{periodKey} FOR UPDATE")
     PostingRow lockPosting(@Param("ownerUnitId") Long ownerUnitId,@Param("chargeKey") String chargeKey,@Param("periodKey") String periodKey);
 
@@ -40,6 +51,7 @@ public interface PropertyExpensePostingMapper {
 
     class PropertyContext { private Long ownerUnitId,ownerId,unitId; public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public Long getOwnerId(){return ownerId;} public void setOwnerId(Long v){ownerId=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} }
     class ProfileRow { private Long ownerUnitId; private String profileJson; public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public String getProfileJson(){return profileJson;} public void setProfileJson(String v){profileJson=v;} }
+    class MandateFeeRow { private Long mandateId,ownerUnitId; private BigDecimal managementFee; public Long getMandateId(){return mandateId;} public void setMandateId(Long v){mandateId=v;} public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public BigDecimal getManagementFee(){return managementFee;} public void setManagementFee(BigDecimal v){managementFee=v;} }
     class PostingRow { private Long financeRecordId; private String confirmationStatus; public Long getFinanceRecordId(){return financeRecordId;} public void setFinanceRecordId(Long v){financeRecordId=v;} public String getConfirmationStatus(){return confirmationStatus;} public void setConfirmationStatus(String v){confirmationStatus=v;} }
     class FinanceWrite { private Long id,unitId,ownerId,actorId; private String transactionNo; private BigDecimal amount; private LocalDate occurredOn; public Long getId(){return id;} public void setId(Long v){id=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getOwnerId(){return ownerId;} public void setOwnerId(Long v){ownerId=v;} public Long getActorId(){return actorId;} public void setActorId(Long v){actorId=v;} public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;} public LocalDate getOccurredOn(){return occurredOn;} public void setOccurredOn(LocalDate v){occurredOn=v;} }
 }

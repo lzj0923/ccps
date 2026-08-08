@@ -67,8 +67,9 @@ class TenancyAgreementPdfServiceTest {
     @Test
     void usesAnInformativePdfFileName() {
         TenancyAgreementPdfService service = new TenancyAgreementPdfService();
-        assertEquals("Tenancy-Agreement-F-40-12.pdf",
-                service.fileName(Map.of("unitNo", "F-40-12", "caseNo", "LS-2026-001")));
+        assertEquals("李四-翻斗花园-F-40-12-租赁合同-LS-2026-001.pdf",
+                service.fileName(Map.of("landlordName", "张三", "tenantName", "李四", "projectName", "翻斗花园",
+                        "unitNo", "F-40-12", "caseNo", "LS-2026-001")));
     }
 
     @Test

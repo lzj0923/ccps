@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRentalWorkbench, selectCurrentRentalMandate } from '../src/utils/rentalCycleWorkbench.js';
+import { buildRentalWorkbench, reportBelongsToMandate, selectCurrentRentalMandate } from '../src/utils/rentalCycleWorkbench.js';
 
 const property = {
   ownerId: 7,
@@ -14,7 +14,7 @@ const currentMandate = {
   id: 42,
   ownerUnitId: 11,
   startDate: '2026-07-01',
-  status: 'pending_review',
+  status: 'active',
 };
 
 test('ignores terminated mandate records when selecting the current rental cycle', () => {
@@ -23,7 +23,15 @@ test('ignores terminated mandate records when selecting the current rental cycle
   assert.equal(selectCurrentRentalMandate({ property, mandates: [oldMandate, currentMandate] }).id, 42);
 });
 
-test('blocks the mandate stage until the current owner authorization is signed', () => {
+test('keeps legacy handover reports inside their rental cycle date boundary', () => {
+  const oldMandate = { id: 9, createdAt: '2025-01-01T00:00:00' };
+  const nextMandate = { id: 42, createdAt: '2026-01-01T00:00:00' };
+  assert.equal(reportBelongsToMandate({ createdAt: '2025-06-01T00:00:00', contentJson: '{}' }, oldMandate, nextMandate), true);
+  assert.equal(reportBelongsToMandate({ createdAt: '2026-02-01T00:00:00', contentJson: '{}' }, oldMandate, nextMandate), false);
+  assert.equal(reportBelongsToMandate({ createdAt: '2026-02-01T00:00:00', mandateId: 9 }, oldMandate, nextMandate), true);
+});
+
+test('keeps authorization files outside the system rental workflow', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [currentMandate, { id: 8, ownerUnitId: 11, status: 'expired' }],
@@ -35,64 +43,68 @@ test('blocks the mandate stage until the current owner authorization is signed',
   });
 
   assert.deepEqual(workbench.stages.map(stage => stage.key), [
-    'preparation', 'mandateAuthorization', 'leasingSigning', 'moveInCollection',
+    'propertySetup', 'mandateAuthorization', 'leasingSigning', 'moveInCollection', 'rentalOperations', 'leaseClosure',
   ]);
-  assert.equal(workbench.stages[1].status, 'blocked');
-  assert.equal(workbench.stages[1].blockingReasonKey, 'authorization_signing_required');
-  assert.equal(workbench.stages[1].primaryAction.key, 'view_signing_status');
-  assert.equal(workbench.currentTask.key, 'mandateAuthorization');
+  assert.equal(workbench.stages[1].status, 'completed');
+  assert.equal(workbench.stages[1].blockingReasonKey, null);
+  assert.deepEqual(workbench.stages[1].missingItems, []);
+  assert.equal(workbench.stages[1].primaryAction, null);
+  assert.equal(workbench.stages.some(stage => stage.primaryAction?.key === 'review_mandate'), false);
+  assert.equal(workbench.currentTask.key, 'leasingSigning');
 });
 
-test('recognizes the backend signed authorization link', () => {
+test('still exposes signed authorization state to the separate signing workspace', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [currentMandate],
     documents: [{ mandateId: 42, relationType: 'authorization', documentType: 'signed_contract' }],
   });
 
-  assert.notEqual(workbench.stages[1].status, 'blocked');
-  assert.notEqual(workbench.stages[1].blockingReasonKey, 'authorization_signing_required');
+  assert.equal(workbench.authorizationSigning.status, 'signed');
+  assert.equal(workbench.stages[1].blockingReasonKey, null);
 });
 
-test('does not mark an active mandate complete when its signed authorization is missing', () => {
+test('marks an active mandate complete without requiring authorization files', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active' }],
     documents: [{ mandateId: 42, relationType: 'authorization_draft' }],
   });
 
-  assert.equal(workbench.stages[1].status, 'blocked');
-  assert.deepEqual(workbench.stages[1].missingItems, ['authorization_signature']);
+  assert.equal(workbench.stages[1].status, 'completed');
+  assert.deepEqual(workbench.stages[1].missingItems, []);
 });
 
-test('does not mark preparation complete from property photos without a report for the current rental', () => {
+test('does not add a mandate review requirement', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [currentMandate],
     workspace: { profile: { id: 1 }, photos: [{ id: 2 }], handoverChecklist: [{ id: 3 }] },
   });
 
-  assert.equal(workbench.stages[0].status, 'in_progress');
-  assert.deepEqual(workbench.stages[0].missingItems, ['handover_report']);
-  assert.equal(workbench.stages[0].blockingReasonKey, 'handover_report_required');
+  assert.equal(workbench.stages[1].status, 'completed');
+  assert.deepEqual(workbench.stages[1].missingItems, []);
+  assert.equal(workbench.stages[1].blockingReasonKey, null);
 });
 
-test('accepts a newly generated unlinked report created during the current mandate', () => {
+test('does not treat a generated report file as system handover completion', () => {
   const workbench = buildRentalWorkbench({
     property,
-    mandates: [{ ...currentMandate, createdAt: '2026-07-29T09:00:00' }],
+    mandates: [{ ...currentMandate, status: 'active', createdAt: '2026-07-29T09:00:00' }],
     workspace: {
       profile: { id: 1 },
       photos: [{ id: 2 }],
       handoverChecklist: [{ id: 3 }],
       handovers: [{ id: 78, createdAt: '2026-07-30T09:00:00', contentJson: JSON.stringify({}) }],
+      leases: [{ id: 88, rentalMandateId: 42, tenantId: 31, status: 'active' }],
     },
   });
 
-  assert.equal(workbench.stages[0].status, 'completed');
+  assert.equal(workbench.stages[3].status, 'in_progress');
+  assert.deepEqual(workbench.stages[3].missingItems, ['handover']);
 });
 
-test('completes the current rental cycle after the signed lease move-in handover', () => {
+test('enters rental operations after the system move-in handover', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active' }],
@@ -114,9 +126,11 @@ test('completes the current rental cycle after the signed lease move-in handover
     },
   });
 
-  assert.ok(workbench.stages.every(stage => stage.status === 'completed'));
-  assert.ok(workbench.stages.every(stage => stage.missingItems.length === 0));
-  assert.equal(workbench.currentTask, null);
+  assert.ok(workbench.stages.slice(0, 4).every(stage => stage.status === 'completed'));
+  assert.equal(workbench.stages[4].status, 'in_progress');
+  assert.equal(workbench.stages[4].primaryAction.key, 'open_operations_center');
+  assert.equal(workbench.stages[5].status, 'pending');
+  assert.equal(workbench.currentTask.key, 'rentalOperations');
   assert.equal(workbench.includesDailyOperations, true);
 });
 
@@ -133,6 +147,7 @@ test('does not let an unpaid first invoice block a completed rental workflow', (
       photos: [{ id: 2 }],
       handoverChecklist: [{ id: 3 }],
       handovers: [{ id: 77, completed: true, contentJson: JSON.stringify({ mandateId: 42 }) }],
+      handover: { status: 'completed', mandateId: 42 },
       leases: [{ id: 88, rentalMandateId: 42, tenantId: 31, status: 'active' }],
       contracts: [
         { leaseId: 88, contractType: 'O_LEASE_RESERVATION', status: 'completed' },
@@ -145,11 +160,11 @@ test('does not let an unpaid first invoice block a completed rental workflow', (
 
   assert.equal(workbench.stages[3].status, 'completed');
   assert.deepEqual(workbench.stages[3].missingItems, []);
-  assert.equal(workbench.currentTask, null);
+  assert.equal(workbench.currentTask.key, 'rentalOperations');
   assert.equal(workbench.firstInvoice.invoiceId, 91);
 });
 
-test('keeps a transferred lease waiting for its own move-out handover report', () => {
+test('does not let a missing move-out report block a transferred lease closure', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active' }],
@@ -166,8 +181,9 @@ test('keeps a transferred lease waiting for its own move-out handover report', (
   assert.equal(workbench.currentLease, null);
   assert.equal(workbench.leaseClosure.leaseId, 88);
   assert.equal(workbench.leaseClosure.reason, 'transfer');
-  assert.equal(workbench.leaseClosure.status, 'awaiting_handover_report');
-  assert.deepEqual(workbench.leaseClosure.missingItems, ['lease_end_handover_report']);
+  assert.equal(workbench.leaseClosure.status, 'completed');
+  assert.equal(workbench.leaseClosure.handoverReportReady, false);
+  assert.deepEqual(workbench.leaseClosure.missingItems, []);
 });
 
 test('keeps the previous lease closure visible when a transferred replacement lease is active', () => {
@@ -185,7 +201,8 @@ test('keeps the previous lease closure visible when a transferred replacement le
   assert.equal(workbench.currentLease.id, 99);
   assert.equal(workbench.leaseClosure.leaseId, 88);
   assert.equal(workbench.leaseClosure.tenantName, '旧租客');
-  assert.equal(workbench.leaseClosure.status, 'awaiting_handover_report');
+  assert.equal(workbench.leaseClosure.status, 'completed');
+  assert.equal(workbench.leaseClosure.handoverReportReady, false);
 });
 
 test('marks the closed lease complete only when its own move-out report exists', () => {
@@ -199,6 +216,7 @@ test('marks the closed lease complete only when its own move-out report exists',
   });
 
   assert.equal(workbench.leaseClosure.status, 'completed');
+  assert.equal(workbench.leaseClosure.handoverReportReady, true);
   assert.deepEqual(workbench.leaseClosure.missingItems, []);
 });
 
@@ -213,7 +231,8 @@ test('keeps the latest closed lease available after its mandate expires', () => 
 
   assert.equal(workbench.currentMandate, null);
   assert.equal(workbench.leaseClosure.leaseId, 88);
-  assert.equal(workbench.leaseClosure.status, 'awaiting_handover_report');
+  assert.equal(workbench.leaseClosure.status, 'completed');
+  assert.equal(workbench.leaseClosure.handoverReportReady, false);
 });
 
 test('completes move-in collection from the lease-scoped invoice API without requiring a proof file', () => {
@@ -229,6 +248,7 @@ test('completes move-in collection from the lease-scoped invoice API without req
       photos: [{ id: 2 }],
       handoverChecklist: [{ id: 3 }],
       handovers: [{ id: 77, completed: true, contentJson: JSON.stringify({ mandateId: 42 }) }],
+      handover: { status: 'completed', mandateId: 42 },
       leases: [{ id: 88, rentalMandateId: 42, tenantId: 31, status: 'active' }],
       contracts: [
         { leaseId: 88, contractType: 'O_LEASE_RESERVATION', status: 'completed' },
@@ -244,7 +264,7 @@ test('completes move-in collection from the lease-scoped invoice API without req
   assert.deepEqual(workbench.stages[3].missingItems, []);
 });
 
-test('does not complete leasing before the current lease contract is signed', () => {
+test('does not let OTR or lease contract files block the system rental workflow', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active' }],
@@ -255,12 +275,13 @@ test('does not complete leasing before the current lease contract is signed', ()
     },
   });
 
-  assert.equal(workbench.stages[2].status, 'in_progress');
-  assert.deepEqual(workbench.stages[2].missingItems, ['lease_contract_signature']);
-  assert.equal(workbench.stages[3].status, 'pending');
+  assert.equal(workbench.stages[2].status, 'completed');
+  assert.deepEqual(workbench.stages[2].missingItems, []);
+  assert.equal(workbench.stages[3].status, 'in_progress');
+  assert.deepEqual(workbench.stages[3].missingItems, ['handover']);
 });
 
-test('keeps completed rental preparation editable', () => {
+test('starts the system workflow by creating a rental mandate', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [],
@@ -268,5 +289,29 @@ test('keeps completed rental preparation editable', () => {
   });
 
   assert.equal(workbench.stages[0].status, 'completed');
-  assert.equal(workbench.stages[0].primaryAction.key, 'complete_property_data');
+  assert.equal(workbench.stages[1].status, 'in_progress');
+  assert.deepEqual(workbench.stages[1].missingItems, ['rental_mandate']);
+  assert.equal(workbench.stages[1].primaryAction.key, 'create_mandate');
+});
+
+test('starts a pre-handover property with property setup', () => {
+  const workbench = buildRentalWorkbench({ property: { ...property, assetStage: 'PRE_HANDOVER' } });
+
+  assert.equal(workbench.stages[0].key, 'propertySetup');
+  assert.equal(workbench.stages[0].status, 'in_progress');
+  assert.equal(workbench.stages[0].primaryAction.key, 'complete_handover');
+  assert.equal(workbench.currentTask.key, 'propertySetup');
+});
+
+test('completes the full system journey after the lease is closed', () => {
+  const workbench = buildRentalWorkbench({
+    property,
+    mandates: [{ ...currentMandate, status: 'active' }],
+    workspace: {
+      leases: [{ id: 88, rentalMandateId: 42, tenantId: 31, status: 'terminated', endDate: '2026-07-30' }],
+    },
+  });
+
+  assert.ok(workbench.stages.every(stage => stage.status === 'completed'));
+  assert.equal(workbench.currentTask, null);
 });

@@ -44,7 +44,7 @@ class AdminBuildingPaymentServiceTest {
     @Test
     void createsNormalizedProject() {
         AdminProjectCreateRequest request = new AdminProjectCreateRequest(
-                " ccps-01 ", " New Project ", "Address", "Kuala Lumpur", "MY", "active");
+                " ccps-01 ", " New Project ", "Address", "Kuala Lumpur", "Bukit Bintang", "MY", "active");
         when(mapper.insertProject(any(NewProject.class))).thenAnswer(invocation -> {
             NewProject project = invocation.getArgument(0);
             project.setId(7L);

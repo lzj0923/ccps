@@ -1,6 +1,7 @@
 package com.ccps.backend.controller;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.ContentDisposition;
@@ -24,6 +25,9 @@ import com.ccps.backend.dto.AdminReserveManagementResponse;
 import com.ccps.backend.dto.AdminReserveSettingsRequest;
 import com.ccps.backend.dto.AdminReserveDirectTopupRequest;
 import com.ccps.backend.dto.AdminReserveRefundRequest;
+import com.ccps.backend.dto.AdminReserveBatchRefundRequest;
+import com.ccps.backend.dto.AdminReserveReconciliationRequest;
+import com.ccps.backend.dto.AdminReserveReconciliationResponse;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.service.AdminReserveManagementService;
 import com.ccps.backend.service.ReserveTopupService;
@@ -65,6 +69,23 @@ public class AdminReserveController {
     public AdminRecordCreateResponse createRefund(@PathVariable Long accountId,
             @Valid @RequestBody AdminReserveRefundRequest request, HttpServletRequest servletRequest) {
         return managementService.createRefund(AuthInterceptor.userId(servletRequest), accountId, request);
+    }
+
+    @PostMapping("/refunds/batch")
+    public List<AdminRecordCreateResponse> createRefunds(
+            @Valid @RequestBody AdminReserveBatchRefundRequest request, HttpServletRequest servletRequest) {
+        return managementService.createRefunds(AuthInterceptor.userId(servletRequest), request);
+    }
+
+    @GetMapping("/reconciliations")
+    public List<AdminReserveReconciliationResponse> findReconciliations() {
+        return managementService.findReconciliations();
+    }
+
+    @PostMapping("/reconciliations")
+    public List<AdminReserveReconciliationResponse> saveReconciliation(
+            @Valid @RequestBody AdminReserveReconciliationRequest request, HttpServletRequest servletRequest) {
+        return managementService.saveReconciliation(AuthInterceptor.userId(servletRequest), request);
     }
 
     @PostMapping("/topups/{financeRecordId}/review")

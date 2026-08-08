@@ -42,6 +42,7 @@ DROP TABLE IF EXISTS property_maintenance_records;
 DROP TABLE IF EXISTS maintenance_status_history;
 DROP TABLE IF EXISTS maintenance_work_orders;
 DROP TABLE IF EXISTS cashflow_entries;
+DROP TABLE IF EXISTS tenant_deposit_transactions;
 DROP TABLE IF EXISTS security_deposit_entries;
 DROP TABLE IF EXISTS rent_payments;
 DROP TABLE IF EXISTS rent_invoices;
@@ -137,6 +138,7 @@ CREATE TABLE projects (
   project_code VARCHAR(40) NOT NULL,
   name VARCHAR(160) NOT NULL,
   address VARCHAR(255) NULL,
+  state_name VARCHAR(100) NULL,
   city VARCHAR(100) NULL,
   country_code CHAR(2) NOT NULL DEFAULT 'MY',
   status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -181,6 +183,7 @@ CREATE TABLE owners (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uk_owners_owner_no (owner_no),
   KEY idx_owners_name (full_name),
   KEY idx_owners_phone (phone),
   KEY idx_owners_user (user_id),
@@ -260,7 +263,7 @@ CREATE TABLE rental_mandates (
   management_fee DECIMAL(18,2) NULL,
   commission_percent DECIMAL(5,2) NULL,
   responsible_user_id BIGINT UNSIGNED NULL,
-  status VARCHAR(30) NOT NULL DEFAULT 'draft',
+  status VARCHAR(30) NOT NULL DEFAULT 'active',
   submitted_at DATETIME NULL,
   reviewed_by BIGINT UNSIGNED NULL,
   reviewed_at DATETIME NULL,
@@ -552,6 +555,30 @@ CREATE TABLE leases (
   CONSTRAINT chk_leases_payment_day CHECK (payment_day BETWEEN 1 AND 31)
 ) ENGINE=InnoDB;
 
+CREATE TABLE lease_periods (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  lease_id BIGINT UNSIGNED NOT NULL,
+  period_no INT UNSIGNED NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  monthly_rent DECIMAL(18,2) NOT NULL,
+  deposit_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  payment_day TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  rent_calculation_method VARCHAR(30) NOT NULL DEFAULT 'daily_prorated',
+  contract_document_id BIGINT UNSIGNED NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_lease_period_no (lease_id, period_no),
+  KEY idx_lease_period_dates (lease_id, start_date, end_date),
+  CONSTRAINT fk_lease_period_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
+  CONSTRAINT fk_lease_period_document FOREIGN KEY (contract_document_id) REFERENCES documents (id),
+  CONSTRAINT fk_lease_period_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_lease_period_dates CHECK (end_date >= start_date),
+  CONSTRAINT chk_lease_period_payment_day CHECK (payment_day BETWEEN 1 AND 31)
+) ENGINE=InnoDB;
+
 CREATE TABLE security_deposit_entries (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   lease_id BIGINT UNSIGNED NOT NULL,
@@ -567,6 +594,35 @@ CREATE TABLE security_deposit_entries (
   CONSTRAINT fk_security_deposit_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
   CONSTRAINT fk_security_deposit_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
   CONSTRAINT chk_security_deposit_amount CHECK (amount > 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE tenant_deposit_transactions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  lease_id BIGINT UNSIGNED NOT NULL,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  unit_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NULL,
+  transaction_type VARCHAR(40) NOT NULL COMMENT 'collection / tenant_advance / tenant_repayment / rent_deduction / refund / forfeiture / adjustment_credit / adjustment_debit',
+  direction VARCHAR(10) NOT NULL COMMENT 'credit / debit',
+  amount DECIMAL(18,2) NOT NULL,
+  occurred_on DATE NOT NULL,
+  description VARCHAR(500) NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'posted',
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tenant_deposit_finance_type (finance_record_id, transaction_type),
+  KEY idx_tenant_deposit_tenant_date (tenant_id, occurred_on, id),
+  KEY idx_tenant_deposit_lease_date (lease_id, occurred_on, id),
+  CONSTRAINT fk_tenant_deposit_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
+  CONSTRAINT fk_tenant_deposit_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+  CONSTRAINT fk_tenant_deposit_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_tenant_deposit_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT fk_tenant_deposit_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_tenant_deposit_amount CHECK (amount > 0),
+  CONSTRAINT chk_tenant_deposit_direction CHECK (direction IN ('credit','debit')),
+  CONSTRAINT chk_tenant_deposit_status CHECK (status IN ('pending','posted','cancelled'))
 ) ENGINE=InnoDB;
 
 ALTER TABLE property_contract_records
@@ -744,7 +800,7 @@ CREATE TABLE reserve_accounts (
   UNIQUE KEY uk_reserve_accounts_owner_unit (owner_unit_id),
   KEY idx_reserve_accounts_balance (current_balance, minimum_balance),
   CONSTRAINT fk_reserve_accounts_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
-  CONSTRAINT chk_reserve_accounts_balance CHECK (minimum_balance >= 0 AND current_balance >= 0)
+  CONSTRAINT chk_reserve_accounts_balance CHECK (minimum_balance >= 0)
 ) ENGINE=InnoDB;
 
 ALTER TABLE cashflow_entries
@@ -770,7 +826,25 @@ CREATE TABLE reserve_transactions (
   CONSTRAINT fk_reserve_transactions_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
   CONSTRAINT fk_reserve_transactions_work_order FOREIGN KEY (maintenance_work_order_id) REFERENCES maintenance_work_orders (id),
   CONSTRAINT fk_reserve_transactions_creator FOREIGN KEY (created_by) REFERENCES users (id),
-  CONSTRAINT chk_reserve_transactions_amount CHECK (amount > 0 AND balance_after >= 0)
+  CONSTRAINT chk_reserve_transactions_amount CHECK (amount > 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE reserve_reconciliations (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  reconciliation_month DATE NOT NULL COMMENT '统一存该月份第一天',
+  system_balance DECIMAL(18,2) NOT NULL,
+  finance_balance DECIMAL(18,2) NOT NULL,
+  difference_amount DECIMAL(18,2) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  note VARCHAR(500) NULL,
+  confirmed_by BIGINT UNSIGNED NULL,
+  confirmed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_reserve_reconciliation_month (reconciliation_month),
+  CONSTRAINT fk_reserve_reconciliation_user FOREIGN KEY (confirmed_by) REFERENCES users (id),
+  CONSTRAINT chk_reserve_reconciliation_status CHECK (status IN ('pending','confirmed'))
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -827,8 +901,12 @@ CREATE TABLE document_links (
 CREATE TABLE electronic_signature_requests (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   source_document_id BIGINT UNSIGNED NOT NULL,
+  root_document_id BIGINT UNSIGNED NULL,
   entity_type VARCHAR(40) NOT NULL,
   entity_id BIGINT UNSIGNED NOT NULL,
+  document_kind VARCHAR(64) NULL,
+  signer_role VARCHAR(32) NOT NULL DEFAULT 'signer',
+  signing_order INT NOT NULL DEFAULT 1,
   signer_name VARCHAR(190) NOT NULL,
   signer_email VARCHAR(190) NOT NULL,
   access_token_hash CHAR(64) NOT NULL,
@@ -848,8 +926,10 @@ CREATE TABLE electronic_signature_requests (
   PRIMARY KEY (id),
   UNIQUE KEY uk_e_signature_token (access_token_hash),
   KEY idx_e_signature_entity (entity_type, entity_id, status),
+  KEY idx_e_signature_package (root_document_id, signing_order, status),
   KEY idx_e_signature_expiry (status, expires_at),
   CONSTRAINT fk_e_signature_source_document FOREIGN KEY (source_document_id) REFERENCES documents (id),
+  CONSTRAINT fk_e_signature_root_document FOREIGN KEY (root_document_id) REFERENCES documents (id),
   CONSTRAINT fk_e_signature_signed_document FOREIGN KEY (signed_document_id) REFERENCES documents (id),
   CONSTRAINT fk_e_signature_requester FOREIGN KEY (requested_by) REFERENCES users (id)
 ) ENGINE=InnoDB;

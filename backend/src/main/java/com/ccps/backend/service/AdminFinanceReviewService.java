@@ -22,8 +22,10 @@ import com.ccps.backend.mapper.AdminFinanceReviewMapper;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceReviewRow;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceSummaryRow;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ProofFile;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReopenRecordContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReviewActionContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveRefundContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveRefundReopenContext;
 
 @Service
 public class AdminFinanceReviewService {
@@ -98,18 +100,23 @@ public class AdminFinanceReviewService {
 
     @Transactional
     public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, String note) {
+        confirmBatch(reviewerId, financeRecordIds, note, null);
+    }
+
+    @Transactional
+    public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, String note, String referenceNo) {
         List<Long> uniqueIds = new LinkedHashSet<>(financeRecordIds).stream().toList();
         if (uniqueIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one payment");
+        String reference = normalize(referenceNo);
         String reviewNote = normalize(note) == null ? "批量確認收款" : note.trim();
+        if (reference != null) reviewNote = "批量编号：" + reference + "；" + reviewNote;
         for (Long financeRecordId : uniqueIds) confirmOne(reviewerId, financeRecordId, reviewNote);
     }
 
     private void confirmOne(Long reviewerId, Long financeRecordId, String note) {
         if ("reserve_refund".equals(mapper.lockRecordType(financeRecordId))) {
             ReserveRefundContext refund = mapper.lockReserveRefund(financeRecordId);
-            if (refund == null || refund.getCurrentBalance().compareTo(refund.getAmount()) < 0) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve balance is insufficient for this refund");
-            }
+            if (refund == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund was not found");
             BigDecimal balanceAfter = refund.getCurrentBalance().subtract(refund.getAmount());
             if (mapper.confirmReserveRefund(financeRecordId, reviewerId) != 1
                     || mapper.debitReserveBalance(refund.getReserveAccountId(), refund.getAmount()) != 1
@@ -117,12 +124,17 @@ public class AdminFinanceReviewService {
                             refund.getAmount(), balanceAfter, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund could not be completed");
             }
+            mapper.postTenantDepositRefund(financeRecordId);
             mapper.insertNotification(refund.getUserId(), refund.getOwnerId(), financeRecordId,
                     "預備金已返還", "%s %s 預備金已返還 RM %s。".formatted(refund.getProjectName(), refund.getUnitNo(), refund.getAmount().setScale(2).toPlainString()), "normal");
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_reserve_refund", "confirmed", note);
             return;
         }
         if ("property_expense".equals(mapper.lockRecordType(financeRecordId))) {
+            if (mapper.countDirectPaymentBlockedByTerminatedMandate(financeRecordId) > 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "业主已解约，该代付款已撤出，不能确认出款");
+            }
             if (mapper.confirmExpense(financeRecordId, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense has already been reviewed");
             }
@@ -134,7 +146,16 @@ public class AdminFinanceReviewService {
                     || mapper.confirmSecurityDepositEntry(financeRecordId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit has already been reviewed");
             }
+            mapper.insertConfirmedSecurityDepositLedger(financeRecordId, reviewerId);
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_security_deposit", "confirmed", note);
+            return;
+        }
+        if ("security_deposit_forfeiture".equals(mapper.lockRecordType(financeRecordId))) {
+            if (mapper.confirmSecurityDepositForfeiture(financeRecordId, reviewerId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit forfeiture has already been reviewed");
+            }
+            mapper.updateSecurityDepositForfeitureLedger(financeRecordId, "pending", "posted");
+            mapper.insertAudit(reviewerId, financeRecordId, "confirm_security_deposit_forfeiture", "confirmed", note);
             return;
         }
         ReviewActionContext context = requirePendingReview(financeRecordId);
@@ -170,6 +191,7 @@ public class AdminFinanceReviewService {
             if (mapper.rejectReserveRefund(financeRecordId, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund has already been reviewed");
             }
+            mapper.cancelTenantDepositRefund(financeRecordId);
             mapper.insertAudit(reviewerId, financeRecordId, "reject_reserve_refund", "rejected", reviewNote);
             return;
         }
@@ -188,6 +210,14 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "reject_security_deposit", "rejected", reviewNote);
             return;
         }
+        if ("security_deposit_forfeiture".equals(mapper.lockRecordType(financeRecordId))) {
+            if (mapper.rejectSecurityDepositForfeiture(financeRecordId, reviewerId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit forfeiture has already been reviewed");
+            }
+            mapper.updateSecurityDepositForfeitureLedger(financeRecordId, "pending", "cancelled");
+            mapper.insertAudit(reviewerId, financeRecordId, "reject_security_deposit_forfeiture", "rejected", reviewNote);
+            return;
+        }
         ReviewActionContext context = requirePendingReview(financeRecordId);
         if (mapper.rejectFinanceRecord(financeRecordId, reviewerId) != 1
                 || mapper.updateReceiptReview(context.getReceiptId(), reviewNote) != 1) {
@@ -202,6 +232,71 @@ public class AdminFinanceReviewService {
         mapper.insertNotification(context.getUserId(), context.getOwnerId(), financeRecordId,
                 "付款憑證退回補件", body, "high");
         mapper.insertAudit(reviewerId, financeRecordId, "reject_property_payment", "rejected", reviewNote);
+    }
+
+    @Transactional
+    public void reopen(Long reviewerId, Long financeRecordId, String note) {
+        String reopenNote = requiredNote(note);
+        ReopenRecordContext record = mapper.lockReopenRecord(financeRecordId);
+        if (record == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Finance record not found");
+        if (!"confirmed".equals(record.getConfirmationStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only confirmed records can be returned to pending");
+        }
+        if ("synced".equals(record.getSyncStatus()) || record.getSyncBatchId() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This record has entered an export or sync batch and cannot be reopened");
+        }
+
+        switch (record.getRecordType()) {
+            case "property_payment" -> reopenPropertyPayment(financeRecordId, reopenNote);
+            case "security_deposit" -> {
+                if (mapper.reopenSecurityDepositEntry(financeRecordId) != 1) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit entry could not be reopened");
+                }
+                mapper.reopenSecurityDepositLedger(financeRecordId);
+            }
+            case "security_deposit_forfeiture" -> mapper.updateSecurityDepositForfeitureLedger(financeRecordId, "posted", "pending");
+            case "reserve_refund" -> reopenReserveRefund(reviewerId, financeRecordId, reopenNote);
+            case "property_expense" -> { /* No balance is posted until payment, so only the review state is reset. */ }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "This finance record type does not support reopening");
+        }
+
+        if (mapper.reopenFinanceRecord(financeRecordId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Finance record could not be returned to pending");
+        }
+        mapper.insertReopenAudit(reviewerId, financeRecordId, reopenNote);
+    }
+
+    private void reopenPropertyPayment(Long financeRecordId, String note) {
+        ReviewActionContext context = mapper.lockReview(financeRecordId);
+        if (context == null || context.getInstallmentId() == null || context.getReceiptId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment allocation could not be found");
+        }
+        BigDecimal allocated = zero(context.getAllocatedAmount());
+        if (allocated.signum() <= 0
+                || mapper.reverseConfirmedPayment(context.getInstallmentId(), allocated) != 1
+                || mapper.updateReceiptReview(context.getReceiptId(), "退回待确认：" + note) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Confirmed payment could not be reversed");
+        }
+        if (context.getProofDocumentId() != null
+                && mapper.reopenDocument(context.getProofDocumentId(), note) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment proof could not be reopened");
+        }
+    }
+
+    private void reopenReserveRefund(Long reviewerId, Long financeRecordId, String note) {
+        ReserveRefundReopenContext refund = mapper.lockReserveRefundReopen(financeRecordId);
+        if (refund == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Confirmed reserve refund transaction was not found");
+        }
+        BigDecimal balanceAfter = zero(refund.getCurrentBalance()).add(zero(refund.getAmount()));
+        if (mapper.restoreReserveBalance(refund.getReserveAccountId(), refund.getAmount()) != 1
+                || mapper.insertReserveRefundReversal(refund.getReserveAccountId(), financeRecordId,
+                        refund.getAmount(), balanceAfter, "撤销确认 · " + note, reviewerId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund balance could not be restored");
+        }
+        mapper.reopenTenantDepositRefund(financeRecordId);
     }
 
     @Transactional(readOnly = true)

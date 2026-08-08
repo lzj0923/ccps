@@ -8,10 +8,11 @@ const documentService = readFileSync(new URL('../../backend/src/main/java/com/cc
 const signatureService = readFileSync(new URL('../../backend/src/main/java/com/ccps/backend/service/ElectronicSignatureService.java', import.meta.url), 'utf8');
 const signatureMapper = readFileSync(new URL('../../backend/src/main/java/com/ccps/backend/mapper/ElectronicSignatureMapper.java', import.meta.url), 'utf8');
 
-test('authorization review opens a guided generation and online-signing workspace', () => {
+test('authorization signing stays independent from mandate activation', () => {
   assert.match(workspace, /signedAuthorizationUploadHint/);
   assert.match(i18n, /signedAuthorizationUploadHint: \['[^']+', '[^']+', '[^']+'\]/);
   assert.match(i18n, /authorizationUploaded: \['[^']+', '[^']+', '[^']+'\]/);
+  assert.match(i18n, /authorizationStepComplete: \['[^']+', '[^']+', '[^']+'\]/);
   assert.doesNotMatch(workspace, /openAuthorizationGenerator\(item\)/);
   assert.match(workspace, /generateAdminContractTemplate\('authorization'/);
   assert.match(workspace, /uploadAdminRentalMandateDocument\(this\.selected\.id, 'authorization_draft'/);
@@ -19,32 +20,26 @@ test('authorization review opens a guided generation and online-signing workspac
   assert.match(workspace, /startOnlineSigning/);
   assert.match(workspace, /doc\.relationType !== 'signed_contract'/);
   assert.match(workspace, /if \(doc\?\.relationType === 'signed_contract'/);
-  assert.match(workspace, /selected\.status !== 'active'/);
+  assert.doesNotMatch(workspace, /selected\.status !== 'active'/);
+  assert.doesNotMatch(workspace, /this\.selected\?\.status === 'active'/);
+  assert.doesNotMatch(workspace, /submitAdminRentalMandate/);
+  assert.doesNotMatch(workspace, /reviewAdminRentalMandate/);
+  assert.doesNotMatch(workspace, /openReview/);
+  assert.doesNotMatch(workspace, /reviewing/);
+  assert.doesNotMatch(workspace, /authorizationRequiredBeforeApproval/);
+  assert.doesNotMatch(workspace, /authorizationStepReview/);
   assert.doesNotMatch(workspace, /manageMandate/);
   assert.doesNotMatch(workspace, /class="workflow-card"/);
-  assert.match(workspace, /reviewing/);
-  assert.match(workspace, /actions button:nth-child\(2\)\.secondary-btn/);
   assert.match(workspace, /&& !hasAuthorization/);
   assert.match(workspace, /:has\(\.modal-backdrop\) \.detail-panel/);
-  assert.match(workspace, /this\.selected = null; this\.documents = \[\]; try \{ this\.documents/);
-  assert.doesNotMatch(workspace, /tr:has\(\.status\.pending_review\) \.actions button:last-child/);
   assert.match(workspace, /workflowPending/);
-  assert.match(workspace, /fetchAdminRentalMandateDocuments\(item\.id\)/);
   assert.match(workspace, /startDocumentRefresh\(\)/);
   assert.match(workspace, /setInterval\(\(\) => this\.refreshSelectedDocuments\(\), 4000\)/);
-  assert.match(workspace, /this\.selected\?\.ownerEmail\?\.trim\(\) \|\| window\.prompt/);
   assert.match(workspace, /documentsLoading/);
   assert.match(workspace, /Promise\.all\(\[fetchAdminRentalMandateHistory/);
   assert.match(i18n, /loadingDocuments: \['[^']+', '[^']+', '[^']+'\]/);
   assert.match(workspace, /beforeUnmount\(\)/);
-  assert.match(workspace, /if \(!this\.hasAuthorization\) \{ this\.openAuthorizationWorkspace\(item\); return; \}/);
   assert.match(documentService, /authorization_draft/);
   assert.match(signatureMapper, /insertSignedMandateAuthorizationLink/);
   assert.match(signatureService, /insertSignedMandateAuthorizationLink\(signed\.getId\(\), row\.getEntityId\(\)\)/);
-  assert.match(workspace, /authorizationRequiredBeforeApproval/);
-  assert.match(workspace, /authorizationStatusMissing/);
-  assert.match(workspace, /authorizationStatusUploaded/);
-  assert.match(workspace, /:disabled="!hasAuthorization" @click="review\(true\)"/);
-  assert.match(workspace, /async openReview\(item\) \{ this\.workflowPending = true; this\.selected = null; this\.documents = \[\]; try \{ this\.documents/);
-  assert.match(workspace, /if \(!this\.hasAuthorization\) \{ this\.openAuthorizationWorkspace\(item\); return; \}/);
 });

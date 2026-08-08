@@ -6,6 +6,7 @@
       <PaymentProofUpload v-if="paymentSubview === 'upload'" :context="paymentUploadContext" @back="closePaymentUpload" />
       <PaymentProgressDetails v-else :initial-property-key="lastPaymentPropertyKey" @upload="openPaymentUpload" />
     </template>
+    <OwnerFinanceDashboard v-else-if="currentId === 'ownerFinance'" />
     <RentIncomeDashboard v-else-if="currentId === 'rentIncome'" />
     <ExpenseMaintenanceDashboard v-else-if="currentId === 'ownerExpenses'" />
     <ReserveDashboard v-else-if="currentId === 'ownerReserve'" />
@@ -30,6 +31,7 @@ import DataWorkspace from '../components/DataWorkspace.vue';
 import MyPropertiesDashboard from '../components/MyPropertiesDashboard.vue';
 import PaymentProgressDetails from '../components/PaymentProgressDetails.vue';
 import PaymentProofUpload from '../components/PaymentProofUpload.vue';
+import OwnerFinanceDashboard from '../components/OwnerFinanceDashboard.vue';
 import RentIncomeDashboard from '../components/RentIncomeDashboard.vue';
 import ExpenseMaintenanceDashboard from '../components/ExpenseMaintenanceDashboard.vue';
 import ReserveDashboard from '../components/ReserveDashboard.vue';
@@ -38,7 +40,7 @@ import DocumentCenterDashboard from '../components/DocumentCenterDashboard.vue';
 
 export default {
   mixins: [pageBridge],
-  components: { PageHeader, MetricsGrid, ModuleToolbar, ModuleCards, DataWorkspace, MyPropertiesDashboard, PaymentProgressDetails, PaymentProofUpload, RentIncomeDashboard, ExpenseMaintenanceDashboard, ReserveDashboard, NotificationCenterDashboard, DocumentCenterDashboard },
+  components: { PageHeader, MetricsGrid, ModuleToolbar, ModuleCards, DataWorkspace, MyPropertiesDashboard, PaymentProgressDetails, PaymentProofUpload, OwnerFinanceDashboard, RentIncomeDashboard, ExpenseMaintenanceDashboard, ReserveDashboard, NotificationCenterDashboard, DocumentCenterDashboard },
   data() {
     return { paymentSubview: 'details', paymentUploadContext: null, lastPaymentPropertyKey: '' };
   },

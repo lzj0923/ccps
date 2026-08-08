@@ -24,6 +24,7 @@ import com.ccps.backend.dto.MaintenanceDetailResponse.Attachment;
 import com.ccps.backend.dto.MaintenanceDetailResponse.StatusEvent;
 import com.ccps.backend.dto.OwnerExpenseMaintenanceResponse;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper;
+import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.CashflowTotals;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.ExpenseTotals;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.MaintenanceHeader;
 import com.ccps.backend.mapper.OwnerExpenseMaintenanceMapper.ReserveTotals;
@@ -47,6 +48,7 @@ class OwnerExpenseMaintenanceServiceTest {
                 .thenReturn(totals("2546.40", "830.00"));
         when(mapper.findTotals(42L, 7L, LocalDate.parse("2026-06-01"), LocalDate.parse("2026-07-01")))
                 .thenReturn(totals("2000.00", "400.00"));
+        when(mapper.findCashflowTotals(42L, 7L)).thenReturn(cashflow("1000.00", "18640.00"));
         when(mapper.findReserveTotals(42L, 7L, LocalDate.parse("2026-07-01"), LocalDate.parse("2026-08-01")))
                 .thenReturn(reserve("480.00", 1));
         when(mapper.countPendingMaintenance(42L, 7L)).thenReturn(2);
@@ -61,6 +63,8 @@ class OwnerExpenseMaintenanceServiceTest {
                 LocalDate.parse("2026-07-05"), LocalDate.parse("2026-07-15"));
 
         assertThat(result.summary().monthlyExpense()).isEqualByComparingTo("2546.40");
+        assertThat(result.summary().totalIncome()).isEqualByComparingTo("1000.00");
+        assertThat(result.summary().totalExpense()).isEqualByComparingTo("18640.00");
         assertThat(result.summary().expenseChangePercent()).isEqualByComparingTo("27.32");
         assertThat(result.summary().maintenanceChangePercent()).isEqualByComparingTo("107.50");
         assertThat(result.summary().reserveDeductedAmount()).isEqualByComparingTo("480.00");
@@ -113,6 +117,13 @@ class OwnerExpenseMaintenanceServiceTest {
         ExpenseTotals value = new ExpenseTotals();
         value.setExpenseAmount(new BigDecimal(expense));
         value.setMaintenanceAmount(new BigDecimal(maintenance));
+        return value;
+    }
+
+    private CashflowTotals cashflow(String income, String expense) {
+        CashflowTotals value = new CashflowTotals();
+        value.setIncomeAmount(new BigDecimal(income));
+        value.setExpenseAmount(new BigDecimal(expense));
         return value;
     }
 

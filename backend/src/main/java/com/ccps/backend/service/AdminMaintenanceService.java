@@ -23,6 +23,7 @@ import com.ccps.backend.dto.AdminPropertyMaintenanceUpdateRequest;
 import com.ccps.backend.dto.MaintenanceDetailResponse;
 import com.ccps.backend.mapper.AdminMaintenanceMapper;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.CompletionContext;
+import com.ccps.backend.mapper.AdminMaintenanceMapper.ExpenseContext;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.NewCashflow;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.NewFinance;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.NewExpenseCashflow;
@@ -122,16 +123,12 @@ public class AdminMaintenanceService {
 
     @Transactional
     public AdminRecordCreateResponse createExpense(Long actorId, AdminExpenseCreateRequest request) {
-        if (!Set.of("reserve", "direct_payment", "unpaid").contains(request.settlementMethod())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid settlement method");
-        }
+        validateExpenseSettlement(request.settlementMethod());
         UnitContext unit = unitContext(request.unitId());
         boolean reserve = "reserve".equals(request.settlementMethod());
+        requireDirectPaymentAllowed(request.settlementMethod(), unit.isDirectPaymentAllowed());
         if (reserve && unit.getReserveAccountId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "No reserve account is linked to this unit");
-        }
-        if (reserve && zero(unit.getReserveBalance()).compareTo(request.amount()) < 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient reserve balance");
         }
 
         String reference = reference("EXP");
@@ -139,9 +136,8 @@ public class AdminMaintenanceService {
         finance.setTransactionNo(reference); finance.setUnitId(unit.getUnitId()); finance.setOwnerId(unit.getOwnerId());
         finance.setAmount(request.amount()); finance.setOccurredOn(request.occurredOn()); finance.setActorId(actorId);
         finance.setPaymentMethod(reserve ? "reserve_account" : "direct_payment".equals(request.settlementMethod()) ? "direct_payment" : null);
-        finance.setPaymentStatus("unpaid".equals(request.settlementMethod()) ? "unpaid" : "paid");
-        finance.setConfirmationStatus(reserve ? "confirmed"
-                : "unpaid".equals(request.settlementMethod()) ? "pending" : "not_required");
+        finance.setPaymentStatus(reserve ? "paid" : "unpaid");
+        finance.setConfirmationStatus(reserve ? "confirmed" : "pending");
         mapper.insertExpenseFinance(finance);
 
         NewExpenseCashflow cashflow = new NewExpenseCashflow();
@@ -150,12 +146,57 @@ public class AdminMaintenanceService {
         cashflow.setOccurredOn(request.occurredOn()); cashflow.setReserveAccountId(reserve ? unit.getReserveAccountId() : null);
         mapper.insertExpenseCashflow(cashflow);
 
-        // Reserve expenses are deducted atomically by the database reserve-policy trigger
-        // when the cashflow row is inserted. Direct payments use not_required so the
-        // trigger cannot silently convert the administrator's choice into a reserve debit.
+        // Reserve expenses are deducted atomically by the database reserve-policy trigger.
+        // Direct payments and unpaid expenses remain pending for finance review.
         mapper.insertCreateAudit(actorId, "create_expense", "cashflow_entry", cashflow.getId(),
                 "{\"transactionNo\":\"" + reference + "\"}");
         return new AdminRecordCreateResponse(cashflow.getId(), reference);
+    }
+
+    @Transactional
+    public AdminRecordCreateResponse updateExpense(Long actorId, Long cashflowId, AdminExpenseCreateRequest request) {
+        validateExpenseSettlement(request.settlementMethod());
+        ExpenseContext current = expenseContext(cashflowId);
+        requireExpenseEditable(current);
+        if (!current.getUnitId().equals(request.unitId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "The unit cannot be changed while editing an expense; delete it and create a new record");
+        }
+        UnitContext unit = unitContext(request.unitId());
+        boolean reserve = "reserve".equals(request.settlementMethod());
+        requireDirectPaymentAllowed(request.settlementMethod(), unit.isDirectPaymentAllowed());
+        if (reserve && unit.getReserveAccountId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No reserve account is linked to this unit");
+        }
+
+        reverseExpenseReserve(actorId, current, "支出修改，回冲原预备金扣款");
+        String paymentMethod = reserve ? "reserve_account"
+                : "direct_payment".equals(request.settlementMethod()) ? "direct_payment" : null;
+        String paymentStatus = reserve ? "paid" : "unpaid";
+        String confirmationStatus = reserve ? "confirmed" : "pending";
+        if (mapper.updateExpenseFinance(current.getFinanceRecordId(), request.amount(), request.occurredOn(),
+                paymentMethod, paymentStatus, confirmationStatus, actorId) != 1
+                || mapper.updateExpenseCashflow(cashflowId, request.category(), request.description(),
+                        request.occurredOn(), reserve ? unit.getReserveAccountId() : null) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense record changed; please reload");
+        }
+        if (reserve) debitExpenseReserve(actorId, current.getFinanceRecordId(), unit.getReserveAccountId(), request.amount());
+        mapper.insertCreateAudit(actorId, "update_expense", "cashflow_entry", cashflowId,
+                "{\"settlementMethod\":\"" + request.settlementMethod() + "\"}");
+        return new AdminRecordCreateResponse(cashflowId, current.getTransactionNo());
+    }
+
+    @Transactional
+    public void deleteExpense(Long actorId, Long cashflowId) {
+        ExpenseContext current = expenseContext(cashflowId);
+        requireExpenseEditable(current);
+        reverseExpenseReserve(actorId, current, "支出作废，回冲预备金扣款");
+        mapper.clearExpenseReserve(cashflowId);
+        if (mapper.voidExpenseFinance(current.getFinanceRecordId()) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense record changed; please reload");
+        }
+        mapper.insertCreateAudit(actorId, "delete_expense", "cashflow_entry", cashflowId,
+                "{\"status\":\"voided\"}");
     }
 
     @Transactional
@@ -175,11 +216,30 @@ public class AdminMaintenanceService {
     }
 
     @Transactional
+    public AdminPropertyMaintenanceResponse updateMaintenance(Long actorId, Long workOrderId,
+            AdminPropertyMaintenanceUpdateRequest request) {
+        CompletionContext current = context(workOrderId);
+        if (current.getOwnerId() == null || current.getOwnerUnitId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The maintenance record is not linked to an owner unit");
+        }
+        return updateForProperty(actorId, current.getOwnerId(), current.getOwnerUnitId(), workOrderId, request);
+    }
+
+    @Transactional
+    public void deleteMaintenance(Long actorId, Long workOrderId) {
+        CompletionContext current = context(workOrderId);
+        if (current.getOwnerId() == null || current.getOwnerUnitId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The maintenance record is not linked to an owner unit");
+        }
+        cancelForProperty(actorId, current.getOwnerId(), current.getOwnerUnitId(), workOrderId);
+    }
+
+    @Transactional
     public AdminMaintenanceHandlingResponse handling(Long workOrderId) {
         CompletionContext context = context(workOrderId);
         return new AdminMaintenanceHandlingResponse(context.getId(), context.getStatus(),
                 zero(context.getReserveBalance()), zero(context.getReserveDeductedAmount()),
-                context.getReserveAccountId() != null,
+                context.getReserveAccountId() != null, context.isDirectPaymentAllowed(),
                 mapper.countPhotos(workOrderId, "before_photo"), mapper.countPhotos(workOrderId, "after_photo"));
     }
 
@@ -195,6 +255,7 @@ public class AdminMaintenanceService {
         if (!SETTLEMENT_METHODS.contains(request.settlementMethod())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid settlement method");
         }
+        requireDirectPaymentAllowed(request.settlementMethod(), context.isDirectPaymentAllowed());
         if (context.getOwnerId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The work order is not linked to an owner");
         }
@@ -209,14 +270,9 @@ public class AdminMaintenanceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This work order already has a reserve deduction and must use reserve settlement");
         }
-        BigDecimal remainingDebit = amount.subtract(alreadyDeducted).max(BigDecimal.ZERO);
         if ("reserve".equals(request.settlementMethod())) {
             if (context.getReserveAccountId() == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "No reserve account is linked to this unit");
-            }
-            if (zero(context.getReserveBalance()).compareTo(remainingDebit) < 0) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Insufficient reserve balance; choose direct payment instead");
             }
         }
 
@@ -287,8 +343,69 @@ public class AdminMaintenanceService {
                 + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
     }
 
+    private void validateExpenseSettlement(String settlementMethod) {
+        if (!Set.of("reserve", "direct_payment", "unpaid").contains(settlementMethod)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid settlement method");
+        }
+    }
+
+    private void requireDirectPaymentAllowed(String settlementMethod, boolean allowed) {
+        if ("direct_payment".equals(settlementMethod) && !allowed) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "业主已解约，代付款已停用，不能再提交或确认出款");
+        }
+    }
+
+    private ExpenseContext expenseContext(Long cashflowId) {
+        if (cashflowId == null || cashflowId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid expense record");
+        }
+        ExpenseContext context = mapper.lockExpense(cashflowId);
+        if (context == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Expense record not found");
+        return context;
+    }
+
+    private void requireExpenseEditable(ExpenseContext context) {
+        if (context.getWorkOrderId() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Maintenance expenses must be changed from the maintenance work order");
+        }
+        if ("voided".equals(context.getPaymentStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The expense record has already been deleted");
+        }
+        if ("exported".equals(context.getSyncStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Exported expense records cannot be modified; reopen them in finance first");
+        }
+    }
+
+    private void reverseExpenseReserve(Long actorId, ExpenseContext context, String note) {
+        BigDecimal amount = zero(context.getReserveDebitAmount());
+        if (context.getReserveAccountId() == null || amount.signum() <= 0) return;
+        if (mapper.restoreExpenseReserve(context.getReserveAccountId(), amount) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to restore reserve balance");
+        }
+        BigDecimal balanceAfter = zero(mapper.findExpenseReserveBalance(context.getReserveAccountId()));
+        if (mapper.reverseExpenseReserveDebits(context.getFinanceRecordId()) < 1
+                || mapper.insertExpenseReserveTransaction(context.getReserveAccountId(), context.getFinanceRecordId(),
+                        "adjustment", amount, balanceAfter, note, actorId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to record reserve reversal");
+        }
+    }
+
+    private void debitExpenseReserve(Long actorId, Long financeRecordId, Long reserveAccountId, BigDecimal amount) {
+        if (mapper.debitExpenseReserve(reserveAccountId, amount) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to debit reserve balance");
+        }
+        BigDecimal balanceAfter = zero(mapper.findExpenseReserveBalance(reserveAccountId));
+        if (mapper.insertExpenseReserveTransaction(reserveAccountId, financeRecordId, "debit", amount,
+                balanceAfter, "支出由预备金扣除", actorId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to record reserve debit");
+        }
+    }
+
     private Long ensureFinance(CompletionContext context, Long actorId, BigDecimal amount, String method) {
-        String confirmationStatus = "reserve_account".equals(method) ? "confirmed" : "not_required";
+        String confirmationStatus = "reserve_account".equals(method) ? "confirmed" : "pending";
         if (context.getFinanceRecordId() != null) {
             mapper.updateFinance(context.getFinanceRecordId(), amount, method, confirmationStatus, actorId);
             return context.getFinanceRecordId();

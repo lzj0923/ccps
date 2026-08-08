@@ -256,11 +256,21 @@ public class TenancyAgreementPdfService {
     }
 
     public String fileName(Map<String, String> fields) {
-        String unit = value(fields, "unitNo");
-        String caseNo = value(fields, "caseNo");
-        String suffix = unit.isBlank() ? caseNo : unit;
-        suffix = suffix.isBlank() ? "draft" : suffix.replaceAll("[^A-Za-z0-9._-]+", "-");
-        return "Tenancy-Agreement-" + suffix + ".pdf";
+        String base = java.util.stream.Stream.of(firstNotBlank(value(fields, "tenantName"), value(fields, "landlordName")), value(fields, "projectName"),
+                        value(fields, "unitNo"), "租赁合同", value(fields, "caseNo"))
+                .map(this::safeFilePart).filter(part -> !part.isBlank())
+                .reduce((left, right) -> left + "-" + right).orElse("租赁合同");
+        return base + ".pdf";
+    }
+
+    private String firstNotBlank(String preferred, String fallback) {
+        return preferred == null || preferred.isBlank() ? fallback : preferred;
+    }
+
+    private String safeFilePart(String value) {
+        if (value == null) return "";
+        String safe = value.trim().replaceAll("[\\\\/:*?\"<>|\\r\\n]+", "-").replaceAll("\\s+", " ");
+        return safe.length() > 60 ? safe.substring(0, 60) : safe;
     }
 
     private void fillCover(PdfContentByte canvas, BaseFont latin, BaseFont cjk, Map<String, String> fields)

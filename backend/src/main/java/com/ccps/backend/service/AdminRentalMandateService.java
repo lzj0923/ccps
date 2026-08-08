@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,9 +34,17 @@ public class AdminRentalMandateService {
     private static final List<String> MANDATE_TYPES = List.of("management", "exclusive", "non_exclusive");
     private static final List<String> ACTIVE_STATUSES = List.of("active", "suspended");
     private final AdminRentalMandateMapper mapper;
+    private final PropertyExpensePostingService expensePostingService;
 
-    public AdminRentalMandateService(AdminRentalMandateMapper mapper) {
+    @Autowired
+    public AdminRentalMandateService(AdminRentalMandateMapper mapper,
+            PropertyExpensePostingService expensePostingService) {
         this.mapper = mapper;
+        this.expensePostingService = expensePostingService;
+    }
+
+    AdminRentalMandateService(AdminRentalMandateMapper mapper) {
+        this(mapper, null);
     }
 
     @Transactional
@@ -96,8 +105,17 @@ public class AdminRentalMandateService {
         if (mapper.insertMandate(mandate) != 1 || mandate.getId() == null) {
             throw conflict("Unable to create rental mandate");
         }
-        mapper.insertHistory(mandate.getId(), null, "draft", "建立租管委託", actorId);
-        audit(actorId, "create", mandate.getId(), null, "{\"status\":\"draft\"}");
+        mapper.insertHistory(mandate.getId(), null, "active", "建立并启用租管委托", actorId);
+        mapper.activateRentalService(mandate.getId());
+        audit(actorId, "create", mandate.getId(), null, "{\"status\":\"active\"}");
+        LocalDate today = LocalDate.now();
+        if (expensePostingService != null && request.managementFee() != null
+                && request.managementFee().signum() > 0
+                && !request.startDate().isAfter(today)
+                && (request.endDate() == null || !request.endDate().isBefore(today))) {
+            expensePostingService.syncMandateFee(request.ownerUnitId(), mandate.getId(),
+                    request.managementFee(), actorId, today);
+        }
         return item(mapper.findById(mandate.getId()));
     }
 
@@ -130,9 +148,6 @@ public class AdminRentalMandateService {
         if (!List.of("draft", "pending_review").contains(current)) {
             throw conflict("Only draft or pending mandates can be reviewed");
         }
-        if (Boolean.TRUE.equals(request.approved()) && mapper.countAuthorizationDocuments(mandateId) == 0) {
-            throw conflict("请先上传业主签署的授权委托书，再启用出租委托");
-        }
         String next = Boolean.TRUE.equals(request.approved()) ? "active" : "draft";
         transition(actorId, mandateId, current, next, request.note(), actorId,
                 request.note(), null);
@@ -163,6 +178,13 @@ public class AdminRentalMandateService {
         transition(actorId, mandateId, current, next, request.reason(), actorId, null,
                 "terminated".equals(next) ? request.reason() : null);
         mapper.updateRentalService(mandateId, next);
+        if ("terminated".equals(next)) {
+            int withdrawn = mapper.withdrawPendingDirectPayments(mandateId, actorId);
+            if (withdrawn > 0) {
+                audit(actorId, "withdraw_pending_direct_payments", mandateId, null,
+                        "{\"withdrawnCount\":" + withdrawn + "}");
+            }
+        }
         if ("active".equals(next)) mapper.activateRentalService(mandateId);
         return item(mapper.findById(mandateId));
     }

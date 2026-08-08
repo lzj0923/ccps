@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -17,15 +18,19 @@ import com.ccps.backend.dto.AdminReserveSettingsRequest;
 import com.ccps.backend.dto.AdminReserveDirectTopupRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.AdminReserveRefundRequest;
+import com.ccps.backend.dto.AdminReserveBatchRefundRequest;
+import com.ccps.backend.dto.AdminReserveReconciliationRequest;
+import com.ccps.backend.dto.AdminReserveReconciliationResponse;
 import com.ccps.backend.mapper.AdminReserveManagementMapper;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.SummaryRow;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.SettingsRow;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.DirectTopupContext;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.DirectTopupRecord;
+import com.ccps.backend.mapper.AdminReserveManagementMapper.ReconciliationRow;
 
 @Service
 public class AdminReserveManagementService {
-    private static final Set<String> PAYMENT_METHODS = Set.of("bank_transfer", "online_payment", "cash", "cheque");
+    private static final Set<String> PAYMENT_METHODS = Set.of("bank_transfer", "online_payment", "cash", "cheque", "other");
     private final AdminReserveManagementMapper mapper;
     public AdminReserveManagementService(AdminReserveManagementMapper mapper) { this.mapper = mapper; }
 
@@ -103,9 +108,6 @@ public class AdminReserveManagementService {
         }
         DirectTopupContext context = mapper.findDirectTopupContext(accountId);
         if (context == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserve account not found");
-        if (request.amount().compareTo(zero(context.getCurrentBalance())) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund amount cannot exceed the current reserve balance");
-        }
         String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         String transactionNo = "RRF-ADM-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + "-" + token;
         DirectTopupRecord refund = new DirectTopupRecord();
@@ -118,6 +120,38 @@ public class AdminReserveManagementService {
         }
         mapper.insertReserveRefundAudit(actorId, refund.getId(), accountId, request.amount(), note);
         return new AdminRecordCreateResponse(refund.getId(), transactionNo);
+    }
+
+    @Transactional
+    public List<AdminRecordCreateResponse> createRefunds(Long actorId, AdminReserveBatchRefundRequest request) {
+        return request.items().stream()
+                .map(item -> createRefund(actorId, item.accountId(),
+                        new AdminReserveRefundRequest(item.amount(), request.paymentMethod(), request.note())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminReserveReconciliationResponse> findReconciliations() {
+        return mapper.findReconciliations().stream().map(this::toReconciliation).toList();
+    }
+
+    @Transactional
+    public List<AdminReserveReconciliationResponse> saveReconciliation(Long actorId,
+            AdminReserveReconciliationRequest request) {
+        LocalDate month = request.reconciliationMonth().withDayOfMonth(1);
+        BigDecimal systemBalance = zero(mapper.findCurrentTotalBalance());
+        BigDecimal difference = request.financeBalance().subtract(systemBalance);
+        String status = request.confirmed() ? "confirmed" : "pending";
+        String note = blank(request.note()) ? null : request.note().trim();
+        mapper.saveReconciliation(month, systemBalance, request.financeBalance(), difference, status, note, actorId);
+        mapper.insertReconciliationAudit(actorId, month, systemBalance, request.financeBalance(), difference, status, note);
+        return findReconciliations();
+    }
+
+    private AdminReserveReconciliationResponse toReconciliation(ReconciliationRow row) {
+        return new AdminReserveReconciliationResponse(row.getId(), row.getReconciliationMonth(),
+                row.getSystemBalance(), row.getFinanceBalance(), row.getDifferenceAmount(), row.getStatus(),
+                row.getNote(), row.getConfirmedByName(), row.getConfirmedAt());
     }
 
     private BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }

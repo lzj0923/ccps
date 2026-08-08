@@ -15,6 +15,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.List;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -86,39 +87,49 @@ public class ElectronicSignatureService {
 
     @Transactional
     public ElectronicSignatureStartResponse startLease(Long actorId, Long leaseId, ElectronicSignatureStartRequest request) {
-        return start(actorId, "lease", leaseId, mapper.findLeaseDocument(leaseId), request);
+        DocumentRow document = mapper.findLeaseDocument(leaseId);
+        return start(actorId, "lease", leaseId, document, request,
+                new SigningPlan("lease_contract", "tenant", 1, 1));
     }
 
     @Transactional
     public ElectronicSignatureStartResponse startMandateDocument(Long actorId, Long mandateId, Long documentId,
             ElectronicSignatureStartRequest request) {
-        if ("active".equals(mapper.findMandateStatus(mandateId))) {
-            throw conflict("Enabled rental mandates cannot start a new signature");
-        }
-        return start(actorId, "rental_mandate", mandateId, mapper.findMandateDocument(mandateId, documentId), request);
+        DocumentRow document = mapper.findMandateDocument(mandateId, documentId);
+        if (document == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract document not found");
+        return start(actorId, "rental_mandate", mandateId, document, request,
+                mandateSigningPlan(document.getRelationType(), request.signerRole()));
     }
 
     private ElectronicSignatureStartResponse start(Long actorId, String entityType, Long entityId, DocumentRow document,
-            ElectronicSignatureStartRequest request) {
+            ElectronicSignatureStartRequest request, SigningPlan plan) {
         requireMail();
         if (document == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract document not found");
-        if (mapper.countSignedRequests(document.getId(), entityType, entityId) > 0) {
-            throw conflict("This contract version is already signed; upload a replacement version before signing again");
+        Long rootDocumentId = document.getId();
+        if (mapper.countSignedRole(rootDocumentId, plan.signerRole()) > 0) {
+            throw conflict("This signer role has already completed this document");
         }
-        if (mapper.countPendingRequests(entityType, entityId) > 0) {
+        if (mapper.countPendingRequestsForRoot(rootDocumentId) > 0) {
             throw conflict("A signing request is already in progress for this contract");
         }
-        if (!"application/pdf".equalsIgnoreCase(document.getMimeType())) throw bad("Only PDF contracts can be signed online");
-        Path source = resolveSource(entityType, document.getStorageKey());
+        DocumentRow sourceDocument = document;
+        if (plan.signingOrder() > 1) {
+            sourceDocument = mapper.findSignedStepDocument(rootDocumentId, plan.signingOrder() - 1);
+            if (sourceDocument == null) throw conflict("The previous signer must complete signing first");
+        }
+        if (!"application/pdf".equalsIgnoreCase(sourceDocument.getMimeType())) throw bad("Only PDF contracts can be signed online");
+        Path source = resolveSourceDocument(entityType, sourceDocument.getStorageKey(), plan.signingOrder() > 1);
         if (!Files.isRegularFile(source)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract file is unavailable");
         LocalDateTime now = LocalDateTime.now(clock);
         int expiryDays = request.expiresInDays() == null ? DEFAULT_EXPIRY_DAYS : request.expiresInDays();
         String token = randomToken(); String code = verificationCode();
-        NewRequest row = new NewRequest(); row.setSourceDocumentId(document.getId()); row.setEntityType(entityType); row.setEntityId(entityId);
+        NewRequest row = new NewRequest(); row.setSourceDocumentId(sourceDocument.getId()); row.setRootDocumentId(rootDocumentId);
+        row.setEntityType(entityType); row.setEntityId(entityId); row.setDocumentKind(plan.documentKind());
+        row.setSignerRole(plan.signerRole()); row.setSigningOrder(plan.signingOrder());
         row.setSignerName(trim(request.signerName(), "Signer name")); row.setSignerEmail(trim(request.signerEmail(), "Signer email").toLowerCase(Locale.ROOT));
         row.setAccessTokenHash(sha256(token)); row.setVerificationCodeHash(encoder.encode(code));
         row.setVerificationExpiresAt(now.plusMinutes(VERIFICATION_MINUTES)); row.setExpiresAt(now.plusDays(expiryDays));
-        row.setRequestedBy(actorId); row.setSourceChecksumSha256(document.getChecksumSha256());
+        row.setRequestedBy(actorId); row.setSourceChecksumSha256(sourceDocument.getChecksumSha256());
         if (mapper.insertRequest(row) != 1 || row.getId() == null) throw conflict("Unable to create signing request");
         String url = frontendBase + "/sign/" + token;
         sendCode(row.getSignerEmail(), row.getSignerName(), url, code, row.getExpiresAt());
@@ -152,24 +163,24 @@ public class ElectronicSignatureService {
         }
         if (!normalizeName(request.signerName()).equals(normalizeName(row.getSignerName()))) throw bad("Signer name does not match the request");
         byte[] signature = decodeSignature(request.signatureDataUrl());
-        Path source = resolveSource(row.getEntityType(), row.getStorageKey());
+        Path source = resolveSourceDocument(row.getEntityType(), row.getStorageKey(), row.getSigningOrder() != null && row.getSigningOrder() > 1);
         if (!Files.isRegularFile(source)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract file is unavailable");
         LocalDateTime signedAt = LocalDateTime.now(clock); Path generated = signatureTarget(row.getId());
         try {
             Files.createDirectories(generated.getParent());
-            stampSignedPdf(source, generated, signature, row.getSignerName(), signedAt, row.getOriginalName());
+            stampSignedPdf(source, generated, signature, row.getSignerName(), signedAt, row.getDocumentKind(), row.getSignerRole());
             NewDocument signed = new NewDocument(); signed.setDocumentNo("SIGNED-" + row.getId() + "-" + signedAt.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
             signed.setOriginalName(signedName(row.getOriginalName())); signed.setStorageKey(signatureRoot.relativize(generated).toString().replace('\\', '/'));
             signed.setFileSize(Files.size(generated)); signed.setChecksumSha256(sha256(generated)); signed.setUploadedBy(null);
             if (mapper.insertSignedDocument(signed) != 1 || signed.getId() == null)
                 throw conflict("Unable to save signed contract");
             int linkResult = "rental_mandate".equals(row.getEntityType())
-                    ? mapper.insertSignedMandateAuthorizationLink(signed.getId(), row.getEntityId())
+                    ? mapper.insertSignedMandateDocumentLink(signed.getId(), row.getEntityId(), signedRelation(row))
                     : mapper.insertSignedDocumentLink(signed.getId(), row.getEntityType(), row.getEntityId());
             if (linkResult != 1
                     || mapper.completeRequest(row.getId(), signedAt, signed.getId(), sha256(signature), shorten(remoteIp, 64), shorten(userAgent, 500)) != 1) throw conflict("Unable to save signed contract");
             // A re-sign replaces the previous signed file only after the new file is safely saved.
-            mapper.supersedePreviousSignedDocuments(row.getEntityType(), row.getEntityId(), signed.getId());
+            mapper.supersedePreviousSignedDocuments(rootDocumentId(row), signed.getId());
             mapper.insertEvent(row.getId(), "signed", "Contract signed", remoteIp, userAgent);
             mapper.insertAudit(null, "complete_electronic_signature", row.getEntityType(), row.getEntityId(), row.getId(), row.getSignerName());
             return response(requireRequest(token));
@@ -180,7 +191,8 @@ public class ElectronicSignatureService {
 
     @Transactional(readOnly = true)
     public Download downloadOriginal(String token) {
-        RequestRow row = requireRequest(token); Path path = resolveSource(row.getEntityType(), row.getStorageKey());
+        RequestRow row = requireRequest(token); Path path = resolveSourceDocument(row.getEntityType(), row.getStorageKey(),
+                row.getSigningOrder() != null && row.getSigningOrder() > 1);
         if (!Files.isRegularFile(path)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract file is unavailable");
         return new Download(path, safeName(row.getOriginalName()));
     }
@@ -221,23 +233,28 @@ public class ElectronicSignatureService {
         mailSender.send(message);
     }
     private void requireMail() { if (mailSender == null || mailHost == null || mailHost.isBlank() || fromAddress == null || fromAddress.isBlank()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email service is not configured"); }
-    private Path resolveSource(String entityType, String storageKey) { Path root = "lease".equals(entityType) ? leaseRoot : "rental_mandate".equals(entityType) ? mandateRoot : null; if (root == null) throw bad("Unsupported contract type"); Path path = root.resolve(storageKey).normalize(); if (!path.startsWith(root)) throw bad("Invalid contract path"); return path; }
+    private Path resolveSource(String entityType, String storageKey) { return resolveSourceDocument(entityType, storageKey, false); }
+    private Path resolveSourceDocument(String entityType, String storageKey, boolean signedStep) { Path root = signedStep ? signatureRoot : "lease".equals(entityType) ? leaseRoot : "rental_mandate".equals(entityType) ? mandateRoot : null; if (root == null) throw bad("Unsupported contract type"); Path path = root.resolve(storageKey).normalize(); if (!path.startsWith(root)) throw bad("Invalid contract path"); return path; }
     private Path signatureTarget(Long requestId) { return signatureRoot.resolve(String.valueOf(requestId)).resolve("signed-contract.pdf").normalize(); }
     private void stampSignedPdf(Path source, Path target, byte[] signature, String signerName, LocalDateTime signedAt,
-            String originalName) throws IOException {
+            String documentKind, String signerRole) throws IOException {
         try (PdfReader reader = new PdfReader(Files.readAllBytes(source)); var output = Files.newOutputStream(target)) {
-            PdfStamper stamper = new PdfStamper(reader, output); int page = reader.getNumberOfPages(); PdfContentByte canvas = stamper.getOverContent(page);
-            com.lowagie.text.Rectangle pageSize = reader.getPageSize(page);
-            SignaturePlacement placement = signaturePlacement(originalName, pageSize.getWidth(), pageSize.getHeight());
-            Image image = Image.getInstance(signature); image.scaleToFit(placement.signatureWidth(), placement.signatureHeight()); image.setAbsolutePosition(placement.signatureX(), placement.signatureY()); canvas.addImage(image);
-            BaseFont font = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED); canvas.beginText(); canvas.setFontAndSize(font, placement.dateOnly() ? 9 : 8);
-            if (placement.dateOnly()) {
-                canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-            } else {
-                canvas.setTextMatrix(placement.signatureX(), placement.signatureY() - 12); canvas.showText("電子簽署：" + signerName);
-                canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText("時間：" + signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            PdfStamper stamper = new PdfStamper(reader, output);
+            for (SignaturePlacement placement : signaturePlacements(documentKind, signerRole, reader)) {
+                PdfContentByte canvas = stamper.getOverContent(placement.page());
+                Image image = Image.getInstance(signature); image.scaleToFit(placement.signatureWidth(), placement.signatureHeight());
+                image.setAbsolutePosition(placement.signatureX(), placement.signatureY()); canvas.addImage(image);
+                BaseFont font = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+                canvas.beginText(); canvas.setFontAndSize(font, placement.dateOnly() ? 9 : 7.5f);
+                if (placement.dateOnly()) {
+                    canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+                } else {
+                    canvas.setTextMatrix(placement.signatureX(), placement.signatureY() - 10); canvas.showText("電子簽署：" + signerName);
+                    canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                }
+                canvas.endText();
             }
-            canvas.endText(); stamper.close();
+            stamper.close();
         } catch (Exception exception) { if (exception instanceof IOException io) throw io; throw new IOException("Unable to stamp PDF", exception); }
     }
     private byte[] decodeSignature(String dataUrl) { if (dataUrl == null || !dataUrl.startsWith("data:image/png;base64,")) throw bad("Invalid handwritten signature"); try { byte[] data = Base64.getDecoder().decode(dataUrl.substring("data:image/png;base64,".length())); if (data.length == 0 || data.length > MAX_SIGNATURE_BYTES) throw bad("Handwritten signature is invalid"); return data; } catch (IllegalArgumentException exception) { throw bad("Handwritten signature is invalid"); } }
@@ -248,13 +265,65 @@ public class ElectronicSignatureService {
         float signatureWidth = Math.min(150f, pageWidth * 0.24f);
         float signatureHeight = Math.min(52f, pageHeight * 0.07f);
         float dateX = Math.min(pageWidth - 150f, pageWidth * 0.50f);
-        return new SignaturePlacement(signatureX, signatureY, signatureWidth, signatureHeight, dateX, signatureY - 22f, false);
+        return new SignaturePlacement(1, signatureX, signatureY, signatureWidth, signatureHeight, dateX, signatureY - 22f, false);
+    }
+
+    private List<SignaturePlacement> signaturePlacements(String documentKind, String signerRole, PdfReader reader) {
+        String kind = Objects.toString(documentKind, "").toLowerCase(Locale.ROOT);
+        String role = Objects.toString(signerRole, "signer").toLowerCase(Locale.ROOT);
+        if ("property_management_agreement_draft".equals(kind)) {
+            if ("owner".equals(role)) return List.of(new SignaturePlacement(7, 232, 566, 150, 48, 390, 558, false));
+            if ("company".equals(role)) return List.of(new SignaturePlacement(7, 232, 243, 150, 48, 390, 235, false));
+            if ("customer_service".equals(role)) return List.of(
+                    new SignaturePlacement(7, 20, 458, 145, 43, 166, 450, false),
+                    new SignaturePlacement(7, 20, 135, 145, 43, 166, 127, false));
+        }
+        if ("management_authorization_draft".equals(kind) || "authorization_draft".equals(kind)
+                || "authorization".equals(kind)) {
+            return List.of(new SignaturePlacement(3, 72, 370, 155, 48, 235, 365, true));
+        }
+        int page = reader.getNumberOfPages();
+        com.lowagie.text.Rectangle pageSize = reader.getPageSize(page);
+        SignaturePlacement generic = signaturePlacement(null, pageSize.getWidth(), pageSize.getHeight());
+        return List.of(new SignaturePlacement(page, generic.signatureX(), generic.signatureY(), generic.signatureWidth(),
+                generic.signatureHeight(), generic.dateX(), generic.dateY(), generic.dateOnly()));
+    }
+
+    private SigningPlan mandateSigningPlan(String relationType, String requestedRole) {
+        String kind = Objects.toString(relationType, "authorization_draft").toLowerCase(Locale.ROOT);
+        String role = Objects.toString(requestedRole, "").trim().toLowerCase(Locale.ROOT);
+        if ("property_management_agreement_draft".equals(kind)) {
+            if (role.isBlank()) role = "owner";
+            return switch (role) {
+                case "owner" -> new SigningPlan(kind, role, 1, 3);
+                case "company" -> new SigningPlan(kind, role, 2, 3);
+                case "customer_service" -> new SigningPlan(kind, role, 3, 3);
+                default -> throw bad("Unsupported signer role for property management agreement");
+            };
+        }
+        if (!role.isBlank() && !"owner".equals(role)) throw bad("The management authorization must be signed by the owner");
+        return new SigningPlan(kind, "owner", 1, 1);
+    }
+
+    private String signedRelation(RequestRow row) {
+        String kind = Objects.toString(row.getDocumentKind(), "authorization_draft");
+        if ("property_management_agreement_draft".equals(kind)) {
+            return row.getSigningOrder() != null && row.getSigningOrder() >= 3
+                    ? "property_management_agreement_signed" : "property_management_agreement_partial";
+        }
+        if ("management_authorization_draft".equals(kind)) return "management_authorization_signed";
+        if ("rental_appointment_draft".equals(kind)) return "rental_appointment_signed";
+        return "signed_contract";
+    }
+
+    private Long rootDocumentId(RequestRow row) {
+        return row.getRootDocumentId() == null ? row.getSourceDocumentId() : row.getRootDocumentId();
     }
     private String verificationCode() { return String.valueOf(100000 + random.nextInt(900000)); }
     private String sha256(String value) { return sha256(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
     private String sha256(Path path) throws IOException { return sha256(Files.readAllBytes(path)); }
     private String sha256(byte[] value) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value)); } catch (NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); } }
-    private String signedName(String name) { String safe = safeName(name); int dot = safe.lastIndexOf('.'); return (dot > 0 ? safe.substring(0, dot) : safe) + "-已簽署.pdf"; }
+    private String signedName(String name) { String safe = safeName(name); int dot = safe.lastIndexOf('.'); return (dot > 0 ? safe.substring(0, dot) : safe) + "-已签署.pdf"; }
     private String safeName(String name) { String value = name == null ? "contract.pdf" : name.replace('\\', '/'); value = value.substring(value.lastIndexOf('/') + 1).replaceAll("[\\r\\n]", "_"); return value.isBlank() ? "contract.pdf" : value; }
     private String trim(String value, String label) { if (value == null || value.isBlank()) throw bad(label + " is required"); return shorten(value.trim(), 190); }
     private String normalizeName(String value) { return Objects.toString(value, "").trim().replaceAll("\\s+", " "); }
@@ -265,6 +334,7 @@ public class ElectronicSignatureService {
     private ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT, message); }
 
     public record Download(Path path, String originalName) { }
-    record SignaturePlacement(float signatureX, float signatureY, float signatureWidth, float signatureHeight, float dateX,
+    record SignaturePlacement(int page, float signatureX, float signatureY, float signatureWidth, float signatureHeight, float dateX,
             float dateY, boolean dateOnly) { }
+    record SigningPlan(String documentKind, String signerRole, int signingOrder, int totalSteps) { }
 }

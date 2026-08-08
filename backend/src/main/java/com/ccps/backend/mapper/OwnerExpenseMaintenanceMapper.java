@@ -22,6 +22,24 @@ public interface OwnerExpenseMaintenanceMapper {
 
     @Select("""
             SELECT
+              COALESCE(SUM(CASE WHEN ce.direction = 'income' AND fr.record_type <> 'security_deposit'
+                                THEN fr.amount ELSE 0 END), 0) AS income_amount,
+              COALESCE(SUM(CASE WHEN ce.direction = 'expense' THEN fr.amount ELSE 0 END), 0) AS expense_amount
+            FROM cashflow_entries ce
+            JOIN finance_records fr ON fr.id = ce.finance_record_id
+            JOIN units u ON u.id = ce.unit_id
+            WHERE fr.payment_status <> 'voided'
+              AND (#{projectId} IS NULL OR u.project_id = #{projectId})
+              AND EXISTS (
+                SELECT 1 FROM owner_units ou JOIN owners o ON o.id = ou.owner_id
+                WHERE ou.unit_id = ce.unit_id AND ou.status = 'active' AND ou.asset_stage = 'OPERATING'
+                  AND o.status = 'active' AND (#{userId} IS NULL OR o.user_id = #{userId})
+              )
+            """)
+    CashflowTotals findCashflowTotals(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
+    @Select("""
+            SELECT
               COALESCE(SUM(ce_amount.amount), 0) AS expense_amount,
               COALESCE(SUM(CASE WHEN ce_amount.category = 'maintenance' THEN ce_amount.amount ELSE 0 END), 0) AS maintenance_amount
             FROM (
@@ -30,6 +48,7 @@ public interface OwnerExpenseMaintenanceMapper {
               JOIN finance_records fr ON fr.id = ce.finance_record_id
               JOIN units u ON u.id = ce.unit_id
               WHERE ce.direction = 'expense'
+                AND fr.payment_status <> 'voided'
                 AND ce.occurred_on >= #{startDate}
                 AND ce.occurred_on < #{endDate}
                 AND (#{projectId} IS NULL OR u.project_id = #{projectId})
@@ -114,6 +133,8 @@ public interface OwnerExpenseMaintenanceMapper {
             <script>
             SELECT
               ce.id,
+              fr.id AS finance_record_id,
+              u.id AS unit_id,
               p.id AS project_id,
               p.name AS project_name,
               u.unit_no,
@@ -129,7 +150,9 @@ public interface OwnerExpenseMaintenanceMapper {
               fr.payment_method,
               fr.transaction_date AS payment_date,
               mwo.id AS work_order_id,
-              COALESCE(attachment_count.total, 0) AS attachment_count
+              COALESCE(attachment_count.total, 0) AS attachment_count,
+              CASE WHEN mwo.id IS NULL AND fr.payment_status &lt;&gt; 'voided'
+                     AND fr.sync_status &lt;&gt; 'exported' THEN TRUE ELSE FALSE END AS editable
             FROM cashflow_entries ce
             JOIN finance_records fr ON fr.id = ce.finance_record_id
             JOIN units u ON u.id = ce.unit_id
@@ -142,6 +165,7 @@ public interface OwnerExpenseMaintenanceMapper {
               GROUP BY dl.entity_id
             ) attachment_count ON attachment_count.work_order_id = mwo.id
             WHERE ce.direction = 'expense'
+              AND fr.payment_status &lt;&gt; 'voided'
               AND ce.occurred_on &gt;= #{startDate}
               AND ce.occurred_on &lt; #{endDate}
               AND EXISTS (
@@ -154,6 +178,8 @@ public interface OwnerExpenseMaintenanceMapper {
             UNION ALL
             SELECT
               (1000000000000 + mwo.id) AS id,
+              fr.id AS finance_record_id,
+              u.id AS unit_id,
               p.id AS project_id,
               p.name AS project_name,
               u.unit_no,
@@ -168,7 +194,8 @@ public interface OwnerExpenseMaintenanceMapper {
               fr.payment_method,
               fr.transaction_date AS payment_date,
               mwo.id AS work_order_id,
-              COALESCE(attachment_count.total, 0) AS attachment_count
+              COALESCE(attachment_count.total, 0) AS attachment_count,
+              FALSE AS editable
             FROM maintenance_work_orders mwo
             JOIN units u ON u.id = mwo.unit_id
             JOIN projects p ON p.id = u.project_id
@@ -180,7 +207,7 @@ public interface OwnerExpenseMaintenanceMapper {
               WHERE dl.entity_type = 'work_order' AND d.document_type = 'maintenance_attachment'
               GROUP BY dl.entity_id
             ) attachment_count ON attachment_count.work_order_id = mwo.id
-            WHERE mwo.cashflow_entry_id IS NULL
+            WHERE mwo.cashflow_entry_id IS NULL AND mwo.status &lt;&gt; 'cancelled'
               AND DATE(mwo.requested_at) &gt;= #{startDate}
               AND DATE(mwo.requested_at) &lt; #{endDate}
               AND EXISTS (
@@ -202,14 +229,18 @@ public interface OwnerExpenseMaintenanceMapper {
             SELECT
               mwo.id,
               mwo.work_order_no,
+              u.id AS unit_id,
               p.id AS project_id,
               p.name AS project_name,
               u.unit_no,
+              mwo.vendor_id,
               mwo.category,
               mwo.title,
+              mwo.description,
               mwo.requested_at,
               mwo.completed_at,
               mwo.status,
+              mwo.estimated_amount,
               COALESCE(mwo.actual_amount, mwo.estimated_amount, 0) AS amount,
               COALESCE((SELECT SUM(rt.amount) FROM reserve_transactions rt
                 WHERE rt.transaction_type = 'debit'
@@ -226,7 +257,8 @@ public interface OwnerExpenseMaintenanceMapper {
               WHERE dl.entity_type = 'work_order' AND d.document_type = 'maintenance_attachment'
               GROUP BY dl.entity_id
             ) attachment_count ON attachment_count.work_order_id = mwo.id
-            WHERE DATE(mwo.requested_at) &gt;= #{startDate}
+            WHERE mwo.status &lt;&gt; 'cancelled'
+              AND DATE(mwo.requested_at) &gt;= #{startDate}
               AND DATE(mwo.requested_at) &lt; #{endDate}
               AND EXISTS (
                 SELECT 1 FROM owner_units ou JOIN owners o ON o.id = ou.owner_id
@@ -364,6 +396,15 @@ public interface OwnerExpenseMaintenanceMapper {
         public void setExpenseAmount(BigDecimal expenseAmount) { this.expenseAmount = expenseAmount; }
         public BigDecimal getMaintenanceAmount() { return maintenanceAmount; }
         public void setMaintenanceAmount(BigDecimal maintenanceAmount) { this.maintenanceAmount = maintenanceAmount; }
+    }
+
+    class CashflowTotals {
+        private BigDecimal incomeAmount;
+        private BigDecimal expenseAmount;
+        public BigDecimal getIncomeAmount() { return incomeAmount; }
+        public void setIncomeAmount(BigDecimal incomeAmount) { this.incomeAmount = incomeAmount; }
+        public BigDecimal getExpenseAmount() { return expenseAmount; }
+        public void setExpenseAmount(BigDecimal expenseAmount) { this.expenseAmount = expenseAmount; }
     }
 
     class ReserveTotals {

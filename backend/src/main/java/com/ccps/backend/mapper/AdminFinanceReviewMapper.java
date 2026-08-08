@@ -196,7 +196,7 @@ public interface AdminFinanceReviewMapper {
 
     @Select({"<script>",
             "SELECT fr.id,fr.transaction_no,fr.record_type,p.name AS project_name,u.unit_no,COALESCE(t.full_name,o.full_name) AS payer_name,fr.amount,fr.currency,fr.transaction_date,fr.payment_method,fr.payment_status,fr.confirmation_status,fr.sync_status,CASE WHEN fr.record_type='reserve_refund' THEN '業主預備金返還' ELSE ce.category END AS receipt_no,ce.description AS milestone,confirmer.display_name AS confirmed_by_name,fr.confirmed_at,fr.created_at AS submitted_at",
-            EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund','security_deposit')",
+            EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund','security_deposit','security_deposit_forfeiture')",
             "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ',fr.transaction_no,p.name,u.unit_no,o.full_name,t.full_name,ce.category,ce.description) LIKE CONCAT('%',#{keyword},'%')</if>",
             "<if test=\"projectName != null and projectName != ''\">AND p.name=#{projectName}</if>",
             "<if test=\"confirmationStatus == 'history'\">AND fr.confirmation_status&lt;&gt;'pending'</if>",
@@ -207,7 +207,7 @@ public interface AdminFinanceReviewMapper {
             "</where>","ORDER BY CASE fr.confirmation_status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,fr.created_at DESC,fr.id DESC LIMIT #{limit} OFFSET #{offset}","</script>"})
     List<FinanceReviewRow> findExpensePage(@Param("keyword") String keyword,@Param("projectName") String projectName,@Param("confirmationStatus") String confirmationStatus,@Param("syncStatus") String syncStatus,@Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate,@Param("limit") int limit,@Param("offset") int offset);
 
-    @Select({"<script>","SELECT COUNT(*)",EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund','security_deposit')",
+    @Select({"<script>","SELECT COUNT(*)",EXPENSE_FROM,"<where>","fr.record_type IN ('property_expense','reserve_refund','security_deposit','security_deposit_forfeiture')",
             "<if test=\"keyword != null and keyword != ''\">AND CONCAT_WS(' ',fr.transaction_no,p.name,u.unit_no,o.full_name,t.full_name,ce.category,ce.description) LIKE CONCAT('%',#{keyword},'%')</if>",
             "<if test=\"projectName != null and projectName != ''\">AND p.name=#{projectName}</if>",
             "<if test=\"confirmationStatus == 'history'\">AND fr.confirmation_status&lt;&gt;'pending'</if>",
@@ -216,10 +216,10 @@ public interface AdminFinanceReviewMapper {
             "<if test=\"startDate != null\">AND fr.transaction_date&gt;=#{startDate}</if>","<if test=\"endDate != null\">AND fr.transaction_date&lt;=#{endDate}</if>","</where>","</script>"})
     Long countExpensePage(@Param("keyword") String keyword,@Param("projectName") String projectName,@Param("confirmationStatus") String confirmationStatus,@Param("syncStatus") String syncStatus,@Param("startDate") LocalDate startDate,@Param("endDate") LocalDate endDate);
 
-    @Select("SELECT SUM(confirmation_status='pending') pending_count,SUM(confirmation_status='confirmed') confirmed_count,SUM(confirmation_status='rejected') rejected_count,SUM(confirmation_status='confirmed' AND sync_status IN ('not_synced','pending','failed')) pending_sync_count,COALESCE(SUM(CASE WHEN confirmation_status='pending' THEN amount ELSE 0 END),0) pending_amount,COALESCE(SUM(CASE WHEN confirmation_status='confirmed' AND YEAR(confirmed_at)=YEAR(CURRENT_DATE) AND MONTH(confirmed_at)=MONTH(CURRENT_DATE) THEN amount ELSE 0 END),0) confirmed_month_amount FROM finance_records WHERE record_type IN ('property_expense','reserve_refund','security_deposit')")
+    @Select("SELECT SUM(confirmation_status='pending') pending_count,SUM(confirmation_status='confirmed') confirmed_count,SUM(confirmation_status='rejected') rejected_count,SUM(confirmation_status='confirmed' AND sync_status IN ('not_synced','pending','failed')) pending_sync_count,COALESCE(SUM(CASE WHEN confirmation_status='pending' THEN amount ELSE 0 END),0) pending_amount,COALESCE(SUM(CASE WHEN confirmation_status='confirmed' AND YEAR(confirmed_at)=YEAR(CURRENT_DATE) AND MONTH(confirmed_at)=MONTH(CURRENT_DATE) THEN amount ELSE 0 END),0) confirmed_month_amount FROM finance_records WHERE record_type IN ('property_expense','reserve_refund','security_deposit','security_deposit_forfeiture')")
     FinanceSummaryRow findExpenseSummary();
 
-    @Select("SELECT DISTINCT p.name FROM finance_records fr JOIN units u ON u.id=fr.unit_id JOIN projects p ON p.id=u.project_id WHERE fr.record_type IN ('property_expense','reserve_refund','security_deposit') ORDER BY p.name")
+    @Select("SELECT DISTINCT p.name FROM finance_records fr JOIN units u ON u.id=fr.unit_id JOIN projects p ON p.id=u.project_id WHERE fr.record_type IN ('property_expense','reserve_refund','security_deposit','security_deposit_forfeiture') ORDER BY p.name")
     List<String> findExpenseProjects();
 
     @Select("SELECT record_type FROM finance_records WHERE id=#{financeRecordId} FOR UPDATE")
@@ -249,8 +249,23 @@ public interface AdminFinanceReviewMapper {
             """)
     FinanceReviewRow findDocumentRow(@Param("financeRecordId") Long financeRecordId);
 
-    @Update("UPDATE finance_records SET confirmation_status='confirmed',payment_status='unpaid',sync_status='pending',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='property_expense' AND confirmation_status='pending'")
+    @Update("UPDATE finance_records SET confirmation_status='confirmed',payment_status='paid',sync_status='pending',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='property_expense' AND confirmation_status='pending'")
     int confirmExpense(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM finance_records fr
+            WHERE fr.id = #{financeRecordId}
+              AND fr.record_type = 'property_expense'
+              AND fr.payment_method = 'direct_payment'
+              AND EXISTS (
+                SELECT 1 FROM owner_units ou
+                JOIN owner_unit_services ous ON ous.owner_unit_id = ou.id
+                WHERE ou.owner_id = fr.owner_id AND ou.unit_id = fr.unit_id
+                  AND ous.service_type = 'RENTAL' AND ous.status = 'ended'
+              )
+            """)
+    int countDirectPaymentBlockedByTerminatedMandate(@Param("financeRecordId") Long financeRecordId);
 
     @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='property_expense' AND confirmation_status='pending'")
     int rejectExpense(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
@@ -261,14 +276,79 @@ public interface AdminFinanceReviewMapper {
     @Update("UPDATE security_deposit_entries SET status='confirmed' WHERE finance_record_id=#{financeRecordId} AND status='pending'")
     int confirmSecurityDepositEntry(@Param("financeRecordId") Long financeRecordId);
 
+    @Insert("""
+            INSERT IGNORE INTO tenant_deposit_transactions
+              (lease_id,tenant_id,unit_id,finance_record_id,transaction_type,direction,amount,occurred_on,
+               description,status,created_by)
+            SELECT sde.lease_id,l.tenant_id,l.unit_id,fr.id,'collection','credit',sde.amount,fr.transaction_date,
+                   CONCAT('租客押金 · ',l.lease_no),'posted',#{reviewerId}
+            FROM security_deposit_entries sde
+            JOIN leases l ON l.id=sde.lease_id
+            JOIN finance_records fr ON fr.id=sde.finance_record_id
+            WHERE fr.id=#{financeRecordId} AND sde.status='confirmed' AND fr.confirmation_status='confirmed'
+            ON DUPLICATE KEY UPDATE amount=VALUES(amount),occurred_on=VALUES(occurred_on),
+              description=VALUES(description),status='posted',created_by=VALUES(created_by)
+            """)
+    int insertConfirmedSecurityDepositLedger(@Param("financeRecordId") Long financeRecordId,
+            @Param("reviewerId") Long reviewerId);
+
     @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='security_deposit' AND confirmation_status='pending'")
     int rejectSecurityDeposit(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
 
     @Update("UPDATE security_deposit_entries SET status='rejected' WHERE finance_record_id=#{financeRecordId} AND status='pending'")
     int rejectSecurityDepositEntry(@Param("financeRecordId") Long financeRecordId);
 
+    @Update("UPDATE finance_records SET confirmation_status='confirmed',payment_status='paid',sync_status='pending',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='security_deposit_forfeiture' AND confirmation_status='pending'")
+    int confirmSecurityDepositForfeiture(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='security_deposit_forfeiture' AND confirmation_status='pending'")
+    int rejectSecurityDepositForfeiture(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Update("UPDATE tenant_deposit_transactions SET status=#{status} WHERE finance_record_id=#{financeRecordId} AND transaction_type='forfeiture' AND status=#{fromStatus}")
+    int updateSecurityDepositForfeitureLedger(@Param("financeRecordId") Long financeRecordId,
+            @Param("fromStatus") String fromStatus,@Param("status") String status);
+
     @Update("UPDATE finance_records SET confirmation_status='rejected',payment_status='voided',sync_status='not_synced',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='reserve_refund' AND confirmation_status='pending'")
     int rejectReserveRefund(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
+
+    @Update("UPDATE tenant_deposit_transactions SET status='posted' WHERE finance_record_id=#{financeRecordId} AND transaction_type='refund' AND status='pending'")
+    int postTenantDepositRefund(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE tenant_deposit_transactions SET status='cancelled' WHERE finance_record_id=#{financeRecordId} AND transaction_type='refund' AND status='pending'")
+    int cancelTenantDepositRefund(@Param("financeRecordId") Long financeRecordId);
+
+    @Select("SELECT id AS finance_record_id,record_type,confirmation_status,sync_status,sync_batch_id FROM finance_records WHERE id=#{financeRecordId} FOR UPDATE")
+    ReopenRecordContext lockReopenRecord(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE finance_records SET confirmation_status='pending',payment_status='unpaid',sync_status='not_synced',sync_batch_id=NULL,confirmed_by=NULL,confirmed_at=NULL WHERE id=#{financeRecordId} AND confirmation_status='confirmed' AND sync_status<>'synced' AND sync_batch_id IS NULL")
+    int reopenFinanceRecord(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE payment_installments SET status=CASE WHEN amount_paid-#{amount}<=0 THEN 'pending' WHEN amount_paid-#{amount}>=amount_due THEN 'paid' ELSE 'partial' END,amount_paid=GREATEST(0,amount_paid-#{amount}),updated_at=CURRENT_TIMESTAMP WHERE id=#{installmentId} AND amount_paid>=#{amount}")
+    int reverseConfirmedPayment(@Param("installmentId") Long installmentId,@Param("amount") BigDecimal amount);
+
+    @Update("UPDATE documents SET status='pending',reviewed_by=NULL,reviewed_at=NULL,review_note=#{note},updated_at=CURRENT_TIMESTAMP WHERE id=#{documentId}")
+    int reopenDocument(@Param("documentId") Long documentId,@Param("note") String note);
+
+    @Update("UPDATE security_deposit_entries SET status='pending' WHERE finance_record_id=#{financeRecordId} AND status='confirmed'")
+    int reopenSecurityDepositEntry(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE tenant_deposit_transactions SET status='cancelled' WHERE finance_record_id=#{financeRecordId} AND transaction_type='collection' AND status='posted'")
+    int reopenSecurityDepositLedger(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE tenant_deposit_transactions SET status='pending' WHERE finance_record_id=#{financeRecordId} AND transaction_type='refund' AND status='posted'")
+    int reopenTenantDepositRefund(@Param("financeRecordId") Long financeRecordId);
+
+    @Select("SELECT rt.reserve_account_id,ra.current_balance,fr.amount FROM finance_records fr JOIN reserve_transactions rt ON rt.finance_record_id=fr.id AND rt.transaction_type='debit' JOIN reserve_accounts ra ON ra.id=rt.reserve_account_id WHERE fr.id=#{financeRecordId} AND fr.record_type='reserve_refund' AND fr.confirmation_status='confirmed' ORDER BY rt.id DESC LIMIT 1 FOR UPDATE")
+    ReserveRefundReopenContext lockReserveRefundReopen(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE reserve_accounts SET current_balance=current_balance+#{amount} WHERE id=#{reserveAccountId}")
+    int restoreReserveBalance(@Param("reserveAccountId") Long reserveAccountId,@Param("amount") BigDecimal amount);
+
+    @Insert("INSERT INTO reserve_transactions (reserve_account_id,finance_record_id,transaction_type,amount,occurred_at,balance_after,note,created_by) VALUES (#{reserveAccountId},#{financeRecordId},'adjustment',#{amount},CURRENT_TIMESTAMP,#{balanceAfter},#{note},#{reviewerId})")
+    int insertReserveRefundReversal(@Param("reserveAccountId") Long reserveAccountId,
+            @Param("financeRecordId") Long financeRecordId,@Param("amount") BigDecimal amount,
+            @Param("balanceAfter") BigDecimal balanceAfter,@Param("note") String note,
+            @Param("reviewerId") Long reviewerId);
 
     @Select("SELECT ra.id AS reserve_account_id, ra.current_balance, fr.amount, fr.owner_id, o.user_id, p.name AS project_name, u.unit_no FROM finance_records fr JOIN owners o ON o.id=fr.owner_id JOIN units u ON u.id=fr.unit_id JOIN projects p ON p.id=u.project_id JOIN owner_units ou ON ou.owner_id=fr.owner_id AND ou.unit_id=fr.unit_id AND ou.status='active' JOIN reserve_accounts ra ON ra.owner_unit_id=ou.id AND ra.status='active' WHERE fr.id=#{financeRecordId} AND fr.record_type='reserve_refund' AND fr.confirmation_status='pending' FOR UPDATE")
     ReserveRefundContext lockReserveRefund(@Param("financeRecordId") Long financeRecordId);
@@ -276,7 +356,7 @@ public interface AdminFinanceReviewMapper {
     @Update("UPDATE finance_records SET confirmation_status='confirmed',payment_status='paid',sync_status='pending',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='reserve_refund' AND confirmation_status='pending'")
     int confirmReserveRefund(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
 
-    @Update("UPDATE reserve_accounts SET current_balance=current_balance-#{amount} WHERE id=#{reserveAccountId} AND current_balance>=#{amount}")
+    @Update("UPDATE reserve_accounts SET current_balance=current_balance-#{amount} WHERE id=#{reserveAccountId}")
     int debitReserveBalance(@Param("reserveAccountId") Long reserveAccountId,@Param("amount") BigDecimal amount);
 
     @Insert("INSERT INTO reserve_transactions (reserve_account_id,finance_record_id,transaction_type,amount,occurred_at,balance_after,note,created_by) VALUES (#{reserveAccountId},#{financeRecordId},'debit',#{amount},CURRENT_TIMESTAMP,#{balanceAfter},'業主預備金返還',#{reviewerId})")
@@ -361,6 +441,10 @@ public interface AdminFinanceReviewMapper {
                     @Param("action") String action,
                     @Param("status") String status,
                     @Param("note") String note);
+
+    @Insert("INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data) VALUES (#{actorId},'reopen_finance_record','finance_record',#{financeRecordId},JSON_OBJECT('confirmationStatus','confirmed'),JSON_OBJECT('confirmationStatus','pending','note',#{note}))")
+    int insertReopenAudit(@Param("actorId") Long actorId,@Param("financeRecordId") Long financeRecordId,
+            @Param("note") String note);
 
     @Select("""
             SELECT d.id, d.original_name, d.storage_key, d.mime_type, d.file_size
@@ -460,6 +544,22 @@ public interface AdminFinanceReviewMapper {
         public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}
         public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
         public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;}
+    }
+
+    class ReopenRecordContext {
+        private Long financeRecordId, syncBatchId; private String recordType, confirmationStatus, syncStatus;
+        public Long getFinanceRecordId(){return financeRecordId;} public void setFinanceRecordId(Long v){financeRecordId=v;}
+        public Long getSyncBatchId(){return syncBatchId;} public void setSyncBatchId(Long v){syncBatchId=v;}
+        public String getRecordType(){return recordType;} public void setRecordType(String v){recordType=v;}
+        public String getConfirmationStatus(){return confirmationStatus;} public void setConfirmationStatus(String v){confirmationStatus=v;}
+        public String getSyncStatus(){return syncStatus;} public void setSyncStatus(String v){syncStatus=v;}
+    }
+
+    class ReserveRefundReopenContext {
+        private Long reserveAccountId; private BigDecimal currentBalance, amount;
+        public Long getReserveAccountId(){return reserveAccountId;} public void setReserveAccountId(Long v){reserveAccountId=v;}
+        public BigDecimal getCurrentBalance(){return currentBalance;} public void setCurrentBalance(BigDecimal v){currentBalance=v;}
+        public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}
     }
 
     class ProofFile {

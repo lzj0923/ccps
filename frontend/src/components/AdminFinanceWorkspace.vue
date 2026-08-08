@@ -8,11 +8,11 @@
         <button type="button" :class="{ active: financeType === 'expense' }" :aria-pressed="financeType === 'expense'" @click="switchFinanceType('expense')"><span>{{ $t('legacy.t_841534d30dbd') }}</span><b>{{ $t('legacy.t_aab58847a4bb') }}</b><small>{{ $t('legacy.t_c8a735ba03ae') }}</small></button>
       </nav>
       <button v-if="viewMode === 'pending'" type="button" class="finance-history-button" @click="switchViewMode('history')">{{ $t('legacy.t_98556ff264a5') }}</button>
+      <button v-if="viewMode === 'history'" type="button" class="finance-history-button back" @click="switchViewMode('pending')"><span aria-hidden="true">←</span> {{ $t('legacy.t_aef2b015b09f') }}</button>
       <div v-if="viewMode === 'history'" class="finance-batch-actions">
         <button type="button" class="finance-batch-button" :disabled="batchDocumentBusy" @click="batchDownloadDocuments('invoice')">批量下载发票</button>
         <button type="button" class="finance-batch-button receipt" :disabled="batchDocumentBusy" @click="batchDownloadDocuments('receipt')">批量下载收据</button>
       </div>
-      <button v-else type="button" class="finance-history-button back" @click="switchViewMode('pending')"><span aria-hidden="true">←</span> {{ $t('legacy.t_aef2b015b09f') }}</button>
     </div>
   <ModuleToolbar />
   <section v-if="financeType === 'property'" class="content-grid admin-finance-workspace">
@@ -62,6 +62,7 @@
           <button :disabled="!selectedRow.proofDocumentId" @click="openProof">{{ $t('legacy.t_96bd7ca72147') }}</button>
           <a v-if="viewMode === 'history'" class="finance-document-button" :href="documentUrl(selectedRow, 'invoice')" download>Invoice / 发票</a>
           <a v-if="viewMode === 'history'" class="finance-document-button" :href="documentUrl(selectedRow, 'receipt')" download>Official Receipt / 收据</a>
+          <button v-if="viewMode === 'history' && selectedRow.confirmationStatus === 'confirmed' && selectedRow.syncStatus !== 'synced'" class="reopen" @click="openReopen">{{ $t('finance.reopen') }}</button>
           <button v-if="selectedRow.confirmationStatus === 'pending'" class="confirm" @click="openDecision('confirm')">{{ $t('legacy.t_a042dbbff199') }}</button>
           <button v-if="selectedRow.confirmationStatus === 'pending'" class="reject" @click="openDecision('reject')">{{ $t('legacy.t_579798368137') }}</button>
           <button @click="goToInstallment">{{ $t('legacy.t_367ff02e0e0d') }}</button>
@@ -86,10 +87,18 @@
       </form>
     </dialog>
 
+    <dialog ref="reopenDialog" class="modal admin-finance-decision-dialog">
+      <form method="dialog" @submit.prevent="submitReopen">
+        <div class="modal-head"><div><h3>{{ $t('finance.reopenTitle') }}</h3><small>{{ selectedRow?.transactionNo }} · {{ selectedRow?.currency }} {{ money(selectedRow?.amount) }}</small></div><button type="button" class="icon-close" @click="closeReopen">×</button></div>
+        <div class="finance-decision-body"><div class="finance-decision-warning"><strong>{{ $t('finance.reopen') }}</strong><span>{{ $t('finance.reopenHint') }}</span></div><label>{{ $t('finance.reopenNote') }}<textarea v-model.trim="reopenNote" maxlength="500" required :placeholder="$t('finance.reopenNotePlaceholder')"></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div>
+        <menu><button type="button" @click="closeReopen">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn reject" :disabled="actionSaving">{{ actionSaving ? $t('legacy.t_1e038f9b55ec') : $t('finance.reopen') }}</button></menu>
+      </form>
+    </dialog>
+
     <dialog ref="batchDialog" class="modal admin-finance-decision-dialog">
       <form method="dialog" @submit.prevent="submitBatch">
         <div class="modal-head"><div><h3>{{ $t('legacy.t_fa73e61d9cbe') }}</h3><small>{{ $t('legacy.t_aeec0b67da9d') }} {{ selectedIds.length }} {{ $t('legacy.t_02819cf567a4') }}</small></div><button type="button" class="icon-close" @click="closeBatch">×</button></div>
-        <div class="finance-decision-body"><div class="finance-decision-warning success"><strong>{{ $t('legacy.t_cd0a784d99c0') }}</strong><span>{{ $t('legacy.t_e234140334fa') }}</span></div><label>{{ $t('legacy.t_c5dc4a6f6bc8') }}<textarea v-model.trim="batchNote" maxlength="500" required></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div>
+        <div class="finance-decision-body"><div class="finance-decision-warning success"><strong>{{ $t('legacy.t_cd0a784d99c0') }}</strong><span>{{ $t('legacy.t_e234140334fa') }}</span></div><label>{{ $t('finance.batchReferenceNo') }}<input v-model.trim="batchReference" maxlength="120" :placeholder="$t('finance.batchReferencePlaceholder')"></label><label>{{ $t('legacy.t_c5dc4a6f6bc8') }}<textarea v-model.trim="batchNote" maxlength="500" required></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div>
         <menu><button type="button" @click="closeBatch">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn" :disabled="actionSaving">{{ actionSaving ? $t('legacy.t_03fc655d6daf') : $t('finance.confirmSelected', { count: selectedIds.length }) }}</button></menu>
       </form>
     </dialog>
@@ -108,7 +117,7 @@
 </template>
 
 <script>
-import { batchConfirmAdminFinanceReviews, confirmAdminFinanceReview, downloadAdminFinanceDocuments, fetchAdminFinanceProjects, fetchAdminFinanceProof, fetchAdminFinanceReviews, getAdminFinanceDocumentUrl, rejectAdminFinanceReview } from '../services/propertyApi';
+import { batchConfirmAdminFinanceReviews, confirmAdminFinanceReview, downloadAdminFinanceDocuments, fetchAdminFinanceProjects, fetchAdminFinanceProof, fetchAdminFinanceReviews, getAdminFinanceDocumentUrl, rejectAdminFinanceReview, reopenAdminFinanceReview } from '../services/propertyApi';
 import AdminRentCollectionWorkspace from './AdminRentCollectionWorkspace.vue';
 import AdminRentFinanceWorkspace from './AdminRentFinanceWorkspace.vue';
 import AdminReserveFinanceWorkspace from './AdminReserveFinanceWorkspace.vue';
@@ -121,8 +130,8 @@ export default {
   data() {
     return {
       financeType: 'property', rows: [], selectedId: null, selectedIds: [], loading: false, errorMessage: '', requestSerial: 0,
-      pageNumber: 1, pageSize: 10, totalRows: 0, totalPages: 1,
-      decisionMode: 'confirm', decisionNote: '', batchNote: '批量核對付款憑證與銀行入賬資料一致', actionSaving: false, actionError: '',
+      pageNumber: 1, pageSize: 5, totalRows: 0, totalPages: 1,
+      decisionMode: 'confirm', decisionNote: '', reopenNote: '', batchNote: '批量核對付款憑證與銀行入賬資料一致', batchReference: '', actionSaving: false, actionError: '',
       proofLoading: false, proofError: '', proofUrl: '', batchDocumentBusy: false
     };
   },
@@ -187,9 +196,12 @@ export default {
      openDecision(mode) { this.decisionMode = mode; this.decisionNote = mode === 'confirm' ? this.$t('finance.reviewNoteDefault') : ''; this.actionError = ''; this.$refs.decisionDialog?.showModal(); },
     closeDecision() { this.$refs.decisionDialog?.close(); },
      async submitDecision() { if (!this.decisionNote) { this.actionError = this.$t('finance.reviewNoteRequired'); return; } this.actionSaving = true; this.actionError = ''; const id = this.selectedRow.id; try { if (this.decisionMode === 'confirm') await confirmAdminFinanceReview(id, this.decisionNote); else await rejectAdminFinanceReview(id, this.decisionNote); this.closeDecision(); await this.loadData(); this.page.showToast(this.decisionMode === 'confirm' ? this.$t('finance.collectionConfirmed') : this.$t('finance.proofReturned')); } catch (error) { this.actionError = error.message || this.$t('finance.reviewOperationFailed'); } finally { this.actionSaving = false; } },
-     openBatch() { if (!this.selectedIds.length) { this.page.showToast(this.$t('finance.selectPendingTransaction')); return; } this.batchNote = this.$t('finance.batchNoteDefault'); this.actionError = ''; this.$refs.batchDialog?.showModal(); },
+     openReopen() { this.reopenNote = ''; this.actionError = ''; this.$refs.reopenDialog?.showModal(); },
+     closeReopen() { this.$refs.reopenDialog?.close(); },
+     async submitReopen() { if (!this.reopenNote) { this.actionError = this.$t('finance.reviewNoteRequired'); return; } this.actionSaving = true; this.actionError = ''; try { await reopenAdminFinanceReview(this.selectedRow.id, this.reopenNote); this.closeReopen(); await this.loadData(); this.page.showToast(this.$t('finance.reopenSuccess')); } catch (error) { this.actionError = error.message || this.$t('finance.reopenFailed'); } finally { this.actionSaving = false; } },
+     openBatch() { if (!this.selectedIds.length) { this.page.showToast(this.$t('finance.selectPendingTransaction')); return; } this.batchNote = this.$t('finance.batchNoteDefault'); this.batchReference = ''; this.actionError = ''; this.$refs.batchDialog?.showModal(); },
     closeBatch() { this.$refs.batchDialog?.close(); },
-     async submitBatch() { if (!this.batchNote) { this.actionError = this.$t('finance.batchNoteRequired'); return; } this.actionSaving = true; this.actionError = ''; const count = this.selectedIds.length; try { await batchConfirmAdminFinanceReviews(this.selectedIds, this.batchNote); this.closeBatch(); this.selectedIds = []; await this.loadData(); this.page.showToast(this.$t('finance.batchConfirmed', { count })); } catch (error) { this.actionError = error.message || this.$t('finance.batchConfirmFailed'); } finally { this.actionSaving = false; } },
+     async submitBatch() { if (!this.batchNote) { this.actionError = this.$t('finance.batchNoteRequired'); return; } this.actionSaving = true; this.actionError = ''; const count = this.selectedIds.length; try { await batchConfirmAdminFinanceReviews(this.selectedIds, this.batchNote, this.batchReference); this.closeBatch(); this.selectedIds = []; await this.loadData(); this.page.showToast(this.$t('finance.batchConfirmed', { count })); } catch (error) { this.actionError = error.message || this.$t('finance.batchConfirmFailed'); } finally { this.actionSaving = false; } },
      async openProof() { if (!this.selectedRow?.proofDocumentId) return; this.revokeProofUrl(); this.proofLoading = true; this.proofError = ''; this.$refs.proofDialog?.showModal(); try { const result = await fetchAdminFinanceProof(this.selectedRow.proofDocumentId); this.proofUrl = URL.createObjectURL(result.blob); } catch (error) { this.proofError = error.message || this.$t('finance.proofLoadFailed'); } finally { this.proofLoading = false; } },
     closeProof() { this.$refs.proofDialog?.close(); this.revokeProofUrl(); },
     revokeProofUrl() { if (this.proofUrl) URL.revokeObjectURL(this.proofUrl); this.proofUrl = ''; },

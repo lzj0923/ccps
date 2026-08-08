@@ -20,7 +20,11 @@ public interface AdminMaintenanceMapper {
     @Select("""
             SELECT u.id AS unit_id, o.id AS owner_id, o.full_name AS owner_name,
                    p.name AS project_name, u.unit_no, ra.id AS reserve_account_id,
-                   COALESCE(ra.current_balance, 0) AS reserve_balance
+                   COALESCE(ra.current_balance, 0) AS reserve_balance,
+                   NOT EXISTS(SELECT 1 FROM owner_unit_services ous
+                              WHERE ous.owner_unit_id = ou.id
+                                AND ous.service_type = 'RENTAL'
+                                AND ous.status = 'ended') AS direct_payment_allowed
             FROM owner_units ou
             JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
             JOIN units u ON u.id = ou.unit_id
@@ -107,7 +111,11 @@ public interface AdminMaintenanceMapper {
 
     @Select("""
             SELECT u.id AS unit_id, o.id AS owner_id, ou.id AS owner_unit_id,
-                   ra.id AS reserve_account_id, COALESCE(ra.current_balance, 0) AS reserve_balance
+                   ra.id AS reserve_account_id, COALESCE(ra.current_balance, 0) AS reserve_balance,
+                   NOT EXISTS(SELECT 1 FROM owner_unit_services ous
+                              WHERE ous.owner_unit_id = ou.id
+                                AND ous.service_type = 'RENTAL'
+                                AND ous.status = 'ended') AS direct_payment_allowed
             FROM units u
             JOIN owner_units ou ON ou.unit_id = u.id AND ou.status = 'active'
               AND ou.asset_stage = 'OPERATING' AND ou.is_primary = 1
@@ -119,10 +127,95 @@ public interface AdminMaintenanceMapper {
     UnitContext lockUnitContext(@Param("unitId") Long unitId);
 
     @Select("""
+            SELECT ce.id, ce.finance_record_id, ce.unit_id, ce.owner_id,
+                   fr.transaction_no, fr.record_type, fr.payment_status,
+                   fr.confirmation_status, fr.sync_status, mwo.id AS work_order_id,
+                   reserve_debit.reserve_account_id,
+                   COALESCE(reserve_debit.amount, 0) AS reserve_debit_amount
+            FROM cashflow_entries ce
+            JOIN finance_records fr ON fr.id = ce.finance_record_id
+            LEFT JOIN maintenance_work_orders mwo ON mwo.cashflow_entry_id = ce.id
+            LEFT JOIN (
+              SELECT finance_record_id, MAX(reserve_account_id) AS reserve_account_id,
+                     SUM(amount) AS amount
+              FROM reserve_transactions
+              WHERE transaction_type = 'debit'
+              GROUP BY finance_record_id
+            ) reserve_debit ON reserve_debit.finance_record_id = fr.id
+            WHERE ce.id = #{cashflowId} AND ce.direction = 'expense'
+            LIMIT 1 FOR UPDATE
+            """)
+    ExpenseContext lockExpense(@Param("cashflowId") Long cashflowId);
+
+    @Update("""
+            UPDATE finance_records
+            SET record_type = 'property_expense', amount = #{amount}, transaction_date = #{occurredOn},
+                payment_method = #{paymentMethod}, payment_status = #{paymentStatus},
+                confirmation_status = #{confirmationStatus}, sync_status = 'not_synced',
+                confirmed_by = CASE WHEN #{confirmationStatus} = 'confirmed' THEN #{actorId} ELSE NULL END,
+                confirmed_at = CASE WHEN #{confirmationStatus} = 'confirmed' THEN NOW() ELSE NULL END
+            WHERE id = #{financeRecordId} AND payment_status <> 'voided'
+            """)
+    int updateExpenseFinance(@Param("financeRecordId") Long financeRecordId,
+            @Param("amount") BigDecimal amount, @Param("occurredOn") LocalDate occurredOn,
+            @Param("paymentMethod") String paymentMethod, @Param("paymentStatus") String paymentStatus,
+            @Param("confirmationStatus") String confirmationStatus, @Param("actorId") Long actorId);
+
+    @Update("""
+            UPDATE cashflow_entries
+            SET category = #{category}, description = #{description}, occurred_on = #{occurredOn},
+                reserve_account_id = #{reserveAccountId}, attachment_status = 'not_required'
+            WHERE id = #{cashflowId} AND direction = 'expense'
+            """)
+    int updateExpenseCashflow(@Param("cashflowId") Long cashflowId,
+            @Param("category") String category, @Param("description") String description,
+            @Param("occurredOn") LocalDate occurredOn, @Param("reserveAccountId") Long reserveAccountId);
+
+    @Update("UPDATE reserve_accounts SET current_balance = current_balance + #{amount} WHERE id = #{reserveAccountId}")
+    int restoreExpenseReserve(@Param("reserveAccountId") Long reserveAccountId, @Param("amount") BigDecimal amount);
+
+    @Update("UPDATE reserve_accounts SET current_balance = current_balance - #{amount} WHERE id = #{reserveAccountId}")
+    int debitExpenseReserve(@Param("reserveAccountId") Long reserveAccountId, @Param("amount") BigDecimal amount);
+
+    @Select("SELECT current_balance FROM reserve_accounts WHERE id = #{reserveAccountId}")
+    BigDecimal findExpenseReserveBalance(@Param("reserveAccountId") Long reserveAccountId);
+
+    @Update("UPDATE reserve_transactions SET transaction_type = 'reversed', note = CONCAT(COALESCE(note, ''), '（记录修改/作废回冲）') WHERE finance_record_id = #{financeRecordId} AND transaction_type = 'debit'")
+    int reverseExpenseReserveDebits(@Param("financeRecordId") Long financeRecordId);
+
+    @Insert("""
+            INSERT INTO reserve_transactions
+              (reserve_account_id, finance_record_id, transaction_type, amount,
+               occurred_at, balance_after, note, created_by)
+            VALUES
+              (#{reserveAccountId}, #{financeRecordId}, #{transactionType}, #{amount},
+               NOW(), #{balanceAfter}, #{note}, #{actorId})
+            """)
+    int insertExpenseReserveTransaction(@Param("reserveAccountId") Long reserveAccountId,
+            @Param("financeRecordId") Long financeRecordId, @Param("transactionType") String transactionType,
+            @Param("amount") BigDecimal amount, @Param("balanceAfter") BigDecimal balanceAfter,
+            @Param("note") String note, @Param("actorId") Long actorId);
+
+    @Update("""
+            UPDATE finance_records
+            SET payment_status = 'voided', confirmation_status = 'rejected',
+                sync_status = 'not_synced', confirmed_by = NULL, confirmed_at = NULL
+            WHERE id = #{financeRecordId} AND payment_status <> 'voided'
+            """)
+    int voidExpenseFinance(@Param("financeRecordId") Long financeRecordId);
+
+    @Update("UPDATE cashflow_entries SET reserve_account_id = NULL WHERE id = #{cashflowId}")
+    int clearExpenseReserve(@Param("cashflowId") Long cashflowId);
+
+    @Select("""
             SELECT mwo.id, mwo.status, mwo.unit_id, COALESCE(mwo.owner_id, ou.owner_id) AS owner_id, mwo.vendor_id,
                    mwo.cashflow_entry_id, ce.finance_record_id,
                    ou.id AS owner_unit_id, ra.id AS reserve_account_id,
                    COALESCE(ra.current_balance, 0) AS reserve_balance,
+                   NOT EXISTS(SELECT 1 FROM owner_unit_services ous
+                              WHERE ous.owner_unit_id = ou.id
+                                AND ous.service_type = 'RENTAL'
+                                AND ous.status = 'ended') AS direct_payment_allowed,
                    COALESCE((SELECT SUM(rt.amount) FROM reserve_transactions rt
                      WHERE rt.transaction_type = 'debit'
                        AND (rt.maintenance_work_order_id = mwo.id
@@ -153,8 +246,8 @@ public interface AdminMaintenanceMapper {
                payment_method, payment_status, confirmation_status, confirmed_by, confirmed_at,
                sync_status, created_by)
             VALUES
-              (#{transactionNo}, 'cashflow', #{unitId}, #{ownerId}, #{amount}, 'MYR', CURRENT_DATE,
-               #{paymentMethod}, 'paid', #{confirmationStatus},
+              (#{transactionNo}, 'property_expense', #{unitId}, #{ownerId}, #{amount}, 'MYR', CURRENT_DATE,
+               #{paymentMethod}, CASE WHEN #{confirmationStatus} = 'confirmed' THEN 'paid' ELSE 'unpaid' END, #{confirmationStatus},
                CASE WHEN #{confirmationStatus} = 'confirmed' THEN #{actorId} ELSE NULL END,
                CASE WHEN #{confirmationStatus} = 'confirmed' THEN NOW() ELSE NULL END,
                'not_synced', #{actorId})
@@ -243,7 +336,7 @@ public interface AdminMaintenanceMapper {
                payment_method, payment_status, confirmation_status, confirmed_by, confirmed_at,
                sync_status, created_by)
             VALUES
-              (#{transactionNo}, 'cashflow', #{unitId}, #{ownerId}, #{amount}, 'MYR', #{occurredOn},
+              (#{transactionNo}, 'property_expense', #{unitId}, #{ownerId}, #{amount}, 'MYR', #{occurredOn},
                #{paymentMethod}, #{paymentStatus}, #{confirmationStatus},
                CASE WHEN #{confirmationStatus} = 'confirmed' THEN #{actorId} ELSE NULL END,
                CASE WHEN #{confirmationStatus} = 'confirmed' THEN NOW() ELSE NULL END,
@@ -298,12 +391,32 @@ public interface AdminMaintenanceMapper {
 
     class UnitContext {
         private Long unitId; private Long ownerId; private Long ownerUnitId;
-        private Long reserveAccountId; private BigDecimal reserveBalance;
+        private Long reserveAccountId; private BigDecimal reserveBalance; private boolean directPaymentAllowed;
         public Long getUnitId() { return unitId; } public void setUnitId(Long value) { unitId = value; }
         public Long getOwnerId() { return ownerId; } public void setOwnerId(Long value) { ownerId = value; }
         public Long getOwnerUnitId() { return ownerUnitId; } public void setOwnerUnitId(Long value) { ownerUnitId = value; }
         public Long getReserveAccountId() { return reserveAccountId; } public void setReserveAccountId(Long value) { reserveAccountId = value; }
         public BigDecimal getReserveBalance() { return reserveBalance; } public void setReserveBalance(BigDecimal value) { reserveBalance = value; }
+        public boolean isDirectPaymentAllowed() { return directPaymentAllowed; } public void setDirectPaymentAllowed(boolean value) { directPaymentAllowed = value; }
+    }
+
+    class ExpenseContext {
+        private Long id; private Long financeRecordId; private Long unitId; private Long ownerId;
+        private Long workOrderId; private Long reserveAccountId; private BigDecimal reserveDebitAmount;
+        private String transactionNo; private String recordType; private String paymentStatus;
+        private String confirmationStatus; private String syncStatus;
+        public Long getId() { return id; } public void setId(Long value) { id = value; }
+        public Long getFinanceRecordId() { return financeRecordId; } public void setFinanceRecordId(Long value) { financeRecordId = value; }
+        public Long getUnitId() { return unitId; } public void setUnitId(Long value) { unitId = value; }
+        public Long getOwnerId() { return ownerId; } public void setOwnerId(Long value) { ownerId = value; }
+        public Long getWorkOrderId() { return workOrderId; } public void setWorkOrderId(Long value) { workOrderId = value; }
+        public Long getReserveAccountId() { return reserveAccountId; } public void setReserveAccountId(Long value) { reserveAccountId = value; }
+        public BigDecimal getReserveDebitAmount() { return reserveDebitAmount; } public void setReserveDebitAmount(BigDecimal value) { reserveDebitAmount = value; }
+        public String getTransactionNo() { return transactionNo; } public void setTransactionNo(String value) { transactionNo = value; }
+        public String getRecordType() { return recordType; } public void setRecordType(String value) { recordType = value; }
+        public String getPaymentStatus() { return paymentStatus; } public void setPaymentStatus(String value) { paymentStatus = value; }
+        public String getConfirmationStatus() { return confirmationStatus; } public void setConfirmationStatus(String value) { confirmationStatus = value; }
+        public String getSyncStatus() { return syncStatus; } public void setSyncStatus(String value) { syncStatus = value; }
     }
 
     class NewExpenseFinance {
@@ -355,7 +468,7 @@ public interface AdminMaintenanceMapper {
     class CompletionContext {
         private Long id; private String status; private Long unitId; private Long ownerId; private Long vendorId;
         private Long cashflowEntryId; private Long financeRecordId; private Long ownerUnitId;
-        private Long reserveAccountId; private BigDecimal reserveBalance; private BigDecimal reserveDeductedAmount;
+        private Long reserveAccountId; private BigDecimal reserveBalance; private BigDecimal reserveDeductedAmount; private boolean directPaymentAllowed;
         public Long getId() { return id; } public void setId(Long value) { id = value; }
         public String getStatus() { return status; } public void setStatus(String value) { status = value; }
         public Long getUnitId() { return unitId; } public void setUnitId(Long value) { unitId = value; }
@@ -367,6 +480,7 @@ public interface AdminMaintenanceMapper {
         public Long getReserveAccountId() { return reserveAccountId; } public void setReserveAccountId(Long value) { reserveAccountId = value; }
         public BigDecimal getReserveBalance() { return reserveBalance; } public void setReserveBalance(BigDecimal value) { reserveBalance = value; }
         public BigDecimal getReserveDeductedAmount() { return reserveDeductedAmount; } public void setReserveDeductedAmount(BigDecimal value) { reserveDeductedAmount = value; }
+        public boolean isDirectPaymentAllowed() { return directPaymentAllowed; } public void setDirectPaymentAllowed(boolean value) { directPaymentAllowed = value; }
     }
 
     class NewFinance {

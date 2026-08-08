@@ -13,10 +13,11 @@
           :key="definition.id"
           class="definition-card"
           :class="{ active: selectedType === definition.reportType }"
+          :aria-pressed="selectedType === definition.reportType"
           @click="selectedType = definition.reportType"
         >
           <b class="definition-icon">{{ typeIcon(definition.reportType) }}</b>
-          <span class="definition-copy"><strong>{{ reportName(definition) }}</strong><small>{{ typeLabel(definition.reportType) }}</small></span>
+          <span class="definition-copy"><strong>{{ reportName(definition) }}</strong><small>{{ definition.defaultFormat === 'PDF' ? $t('reports.pdfHint') : $t('reports.xlsxHint') }}</small></span>
           <span class="format-chip">{{ definition.defaultFormat }}</span>
         </button>
       </div>
@@ -98,7 +99,7 @@
           </div>
           <div>
             <h3>{{ reportName(selectedDefinition) }}</h3>
-            <p>{{ selectedDefinition.reportCode }}</p>
+            <p>{{ $t('reports.defaultFormat') }} · {{ selectedDefinition.defaultFormat }}</p>
           </div>
           <span class="report-tag completed">{{ $t('reports.enabled') }}</span>
         </div>
@@ -186,17 +187,16 @@
             /></label>
           </div>
           <div class="form-grid">
-            <label
+            <label v-if="scopeTypes.length > 1"
               >{{ $t('reports.exportScope') }}<select
                 v-model="form.scopeType"
                 @change="form.scopeId = null"
               >
-                <option value="all">{{ $t('reports.allData') }}</option>
-                <option value="project">{{ $t('reports.byProject') }}</option>
-                <option value="owner">{{ $t('reports.byOwner') }}</option>
-                <option value="unit">{{ $t('reports.byUnit') }}</option>
+                <option v-for="scopeType in scopeTypes" :key="scopeType" :value="scopeType">
+                  {{ scopeType === 'all' ? $t('reports.allData') : scopeTypeLabel(scopeType) }}
+                </option>
               </select></label
-            ><label v-if="form.scopeType !== 'all'"
+            ><label v-if="form.scopeType !== 'all'" :class="{ 'scope-person-select': scopeTypes.length === 1 }"
               >{{ $t('reports.select') }} {{ scopeTypeLabel(form.scopeType)
               }}<select v-model.number="form.scopeId" required>
                 <option :value="null" disabled>
@@ -271,6 +271,7 @@ export default {
       runs: [],
       projects: [],
       owners: [],
+      tenants: [],
       units: [],
       selectedType: "property_payment",
       form: {
@@ -312,12 +313,19 @@ export default {
         return this.projects.map((x) => ({ id: x.id, label: x.name }));
       if (this.form.scopeType === "owner")
         return this.owners.map((x) => ({ id: x.id, label: x.name }));
+      if (this.form.scopeType === "tenant")
+        return this.tenants.map((x) => ({ id: x.id, label: x.name }));
       if (this.form.scopeType === "unit")
         return this.units.map((x) => ({
           id: x.id,
           label: `${x.projectName} · ${x.unitNo}`,
         }));
       return [];
+    },
+    scopeTypes() {
+      if (this.form.reportType === "owner_statement") return ["owner"];
+      if (this.form.reportType === "tenant_statement") return ["tenant"];
+      return ["all", "project", "owner", "unit"];
     },
     filteredRuns() {
       return this.runs;
@@ -370,6 +378,7 @@ export default {
         this.runs = r.runs || [];
         this.projects = r.projects || [];
         this.owners = r.owners || [];
+        this.tenants = r.tenants || [];
         this.units = r.units || [];
         this.totalRows = Number(r.page?.totalRows || 0);
         if (r.page?.page && r.page.page !== this.pageNumber)
@@ -463,7 +472,7 @@ export default {
         reportType: d?.reportType || "property_payment",
         dateStart: start,
         dateEnd: end,
-        scopeType: "all",
+        scopeType: this.defaultScopeType(d?.reportType),
         scopeId: null,
         outputFormat: d?.defaultFormat || "XLSX",
       };
@@ -478,6 +487,8 @@ export default {
         (x) => x.reportType === this.form.reportType,
       );
       if (d) this.form.outputFormat = d.defaultFormat;
+      this.form.scopeType = this.defaultScopeType(this.form.reportType);
+      this.form.scopeId = null;
     },
     async generate() {
       this.generating = true;
@@ -490,6 +501,7 @@ export default {
           projectId:
             this.form.scopeType === "project" ? this.form.scopeId : null,
           ownerId: this.form.scopeType === "owner" ? this.form.scopeId : null,
+          tenantId: this.form.scopeType === "tenant" ? this.form.scopeId : null,
           unitId: this.form.scopeType === "unit" ? this.form.scopeId : null,
           outputFormat: this.form.outputFormat,
         };
@@ -524,7 +536,12 @@ export default {
       }
     },
     scopeTypeLabel(v) {
-      return this.$t({ project: 'reports.byProject', owner: 'reports.byOwner', unit: 'reports.byUnit' }[v] || 'reports.exportScope');
+      return this.$t({ project: 'reports.byProject', owner: 'reports.byOwner', tenant: 'reports.byTenant', unit: 'reports.byUnit' }[v] || 'reports.exportScope');
+    },
+    defaultScopeType(reportType) {
+      if (reportType === 'owner_statement') return 'owner';
+      if (reportType === 'tenant_statement') return 'tenant';
+      return 'all';
     },
     downloadName(run) {
       const scope = run.scopeName || run.projectName || this.$t('reports.allScope');
@@ -543,6 +560,8 @@ export default {
           reserve_refund: "返",
           finance: "財",
           sync: "同",
+          owner_statement: "主",
+          tenant_statement: "客",
         }[v] || "表"
       );
     },
@@ -579,13 +598,17 @@ export default {
 <style scoped>
 .report-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 16px;
   min-height: 560px;
 }
 .report-main,
 .report-detail {
   min-width: 0;
+}
+.report-main {
+  overflow: hidden;
 }
 .report-head {
   display: flex;
@@ -614,22 +637,23 @@ export default {
 .definition-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-  padding: 4px 18px 16px;
+  gap: 9px;
+  padding: 7px 18px 18px;
 }
 .definition-card {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 68px;
+  min-height: 78px;
   border: 1px solid #dce4ed;
   border-radius: 10px;
-  background: #fff;
-  padding: 11px;
+  background: linear-gradient(145deg, #fff, #fbfdff);
+  padding: 12px;
   text-align: left;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+  cursor: pointer;
 }
 .definition-card:hover {
   border-color: #9fc1df;
@@ -639,16 +663,17 @@ export default {
 .definition-card.active {
   border-color: #d49718;
   background: #fff9eb;
-  box-shadow: 0 6px 16px #d4971822;
+  box-shadow: inset 3px 0 #d49718, 0 7px 18px #d4971820;
 }
 .definition-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: #0a3d72;
   color: #fff;
+  font-size: 15px;
 }
 .definition-card.active .definition-icon {
   background: #c98300;
@@ -666,12 +691,42 @@ export default {
   line-height: 1.35;
 }
 .definition-copy small {
-  margin-top: 3px;
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
   color: #718096;
   font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.report-main :deep(.toolbar) {
+  width: auto;
+  margin: 0;
+  padding: 13px 18px;
+  gap: 8px;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: #f8fbfc;
+  box-shadow: none;
+}
+.report-main :deep(.toolbar .search-box) {
+  flex: 1 1 280px;
+  min-width: 240px;
+}
+.report-main :deep(.toolbar select) {
+  width: 160px;
+  min-width: 140px;
+  flex: 0 1 160px;
+}
+.report-main :deep(.toolbar .primary-btn),
+.report-main :deep(.toolbar .ghost-btn) {
+  min-width: auto;
+  padding-inline: 13px;
 }
 .report-table {
   overflow: auto;
+  border-top: 1px solid #e3ebf1;
 }
 .report-table table {
   min-width: 1000px;
@@ -723,13 +778,21 @@ export default {
   padding: 35px !important;
 }
 .report-detail {
-  padding: 17px;
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  padding: 18px;
+  overflow: hidden;
 }
 .detail-title {
   display: grid;
   grid-template-columns: 48px 1fr auto;
   align-items: center;
   gap: 10px;
+  margin: -18px -18px 0;
+  padding: 18px;
+  border-bottom: 1px solid #e0e9ef;
+  background: linear-gradient(145deg, #f7fbfc, #fff);
 }
 .report-icon {
   display: grid;
@@ -753,15 +816,18 @@ export default {
 }
 .generate-button {
   width: 100%;
-  margin: 15px 0;
+  margin: 16px 0;
   border: 0;
-  border-radius: 7px;
-  background: #cf8900;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #efad00, #cf8900);
   color: #fff;
-  padding: 10px;
+  padding: 12px;
+  font-weight: 700;
+  box-shadow: 0 7px 16px #cf890026;
+  cursor: pointer;
 }
 .detail-section {
-  padding: 14px 0;
+  padding: 15px 0;
   border-top: 1px solid #e2e8ef;
 }
 .detail-section h4 {
@@ -774,7 +840,7 @@ export default {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding: 5px 0;
+  padding: 6px 0;
 }
 .detail-section dt {
   color: #718096;
@@ -883,6 +949,9 @@ export default {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.scope-person-select {
+  grid-column: 1 / -1;
+}
 .dialog-body fieldset {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -940,8 +1009,27 @@ export default {
   .report-layout {
     grid-template-columns: 1fr;
   }
+  .report-detail {
+    position: static;
+  }
+}
+@media (min-width: 1500px) {
+  .definition-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .definition-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .report-main :deep(.toolbar .search-box) {
+    flex-basis: 100%;
+  }
 }
 @media (max-width: 600px) {
+  .definition-strip {
+    grid-template-columns: 1fr;
+  }
   .form-grid,
   .dialog-body fieldset {
     grid-template-columns: 1fr;

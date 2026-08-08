@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +28,8 @@ import com.ccps.backend.dto.AdminExpenseCreateRequest;
 import com.ccps.backend.dto.AdminMaintenanceCreateRequest;
 import com.ccps.backend.dto.AdminMaintenanceHandlingResponse;
 import com.ccps.backend.dto.AdminMaintenanceOptionsResponse;
+import com.ccps.backend.dto.AdminPropertyMaintenanceResponse;
+import com.ccps.backend.dto.AdminPropertyMaintenanceUpdateRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.OwnerExpenseMaintenanceResponse;
 import com.ccps.backend.service.AdminMaintenanceService;
@@ -71,10 +77,34 @@ public class AdminExpenseMaintenanceController {
         return adminMaintenanceService.createExpense(AuthInterceptor.userId(request), body);
     }
 
+    @PutMapping("/records/{cashflowId}")
+    public AdminRecordCreateResponse updateExpense(@PathVariable Long cashflowId,
+            @Valid @RequestBody AdminExpenseCreateRequest body, HttpServletRequest request) {
+        return adminMaintenanceService.updateExpense(AuthInterceptor.userId(request), cashflowId, body);
+    }
+
+    @DeleteMapping("/records/{cashflowId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteExpense(@PathVariable Long cashflowId, HttpServletRequest request) {
+        adminMaintenanceService.deleteExpense(AuthInterceptor.userId(request), cashflowId);
+    }
+
     @PostMapping("/maintenance")
     public AdminRecordCreateResponse createMaintenance(@Valid @RequestBody AdminMaintenanceCreateRequest body,
             HttpServletRequest request) {
         return adminMaintenanceService.createMaintenance(AuthInterceptor.userId(request), body);
+    }
+
+    @PutMapping("/maintenance/{workOrderId}")
+    public AdminPropertyMaintenanceResponse updateMaintenance(@PathVariable Long workOrderId,
+            @Valid @RequestBody AdminPropertyMaintenanceUpdateRequest body, HttpServletRequest request) {
+        return adminMaintenanceService.updateMaintenance(AuthInterceptor.userId(request), workOrderId, body);
+    }
+
+    @DeleteMapping("/maintenance/{workOrderId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMaintenance(@PathVariable Long workOrderId, HttpServletRequest request) {
+        adminMaintenanceService.deleteMaintenance(AuthInterceptor.userId(request), workOrderId);
     }
 
     @GetMapping("/maintenance/{workOrderId}")

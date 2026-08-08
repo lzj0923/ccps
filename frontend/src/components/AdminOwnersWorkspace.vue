@@ -142,7 +142,6 @@
       <form method="dialog" @submit.prevent="saveOwner">
         <div class="modal-head"><h3>{{ ownerEditingId ? $t('legacy.t_56ca7e123ac5') : $t('legacy.t_4bc730395ca1') }}</h3><button class="icon-close" type="button" @click="closeOwnerDialog">×</button></div>
         <div class="form-grid">
-          <label>{{ $t('legacy.t_1b5a419c3d2f') }}<input v-model.trim="ownerForm.ownerNo" maxlength="30" :placeholder="$t('legacy.t_4589a81e73d1')"></label>
           <label class="wide">{{ $t('legacy.t_1c4f579e884d') }}<input v-model.trim="ownerForm.fullName" maxlength="160" required :placeholder="$t('legacy.t_87746aa5b712')"></label>
           <label>{{ $t('legacy.t_45d661f5882e') }}<input v-model.trim="ownerForm.mobilePhone" maxlength="40" required :placeholder="$t('legacy.t_fccc6804ec32')"></label>
           <label>{{ $t('legacy.t_898dcb50fa59') }}<input v-model.trim="ownerForm.homePhone" maxlength="40"></label>
@@ -161,7 +160,7 @@
     <dialog ref="propertyCreateDialog" class="modal admin-property-create-dialog">
       <form method="dialog" @submit.prevent="saveNewProperty">
         <div class="modal-head">
-          <div><h3>{{ $t('legacy.t_b5e81d15de84') }}</h3><small>{{ $t('legacy.t_3c5a59a165f1') }} {{ propertyCreateStep }}{{ $t('legacy.t_db4294e5c095') }} {{ propertyCreateStep === 1 ? $t('legacy.t_e22679b814e7') : $t('legacy.t_018b79cfceee') }}</small></div>
+          <div><h3>{{ $t('legacy.t_b5e81d15de84') }}</h3><small>{{ $t(propertyCreateStep === 1 ? 'properties.createStepChooseOwner' : 'properties.createStepDetails') }}</small></div>
           <button class="icon-close" type="button" @click="closePropertyCreateDialog">×</button>
         </div>
 
@@ -184,10 +183,7 @@
             <select v-model="propertyCreateForm.projectId" required @change="selectExistingProject">
               <option value="">{{ $t('properties.projectInputPlaceholder') }}</option>
               <option v-for="project in propertyProjects" :key="project.id" :value="String(project.id)">{{ project.name }}{{ project.city ? ` · ${project.city}` : '' }}</option>
-              <option value="__new__">＋ {{ $t('building.createProject') }}</option>
             </select>
-            <input v-if="propertyCreateForm.projectId === '__new__'" v-model.trim="propertyCreateForm.projectName" :placeholder="$t('properties.projectInputPlaceholder')" required @input="syncProjectInput">
-            <small v-if="propertyCreateForm.projectId === '__new__'" class="admin-property-form-hint">{{ $t('properties.newProjectHint') }}</small>
           </label>
           <label>{{ $t('legacy.t_5807b077534d') }}<input v-model.trim="propertyCreateForm.building" maxlength="80"></label>
           <label>{{ $t('legacy.t_fdf913aed6c7') }}<input v-model.trim="propertyCreateForm.floorNo" maxlength="20"></label>
@@ -212,14 +208,6 @@
 
         <menu v-if="propertyCreateStep === 1"><button type="button" @click="closePropertyCreateDialog">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="button" class="primary-btn" :disabled="!propertyOwnerId" @click="continuePropertyCreate">{{ $t('legacy.t_d0a1c0c58c5d') }}</button></menu>
         <menu v-else><button type="button" @click="propertyCreateStep = 1">{{ $t('legacy.t_75ef1241c0f4') }}</button><button type="submit" class="primary-btn" :disabled="propertyCreating">{{ propertyCreating ? $t('legacy.t_2cd5496ec548') : $t('legacy.t_ea9957f58b51') }}</button></menu>
-      </form>
-    </dialog>
-
-    <dialog ref="newProjectConfirmDialog" class="modal admin-project-confirm-dialog">
-      <form method="dialog" @submit.prevent>
-        <div class="modal-head"><h3>{{ $t('properties.confirmNewProjectTitle') }}</h3><button class="icon-close" type="button" @click="cancelNewProject">×</button></div>
-        <p class="admin-project-confirm-message">{{ $t('properties.confirmNewProjectMessage', { name: propertyCreateForm.projectName }) }}</p>
-        <menu><button type="button" @click="cancelNewProject">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="button" class="primary-btn" @click="confirmNewProject">{{ $t('properties.confirmNewProject') }}</button></menu>
       </form>
     </dialog>
 
@@ -315,11 +303,6 @@ export default {
       });
     },
     selectedProperty() { return this.filteredProperties.find(property => property.rowKey === this.selectedPropertyKey) || this.filteredProperties[0] || null; },
-    newProjectName() {
-      const name = String(this.propertyCreateForm.projectName || '').trim().toLowerCase();
-      return Boolean(name) && this.propertyCreateForm.projectId === '__new__'
-        && !this.propertyProjects.some(project => String(project.name || '').trim().toLowerCase() === name);
-    },
     propertyVisiblePages() { const start = Math.max(1, Math.min(this.propertyPageNumber - 2, this.propertyTotalPages - 4)); return Array.from({ length: Math.min(5, this.propertyTotalPages) }, (_, index) => start + index); },
     propertyProgress() { return !Number(this.selectedProperty?.purchasePrice) ? 0 : Math.max(0, Math.min(100, Math.round(Number(this.selectedProperty.paidAmount || 0) / Number(this.selectedProperty.purchasePrice) * 100))); },
     filteredOwners() {
@@ -495,7 +478,9 @@ export default {
       this.ownerForm.phone = this.ownerForm.mobilePhone;
       this.ownerSaving = true; this.ownerFormError = '';
       try {
-        const owner = this.ownerEditingId ? await updateAdminOwner(this.ownerEditingId, this.ownerForm) : await createAdminOwner(this.ownerForm);
+        const payload = { ...this.ownerForm };
+        delete payload.ownerNo;
+        const owner = this.ownerEditingId ? await updateAdminOwner(this.ownerEditingId, payload) : await createAdminOwner(payload);
         await this.loadOwners(owner.id);
         this.closeOwnerDialog();
         this.page.showToast(this.ownerEditingId ? '房主資料已更新' : '業主已新增，登入帳號為手機號，初始密碼 123456');
@@ -510,40 +495,25 @@ export default {
       this.propertyCreateForm = this.emptyPropertyCreateForm(); this.propertyCreateError = '';
       this.$refs.propertyCreateDialog.showModal();
     },
-    closePropertyCreateDialog() { this.$refs.newProjectConfirmDialog?.close(); this.$refs.propertyCreateDialog?.close(); },
+    closePropertyCreateDialog() { this.$refs.propertyCreateDialog?.close(); },
     continuePropertyCreate() {
       if (!this.propertyCreateOwner) { this.propertyCreateError = '請先選擇業主'; return; }
       this.propertyCreateError = ''; this.propertyCreateStep = 2;
     },
-    syncProjectInput() {
-      if (this.propertyCreateForm.projectId === '__new__') return;
-      const name = String(this.propertyCreateForm.projectName || '').trim().toLowerCase();
-      const project = this.propertyProjects.find(item => String(item.name || '').trim().toLowerCase() === name);
-      this.propertyCreateForm.projectId = project?.id || '';
-    },
     selectExistingProject() {
-      if (this.propertyCreateForm.projectId === '__new__') { this.propertyCreateForm.projectName = ''; return; }
       const project = this.propertyProjects.find(item => String(item.id) === String(this.propertyCreateForm.projectId));
       this.propertyCreateForm.projectName = project?.name || '';
     },
     async saveNewProperty() {
       if (!this.propertyCreateOwner) { this.propertyCreateStep = 1; this.propertyCreateError = '請先選擇業主'; return; }
-      this.syncProjectInput();
-      const creatingProject = this.propertyCreateForm.projectId === '__new__';
-      if ((!this.propertyCreateForm.projectId || (creatingProject && !this.propertyCreateForm.projectName)) || !this.propertyCreateForm.unitNo) { this.propertyCreateError = '請選擇建案或輸入新建案名稱，並填寫單位編號'; return; }
+      if (!this.propertyCreateForm.projectId || !this.propertyCreateForm.unitNo) { this.propertyCreateError = '請選擇已有建案，並填寫單位編號'; return; }
       if (this.propertyCreateForm.assetStage === 'OPERATING' && !this.propertyCreateForm.actualHandoverDate) { this.propertyCreateError = '已交房房產需要填寫實際交房日期'; return; }
-      if (this.newProjectName) { this.$refs.newProjectConfirmDialog.showModal(); return; }
-      await this.submitNewProperty();
-    },
-    cancelNewProject() { this.$refs.newProjectConfirmDialog?.close(); },
-    async confirmNewProject() {
-      this.$refs.newProjectConfirmDialog?.close();
       await this.submitNewProperty();
     },
     async submitNewProperty() {
       this.propertyCreating = true; this.propertyCreateError = '';
       try {
-        const payload = { ...this.propertyCreateForm, projectId: this.propertyCreateForm.projectId === '__new__' ? null : Number(this.propertyCreateForm.projectId) };
+        const payload = { ...this.propertyCreateForm, projectId: Number(this.propertyCreateForm.projectId) };
         await createAdminOwnerProperty(this.propertyCreateOwner.id, payload);
         const ownerId = this.propertyCreateOwner.id;
         await this.loadOwners(ownerId);

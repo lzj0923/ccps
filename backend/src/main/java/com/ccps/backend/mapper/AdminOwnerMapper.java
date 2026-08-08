@@ -234,8 +234,8 @@ public interface AdminOwnerMapper {
     @Select("SELECT COUNT(*) FROM owners WHERE LOWER(email) = LOWER(#{email}) AND id <> #{ownerId}")
     int countOtherOwnersByEmail(@Param("ownerId") Long ownerId, @Param("email") String email);
 
-    @Update("UPDATE owners SET owner_no=#{ownerNo}, full_name=#{fullName}, identity_no=#{identityNo}, phone=#{phone}, mobile_phone=#{mobilePhone}, home_phone=#{homePhone}, office_phone=#{officePhone}, passport_no=#{passportNo}, email=#{email}, status=#{status} WHERE id=#{ownerId}")
-    int updateOwner(@Param("ownerId") Long ownerId, @Param("ownerNo") String ownerNo, @Param("fullName") String fullName,
+    @Update("UPDATE owners SET full_name=#{fullName}, identity_no=#{identityNo}, phone=#{phone}, mobile_phone=#{mobilePhone}, home_phone=#{homePhone}, office_phone=#{officePhone}, passport_no=#{passportNo}, email=#{email}, status=#{status} WHERE id=#{ownerId}")
+    int updateOwner(@Param("ownerId") Long ownerId, @Param("fullName") String fullName,
             @Param("identityNo") String identityNo, @Param("phone") String phone, @Param("mobilePhone") String mobilePhone,
             @Param("homePhone") String homePhone, @Param("officePhone") String officePhone, @Param("passportNo") String passportNo,
             @Param("email") String email, @Param("status") String status);
@@ -246,6 +246,9 @@ public interface AdminOwnerMapper {
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertOwner(NewOwner owner);
+
+    @Update("UPDATE owners SET owner_no=#{ownerNo} WHERE id=#{ownerId} AND (owner_no IS NULL OR TRIM(owner_no) = '')")
+    int assignOwnerNo(@Param("ownerId") Long ownerId, @Param("ownerNo") String ownerNo);
 
     @Select("""
             SELECT id, project_code AS code, name, city
