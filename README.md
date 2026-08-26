@@ -43,6 +43,9 @@ database/
 ## 專案結構
 
 ```text
+backend/                    # Spring Boot 後端
+database/                   # 資料庫結構與遷移腳本
+docker/                     # 容器部署設定
 frontend/
 ├─ src/
 │  ├─ components/            # 可重用的畫面元件
@@ -59,7 +62,15 @@ frontend/
 ├─ vite.config.js
 ├─ package.json
 └─ dist/                     # Vite 編譯輸出
+project-resources/           # 不參與系統運行的文件、交付物與生成檔案
+scripts/                     # 部署與維護腳本
+tools/                       # 專案開發工具
 ```
+
+文檔、交付包、部署快照和臨時輸出均集中在
+[project-resources/](project-resources/README.md)，避免在專案根目錄散落。
+新增文件前請先查看
+[项目目录与文件存放规范](project-resources/documentation/项目目录与文件存放规范.md)。
 
 ## 重構原則
 

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "hallmark": {
+      "source": "Nutlope/hallmark",
+      "sourceType": "github",
+      "skillPath": "skills/hallmark/SKILL.md",
+      "computedHash": "6d53b2b609e05849c1dd0fc53e37daa7515089d5880c15e7e885c86e8b814e9c"
+    },
+    "search-first": {
+      "source": "affaan-m/ecc",
+      "sourceType": "github",
+      "skillPath": "skills/search-first/SKILL.md",
+      "computedHash": "c82ffe228acdc70bb4d641d391f811d3d3ea5ba467b9ffe88e6dc4cd71c7b416"
+    }
+  }
+}

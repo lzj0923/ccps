@@ -14,5 +14,13 @@ backend/config/
 .DS_Store
 Thumbs.db
 .pnpm-store/
+.gradle-cache/
+.tmp/
+.codex-video-review/
+.codex-video-tools/
+.hallmark/
 .codex-ppt-build/
+project-resources/generated/
+project-resources/deliverables/*.apk
+project-resources/deployment/packages/database-migrations-latest.tar.gz
 scripts/rebuild_db.py
