@@ -186,6 +186,12 @@ const modules = [
     )
   },
   {
+    id: "adminOffMarketProperties", shell: "admin-shell", code: "03.1", name: "下架房源", avatar: false,
+    title: "下架房源", category: "RENTAL LISTINGS", hero: "管理已下架的出租房源资料。",
+    hint: "历史租约、账单、附件与维修资料完整保留，需要时可重新上架。",
+    table: "下架房源列表", searchHint: "搜索建案、单位或业主", primaryAction: "", secondaryAction: ""
+  },
+  {
     id: "adminProcess", shell: "admin-shell", code: "02.5", name: "租赁智控台", avatar: false,
     title: "租赁智控台", category: "ADMIN PROPERTY WORKFLOW", hero: "先選房產，再按流程完成出租作業。",
     hint: "集中查看出租委託、租客、租約、收款及後續營運進度。",
@@ -308,6 +314,12 @@ const modules = [
     )
   },
   {
+    id: "adminAccounts", shell: "admin-shell", code: "09.5", name: "管理员账号", avatar: false,
+    title: "管理员账号", category: "ADMIN ACCESS CONTROL", hero: "管理五类后台岗位账号与登录状态。",
+    hint: "岗位权限会同时作用于菜单、操作按钮与后端接口。", table: "后台账号列表", searchHint: "搜索账号、姓名、岗位或联系方式",
+    primaryAction: "新增管理员", secondaryAction: ""
+  },
+  {
     id: "adminAudit", shell: "admin-shell", code: "10", name: "操作審計", avatar: false,
     title: "操作審計中心", category: "ADMIN AUDIT", hero: "集中查看後台資料的新增、修改與停用紀錄。",
     hint: "可按時間、文員、操作類型與關鍵字追查資料異動。",
@@ -337,6 +349,7 @@ const featureMap = {
   adminRentalSigning: [],
   adminOwners: [["H1", "業主資料", ["登記業主基本資料", "管理名下單位", "上傳合約文件"]], ["H2", "房產概覽", ["房產總價", "已繳 / 未繳", "預備金狀態"]], ["H3", "文件狀態", ["買賣合約", "身份文件", "付款憑證"]]],
   adminProperties: [["P1", "房產主檔", ["建案與單位", "房型與面積", "交房狀態"]], ["P2", "業主關聯", ["所屬業主", "持有比例", "持有日期"]], ["P3", "財務狀態", ["房產總價", "已繳金額", "未繳金額"]]],
+  adminOffMarketProperties: [],
   adminTenantDirectory: [],
   adminTenants: [["I1", "租客資料", ["租客基本資料", "租約資料", "押金資料"]], ["I2", "租金管理", ["每月租金", "已收未收", "逾期提醒"]], ["I3", "合約提醒", ["租約到期", "文件到期", "續約跟進"]]],
   adminMaintenance: [["J1", "支出分類", ["維修費用", "水電費", "管理費", "其他支出"]], ["J2", "工單追蹤", ["處理進度", "供應商", "維修附件"]], ["J3", "財務確認", ["付款憑證", "支付狀態", "同步會計"]]],
@@ -361,6 +374,7 @@ const workflowMap = {
   adminRentalSigning: [],
   adminOwners: ["新增業主", "綁定房產", "上傳文件", "檢查狀態", "同步業主端"],
   adminProperties: ["新增房產", "綁定業主", "維護資料", "檢查狀態", "查看房款"],
+  adminOffMarketProperties: [],
   adminTenantDirectory: ["維護資料", "建立租客", "管理狀態"],
   adminTenants: ["新增租客", "建立租約", "每月租金", "收款確認", "到期提醒"],
   adminMaintenance: ["建立工單", "分類支出", "上傳憑證", "審核付款", "同步會計"],
@@ -385,6 +399,7 @@ const reminderMap = {
   adminRentalSigning: [],
   adminOwners: ["屋主資料缺失", "合約文件即將到期", "付款憑證待補件"],
   adminProperties: ["房產資料缺失", "未綁定業主", "交房狀態待更新"],
+  adminOffMarketProperties: [],
   adminTenants: ["租金收款通知", "租約到期提醒", "租客文件缺失"],
   adminMaintenance: ["維修費用需確認", "支出憑證缺失", "付款待審核"],
   adminFinance: ["付款後未確認", "部分收款需追蹤", "同步會計失敗"],
@@ -479,6 +494,7 @@ const rows = {
   ownerDocuments: [["買賣合約", "A-28-05", "PDF", "2025-01-02", "已完成", "2026-01-02", "正常"], ["付款憑證", "A-28-05", "JPG", "2025-05-15", "待處理", "-", "待補件"], ["租約文件", "A-19-09", "PDF", "2024-09-30", "已完成", "2025-09-30", "即將到期"]],
   adminOwners: [["Tan Wei Ming", "+60 12-345 6789", "Pavilion Square", "A-28-05", "正常", "1,300,000.00", "1,200,000.00", "100,000.00", "已完成"], ["Lim Jia Wei", "+60 13-987 6543", "Pavilion Square", "B-12-07", "待處理", "850,000.00", "600,000.00", "250,000.00", "待處理"], ["Wong Kok Leong", "+60 16-223 5566", "Pavilion Square", "A-19-09", "正常", "3,180,000.00", "3,030,000.00", "150,000.00", "已完成"], ["Nur Farah Binti Ali", "+60 11-445 6677", "Pavilion Square", "C-10-02", "待處理", "2,650,000.00", "2,400,000.00", "250,000.00", "待確認"], ["Ho Chin Seng", "+60 12-778 8890", "Pavilion Square", "B-30-01", "正常", "3,500,000.00", "3,500,000.00", "0.00", "已完成"], ["G R Alphyshah Bt Rahman", "+60 17-889 9012", "Pavilion Square", "D-10-02", "待處理", "2,400,000.00", "1,200,000.00", "1,200,000.00", "待處理"], ["Yap Soon Huat", "+60 13-223 4455", "Pavilion Square", "A-30-08", "正常", "3,000,000.00", "3,000,000.00", "0.00", "已完成"], ["Lee Mei Ling", "+60 16-556 7788", "Pavilion Square", "C-20-08", "待處理", "2,800,000.00", "2,100,000.00", "700,000.00", "待處理"], ["Ong Mei Ling", "+60 12-334 5566", "Pavilion Square", "A-45-01", "正常", "1,180,000.00", "1,180,000.00", "0.00", "已完成"], ["Steven Tan", "+60 14-667 8899", "Pavilion Square", "B-20-01", "待處理", "860,000.00", "610,000.00", "250,000.00", "待處理"]],
   adminProperties: [],
+  adminOffMarketProperties: [],
   adminTenantDirectory: [],
   adminTenants: [["Tan Wei Ming", "Pavilion Square / A-28-05", "2024-12-15 ~ 2025-12-14", "2,800.00", "2026-05-15", "2,800.00", "0.00", "0", "已收", "有", "已確認"], ["Lim Jia Hui", "Pavilion Square / B-12-03", "2025-02-01 ~ 2026-01-31", "3,200.00", "2026-05-05", "1,600.00", "1,600.00", "0", "部分收款", "有", "待財務確認"], ["Wong Kok Leong", "Pavilion Square / A-18-09", "2024-11-01 ~ 2025-10-31", "3,000.00", "2026-05-01", "0.00", "3,000.00", "14", "逾期", "-", "待財務確認"], ["Nur Farah Binti Ali", "Pavilion Square / C-05-12", "2025-03-01 ~ 2026-02-28", "2,600.00", "2026-05-01", "0.00", "2,600.00", "14", "逾期", "-", "待確認"], ["Ho Chin Seng", "Pavilion Square / B-23-01", "2024-09-15 ~ 2025-09-14", "3,500.00", "2026-05-01", "3,500.00", "0.00", "0", "已收", "有", "已確認"], ["Siti Aisyah Bt Rahman", "Pavilion Square / A-07-02", "2025-02-10 ~ 2026-02-09", "2,400.00", "2026-05-01", "1,200.00", "1,200.00", "5", "部分收款", "有", "待財務確認"], ["Yap Soon Huat", "Pavilion Square / B-16-01", "2024-01-01 ~ 2025-09-30", "3,000.00", "2026-05-01", "0.00", "3,000.00", "14", "逾期", "-", "-"], ["Lee Mei Ling", "Pavilion Square / C-20-08", "2025-04-15 ~ 2026-04-14", "2,900.00", "2026-05-01", "0.00", "2,900.00", "0", "待收", "-", "-"], ["Muhammad Izwan", "Pavilion Square / A-33-11", "2025-02-20 ~ 2026-02-19", "2,700.00", "2026-05-01", "2,700.00", "0.00", "0", "已收", "有", "待財務確認"], ["Chan Pui San", "Pavilion Square / B-30-06", "2024-08-01 ~ 2025-07-31", "3,300.00", "2026-05-01", "0.00", "3,300.00", "14", "逾期", "-", "-"]],
   adminMaintenance: [["WO-10091", "維修費用", "A-28-05", "CoolMax Service", "580.00", "已完成", "已完成", "已完成"], ["EX-10092", "管理費", "Pavilion Square", "CleanPro", "3,600.00", "已完成", "待確認", "待處理"], ["WO-10093", "水電費", "C-20-08", "PipeCare", "920.00", "待處理", "待確認", "處理中"]],
@@ -504,6 +520,7 @@ const headers = {
   ownerDocuments: ["文件名稱", "單位", "格式", "上傳日期", "審核狀態", "到期日", "狀態", "操作"],
   adminOwners: ["業主姓名", "手機號", "建案/項目", "單位編號", "房產狀態", "房產總價", "已繳金額", "未繳金額", "文件狀態", "操作"],
   adminProperties: ["建案／項目", "單位編號", "業主", "房型", "房產階段", "房產總價", "已繳金額", "未繳金額", "操作"],
+  adminOffMarketProperties: [],
   adminProcess: [],
   adminRentalSigning: [],
   adminTenantDirectory: [],

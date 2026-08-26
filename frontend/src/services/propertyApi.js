@@ -1,3 +1,5 @@
+import { localizeTenantApiErrorMessage } from './tenantApiErrorMessages';
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 const API_ERROR_MESSAGES = new Map([
@@ -14,6 +16,11 @@ const API_ERROR_MESSAGES = new Map([
   ['Unable to review rental mandate', '委托审核失败，请确认授权文件已完成签署'],
   ['Current rental mandate does not cover this lease', '当前出租委托未覆盖完整租期，请先调整委托期限或缩短租约'],
   ['Unit already has an overlapping active lease', '该单位已有重叠中的有效租约，请先结束旧租约或调整租期'],
+  ['Lease end date must not be before start date', '租约结束日期不能早于开始日期，请重新选择日期'],
+  ['Lease not found', '租约不存在或已被删除，请重新载入列表'],
+  ['Only active leases can be edited', '只有有效租约可以修改，请重新载入确认租约状态'],
+  ['Active lease end date cannot be in the past', '有效租约的结束日期不能早于今天，请重新选择日期'],
+  ['Lease state changed; reload and try again', '租约资料已被其他操作修改，请重新载入后再试'],
   ['Active tenant not found', '当前租客不存在或未启用，请重新选择租客'],
   ['Operating unit not found', '当前单位尚未进入可出租状态，请先完成房产交接'],
   ['Invalid rent calculation method', '租金计算方式无效，请刷新页面后重试'],
@@ -27,13 +34,47 @@ const API_ERROR_MESSAGES = new Map([
   ['Project could not be created', '建案新增失败，请稍后再试'],
   ['Project could not be updated', '建案更新失败，请稍后再试'],
   ['Project could not be deleted', '建案删除失败，请稍后再试'],
-]);
+  ['Owner identity number already exists', '该身份证件号码已被其他业主使用，请核对后重试'],
+  ['Owner phone already exists', '该手机号已作为业主登录账号使用，请更换手机号或直接选择已有业主'],
+  ['Owner phone number must use E.164 format', '请选择国家或地区，并填写有效的业主手机号码'],
+  ['Tenant phone number must use E.164 format', '请选择国家或地区，并填写有效手机号码'],
+  ['WhatsApp phone number must use a valid international format', '请选择国家或地区，并填写有效的 WhatsApp 手机号码'],
+  ['WhatsApp phone number is required', '启用 WhatsApp 自动催收时必须填写手机号码'],
+  ['Unable to create owner', '业主建立失败，请稍后重试'],
+  ['Unable to assign owner number', '系统生成业主编号失败，请稍后重试'],
+  ['Created owner could not be loaded', '业主已建立但资料读取失败，请重新载入'],
+  ['Property unit not found', '房产不存在或已被删除，请刷新列表'],
+  ['Property with related business records cannot be deleted', '该房产已有租约、财务、维修、文件或其他业务资料，为保护历史记录不能删除'],
+  ['Property was changed by another request', '房产资料已发生变化，请刷新后重试'],
+  ['Rental listing is already off market', '该出租房源已经下架，请刷新列表'],
+  ['Rental listing is not off market', '该出租房源当前不在下架状态，请刷新列表'],
+  ['Property has no active rental service', '该房产尚未启用出租服务，不能进行房源上下架'],
+  ['Occupied rental listing cannot be relisted', '该房源仍有生效租约，不能重新上架招租'],
+  ['Property has no active owner or has been disposed', '该房产没有有效业主关系或已完成资产处置，暂时不能重新上架'],
+  ['Invalid off-market reason', '请选择有效的下架原因'],
+  ['Maintenance work order is already completed', '该维修工单已经完成，请刷新列表后再操作'],
+  ['Cancelled work orders cannot be completed', '已取消的维修工单不能标记为完成'],
+  ['Invalid settlement method', '结算方式无效，请重新选择后再提交'],
+  ['The work order is not linked to an owner', '该维修工单没有关联业主，请先补充房产业主资料'],
+  ['For maintenance amounts above RM 500, at least one before photo and one after photo are required', '维修金额超过 RM 500，维修前与维修后照片各至少需要 1 份'],
+  ['This work order already has a reserve deduction and must use reserve settlement', '该维修工单已有预备金扣款，请选择预备金结算'],
+  ['No reserve account is linked to this unit', '该单位没有关联可用的预备金账户'],
+  ['Reserve deduction did not match the maintenance amount; transaction rolled back', '预备金扣款金额与维修金额不一致，操作已回滚，请刷新后重试'],
+  ['Unable to debit reserve balance', '预备金扣款失败，请刷新后重试'],
+  ['Unable to record reserve debit', '预备金扣款记录保存失败，请刷新后重试'],
+  ['Unable to create finance record', '财务记录建立失败，请刷新后重试'],
+  ['Unable to create cashflow entry', '收支流水建立失败，请刷新后重试'],
+  ]);
 
 export function localizeApiErrorMessage(message, status = '') {
   const value = String(message || '').trim();
+  const tenantMessage = localizeTenantApiErrorMessage(value);
+  if (tenantMessage) return tenantMessage;
   if (API_ERROR_MESSAGES.has(value)) return API_ERROR_MESSAGES.get(value);
   if (!value || /^API request failed/i.test(value)) return `服務請求失敗${status ? `（HTTP ${status}）` : ''}`;
-  if (/^[\x00-\x7F]*[A-Za-z][\x00-\x7F]*$/.test(value)) return '操作失敗，請稍後再試；如問題持續，請聯絡管理員。';
+  if (/^[\x00-\x7F]*[A-Za-z][\x00-\x7F]*$/.test(value)) {
+    return `操作失败：${value}${status ? `（HTTP ${status}）` : ''}`;
+  }
   return value;
 }
 
@@ -91,6 +132,10 @@ export function fetchAdminOwners() {
   return request('/admin/owners');
 }
 
+export function fetchAdminOwner(ownerId) {
+  return request(`/admin/owners/${ownerId}`);
+}
+
 export function fetchAdminProperties(filters = {}) {
   const query = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
@@ -98,6 +143,10 @@ export function fetchAdminProperties(filters = {}) {
   });
   const suffix = query.toString() ? `?${query}` : '';
   return request(`/admin/properties${suffix}`);
+}
+
+export function deleteAdminProperty(unitId) {
+  return request(`/admin/properties/${unitId}`, { method: 'DELETE' });
 }
 
 export function fetchAdminOwnerSummary() {
@@ -117,6 +166,15 @@ export function createAdminBuildingProject(payload) {
   return request('/admin/buildings/projects', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export function fetchAdminOffMarketProperties(filters = {}) {
+  const query = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== '') query.set(key, value); });
+  return request(`/admin/rental-listings/off-market${query.size ? `?${query}` : ''}`);
+}
+export function markAdminPropertyOffMarket(unitId, payload) { return request(`/admin/rental-listings/${unitId}/off-market`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function relistAdminProperty(unitId, payload = {}) { return request(`/admin/rental-listings/${unitId}/relist`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function fetchAdminPropertyManagementHistory(unitId) { return request(`/admin/rental-listings/${unitId}/history`); }
+
 export function fetchAdminProjects(filters = {}) {
   const query = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
@@ -124,6 +182,10 @@ export function fetchAdminProjects(filters = {}) {
   });
   const suffix = query.toString() ? `?${query}` : '';
   return request(`/admin/projects${suffix}`);
+}
+
+export function checkAdminProjectCodeAvailability(code) {
+  return request(`/admin/projects/code-availability?code=${encodeURIComponent(code)}`);
 }
 
 export function createAdminProject(payload) {
@@ -184,6 +246,24 @@ export function runAllAdminReminderRules() {
 
 export function retryAdminReminderDelivery(deliveryId) {
   return request(`/admin/reminders/deliveries/${deliveryId}/retry`, { method: 'POST' });
+}
+
+export function fetchAdminRentCollectionWorkflow() {
+  return request('/admin/reminders/rent-collection');
+}
+
+export function sendAdminRentCollectionStage(invoiceId, stage) {
+  return request(`/admin/reminders/rent-collection/${invoiceId}/stages/${stage}/send`, { method: 'POST' });
+}
+
+export function holdAdminRentCollection(invoiceId, reason) {
+  return request(`/admin/reminders/rent-collection/${invoiceId}/hold`, {
+    method: 'PUT', body: JSON.stringify({ reason })
+  });
+}
+
+export function resumeAdminRentCollection(invoiceId) {
+  return request(`/admin/reminders/rent-collection/${invoiceId}/hold`, { method: 'DELETE' });
 }
 
 
@@ -285,6 +365,11 @@ export function fetchAdminTenancy(filters = {}) {
 }
 
 export function fetchAdminTenancyOptions() { return request('/admin/tenancy/options'); }
+export function fetchAdminRentalSpaces(unitId) { return request(`/admin/units/${unitId}/rental-spaces`); }
+export function createAdminRentalSpace(unitId, payload) { return request(`/admin/units/${unitId}/rental-spaces`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function updateAdminRentalSpace(unitId, spaceId, payload) { return request(`/admin/units/${unitId}/rental-spaces/${spaceId}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+export function disableAdminRentalSpace(unitId, spaceId) { return request(`/admin/units/${unitId}/rental-spaces/${spaceId}`, { method: 'DELETE' }); }
+export function updateAdminRentalMode(unitId, rentalMode) { return request(`/admin/units/${unitId}/rental-spaces/mode`, { method: 'PUT', body: JSON.stringify({ rentalMode }) }); }
 export function fetchAdminTenantDirectory(filters = {}) {
   const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== null && value !== undefined && value !== ''));
   return request(`/admin/tenancy/tenants${params.size ? `?${params}` : ''}`);
@@ -293,6 +378,12 @@ export function fetchAdminTenantDetail(tenantId) { return request(`/admin/tenanc
 export function fetchAdminDepositAccounts(filters = {}) {
   const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== null && value !== undefined && value !== ''));
   return request(`/admin/tenancy/deposits${params.size ? `?${params}` : ''}`);
+}
+
+export function updateAdminFinanceAllocationNote(financeRecordId, payload) {
+  return request(`/admin/finance/reviews/${financeRecordId}/allocation-note`, {
+    method: 'PUT', body: JSON.stringify(payload)
+  });
 }
 export function fetchAdminDepositAccount(leaseId) { return request(`/admin/tenancy/deposits/${leaseId}`); }
 export function createAdminTenantDepositTransaction(leaseId, payload) { return request(`/admin/tenancy/leases/${leaseId}/deposit-transactions`, { method: 'POST', body: JSON.stringify(payload) }); }
@@ -308,6 +399,8 @@ export function submitAdminRentalMandate(mandateId) { return request(`/admin/ren
 export function reviewAdminRentalMandate(mandateId, payload) { return request(`/admin/rental-mandates/${mandateId}/review`, { method: 'POST', body: JSON.stringify(payload) }); }
 export function updateAdminRentalMandateStatus(mandateId, payload) { return request(`/admin/rental-mandates/${mandateId}/status`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function fetchAdminRentalMandateHistory(mandateId) { return request(`/admin/rental-mandates/${mandateId}/history`); }
+export function fetchAdminRentalAppointmentDetails(mandateId) { return request(`/admin/rental-mandates/${mandateId}/appointment-details`); }
+export function saveAdminRentalAppointmentDetails(mandateId, fields) { return request(`/admin/rental-mandates/${mandateId}/appointment-details`, { method: 'PUT', body: JSON.stringify({ fields }) }); }
 export function fetchAdminPropertyHandover(mandateId) { return request(`/admin/rental-mandates/${mandateId}/handover`); }
 export function saveAdminPropertyHandover(mandateId, payload) { return request(`/admin/rental-mandates/${mandateId}/handover`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function fetchAdminRentalMandateDocuments(mandateId) { return request(`/admin/rental-mandates/${mandateId}/documents`); }
@@ -341,10 +434,17 @@ export function confirmAdminRentCollection(invoiceId, payload, proof = null) {
   const body = new FormData();
   body.append('payload', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
   if (proof) body.append('proof', proof);
-  return request(`/admin/tenancy/rent-invoices/${invoiceId}/confirm`, { method: 'POST', body });
+  return request(`/admin/finance/rent/invoices/${invoiceId}/confirm`, { method: 'POST', body });
+}
+
+export function batchConfirmAdminRentCollections(payload) {
+  return request('/admin/finance/rent/invoices/batch-confirm', {
+    method: 'POST', body: JSON.stringify(payload)
+  });
 }
 export function createAdminTenant(payload) { return request('/admin/tenancy/tenants', { method: 'POST', body: JSON.stringify(payload) }); }
 export function updateAdminTenant(tenantId, payload) { return request(`/admin/tenancy/tenants/${tenantId}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+export function updateAdminTenantWhatsAppSubscription(tenantId, payload) { return request(`/admin/tenancy/tenants/${tenantId}/whatsapp-subscription`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function deleteAdminTenant(tenantId) { return request(`/admin/tenancy/tenants/${tenantId}`, { method: 'DELETE' }); }
 export function createAdminLease(payload) { return request('/admin/tenancy/leases', { method: 'POST', body: JSON.stringify(payload) }); }
 export function createAdminLeaseFirstInvoice(leaseId, billingMonth) {
@@ -378,8 +478,11 @@ export function uploadAdminLeaseContract(leaseId, file) {
   const body = new FormData(); body.append('file', file);
   return request(`/admin/tenancy/leases/${leaseId}/contract`, { method: 'POST', body });
 }
-export function startAdminLeaseSignature(leaseId, payload) { return request(`/admin/e-signatures/leases/${leaseId}`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function fetchAdminLeaseSignatureParticipants(leaseId) { return request(`/admin/e-signatures/leases/${leaseId}/participants`); }
+export function startAdminLeaseSignaturePackage(leaseId, payload) { return request(`/admin/e-signatures/leases/${leaseId}/package`, { method: 'POST', body: JSON.stringify(payload) }); }
 export function startAdminMandateDocumentSignature(mandateId, documentId, payload) { return request(`/admin/e-signatures/rental-mandates/${mandateId}/documents/${documentId}`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function fetchAdminMandateSignatureParticipants(mandateId, documentId) { return request(`/admin/e-signatures/rental-mandates/${mandateId}/documents/${documentId}/participants`); }
+export function startAdminMandateSignaturePackage(mandateId, documentId, payload) { return request(`/admin/e-signatures/rental-mandates/${mandateId}/documents/${documentId}/package`, { method: 'POST', body: JSON.stringify(payload) }); }
 export function fetchPublicSignature(token) { return request(`/public/signatures/${token}`); }
 export function resendPublicSignatureCode(token) { return request(`/public/signatures/${token}/verification-code`, { method: 'POST' }); }
 export function signPublicSignature(token, payload) { return request(`/public/signatures/${token}/sign`, { method: 'POST', body: JSON.stringify(payload) }); }
@@ -418,6 +521,21 @@ export function replaceAdminContractTemplate(templateType, file) {
   const body = new FormData(); body.append('file', file);
   return request(`/admin/contract-templates/${encodeURIComponent(templateType)}/template`, { method: 'POST', body });
 }
+export async function fetchAdminContractTemplateFile(templateType) {
+  const response = await fetch(`${API_BASE_URL}/admin/contract-templates/${encodeURIComponent(templateType)}/template`, { credentials: 'include' });
+  if (!response.ok) {
+    let message = `API request failed: ${response.status}`;
+    try { message = (await response.json()).message || message; } catch { /* Keep status. */ }
+    throw new Error(localizeApiErrorMessage(message, response.status));
+  }
+  return response.blob();
+}
+export function fetchAdminContractTemplateLayout(templateType) {
+  return request(`/admin/contract-templates/${encodeURIComponent(templateType)}/layout`);
+}
+export function saveAdminContractTemplateLayout(templateType, layout) {
+  return request(`/admin/contract-templates/${encodeURIComponent(templateType)}/layout`, { method: 'PUT', body: JSON.stringify(layout) });
+}
 export function sendAdminRentReminder(invoiceId) { return request(`/admin/tenancy/rent-invoices/${invoiceId}/reminders`, { method: 'POST' }); }
 export function uploadAdminRentProof(financeRecordId, file) {
   const body = new FormData(); body.append('file', file);
@@ -433,9 +551,9 @@ export async function fetchAdminRentProof(documentId, download = false) {
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
-export function confirmAdminFinanceReview(financeRecordId, note) {
+export function confirmAdminFinanceReview(financeRecordId, transactionDate, note, receiptDate = null) {
   return request(`/admin/finance/reviews/${financeRecordId}/confirm`, {
-    method: 'POST', body: JSON.stringify({ note })
+    method: 'POST', body: JSON.stringify({ transactionDate, receiptDate, note })
   });
 }
 
@@ -471,9 +589,15 @@ export function reopenAdminFinanceReview(financeRecordId, note) {
   });
 }
 
-export function batchConfirmAdminFinanceReviews(ids, note, referenceNo = '') {
+export function batchReopenAdminFinanceReviews(ids, note) {
+  return request('/admin/finance/reviews/batch-reopen', {
+    method: 'POST', body: JSON.stringify({ ids, note })
+  });
+}
+
+export function batchConfirmAdminFinanceReviews(ids, transactionDate, note, referenceNo = '', receiptDate = null) {
   return request('/admin/finance/reviews/batch-confirm', {
-    method: 'POST', body: JSON.stringify({ ids, note, referenceNo: referenceNo || null })
+    method: 'POST', body: JSON.stringify({ ids, transactionDate, receiptDate, note, referenceNo: referenceNo || null })
   });
 }
 
@@ -867,12 +991,22 @@ export function deleteAdminPropertyRepairReport(ownerId, ownerUnitId, workOrderI
   });
 }
 
-export function fetchAdminPropertyOperations(ownerId, ownerUnitId, month) {
-  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/operations?month=${encodeURIComponent(month)}`);
+export function fetchAdminPropertyOperations(ownerId, ownerUnitId, month, leaseId = null) {
+  const query = new URLSearchParams({ month });
+  if (leaseId) query.set('leaseId', leaseId);
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/operations?${query}`);
 }
 
-export function createAdminPropertyOperationsCharge(ownerId, ownerUnitId, month, payload) {
-  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/operations/charges?month=${encodeURIComponent(month)}`, {
+export function updateAdminPropertyCashflowAllocationNote(ownerId, ownerUnitId, cashflowId, payload) {
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/income-expenses/${cashflowId}/allocation-note`, {
+    method: 'PUT', body: JSON.stringify(payload)
+  });
+}
+
+export function createAdminPropertyOperationsCharge(ownerId, ownerUnitId, month, leaseId, payload) {
+  const query = new URLSearchParams({ month });
+  if (leaseId) query.set('leaseId', leaseId);
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/operations/charges?${query}`, {
     method: 'POST', body: JSON.stringify(payload)
   });
 }
@@ -938,6 +1072,14 @@ export function createAdminExpense(payload) {
   return request('/admin/expenses/records', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export function createAdminPropertyOperationsSharedCharge(ownerId, ownerUnitId, month, leaseId, payload) {
+  const query = new URLSearchParams({ month });
+  if (leaseId) query.set('leaseId', leaseId);
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/operations/shared-charges?${query}`, {
+    method: 'POST', body: JSON.stringify(payload)
+  });
+}
+
 export function updateAdminExpense(id, payload) {
   return request(`/admin/expenses/records/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 }
@@ -956,6 +1098,18 @@ export function updateAdminMaintenance(id, payload) {
 
 export function deleteAdminMaintenance(id) {
   return request(`/admin/expenses/maintenance/${id}`, { method: 'DELETE' });
+}
+
+export function fetchAdminRecycleBin() {
+  return request('/admin/expenses/recycle-bin');
+}
+
+export function restoreAdminRecycleBin(id) {
+  return request(`/admin/expenses/recycle-bin/${id}/restore`, { method: 'POST' });
+}
+
+export function purgeAdminRecycleBin(id) {
+  return request(`/admin/expenses/recycle-bin/${id}`, { method: 'DELETE' });
 }
 
 export function fetchAdminMaintenanceDetail(workOrderId) {
@@ -985,6 +1139,13 @@ export function completeAdminMaintenance(workOrderId, payload) {
   return request(`/admin/expenses/maintenance/${workOrderId}/complete`, {
     method: 'POST',
     body: JSON.stringify(payload)
+  });
+}
+
+export function resubmitAdminMaintenanceFinance(workOrderId, note = '') {
+  return request(`/admin/expenses/maintenance/${workOrderId}/resubmit-finance`, {
+    method: 'POST',
+    body: JSON.stringify({ note })
   });
 }
 
@@ -1090,6 +1251,35 @@ export function fetchOwnerDocuments() {
 
 export async function fetchOwnerDocumentFile(documentId, download = false) {
   const response = await fetch(`${API_BASE_URL}/owner/documents/${documentId}/file?download=${download}`, {
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    let message = `API request failed: ${response.status}`;
+    try {
+      const body = await response.json();
+      message = body.message || message;
+    } catch {
+      // Keep the HTTP status when the server does not return JSON.
+    }
+    throw new Error(localizeApiErrorMessage(message, response.status));
+  }
+  return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
+}
+
+export function fetchOwnerPropertyHandoverReports(ownerUnitId) {
+  return request(`/owner/properties/${ownerUnitId}/handover-reports`);
+}
+
+export function fetchOwnerPropertyInformation(ownerUnitId) {
+  return request(`/owner/properties/${ownerUnitId}/information`);
+}
+
+export function fetchOwnerPropertyCashflows(ownerUnitId) {
+  return request(`/owner/properties/${ownerUnitId}/cashflows`);
+}
+
+export async function fetchOwnerPropertyHandoverReportFile(ownerUnitId, reportId, download = false) {
+  const response = await fetch(`${API_BASE_URL}/owner/properties/${ownerUnitId}/handover-reports/${reportId}/file?download=${download}`, {
     credentials: 'include'
   });
   if (!response.ok) {

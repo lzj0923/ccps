@@ -3,6 +3,7 @@ package com.ccps.backend.service;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 import java.math.BigDecimal;
 
@@ -46,5 +47,23 @@ class AdminPropertyCashflowServiceTest {
         verify(mapper).voidFinance(45L);
         verify(mapper,never()).deleteCashflow(27L);
         verify(mapper,never()).deleteFinance(45L);
+    }
+
+    @Test
+    void updatesOnlyAllocationNoteAndStoresReusableDefaultWithoutTouchingBill(){
+        PropertyContext context=new PropertyContext();context.setOwnerId(1L);context.setOwnerUnitId(10L);context.setUnitId(12L);
+        CashflowRow before=new CashflowRow();before.setId(27L);before.setFinanceRecordId(45L);before.setDirection("expense");before.setCategory("utilities");
+        CashflowRow after=new CashflowRow();after.setId(27L);after.setFinanceRecordId(45L);after.setDirection("expense");after.setCategory("utilities");after.setAllocationNote("租戶已付 RM 80，屋主已付 RM 20");
+        when(mapper.findProperty(1L,10L)).thenReturn(context);
+        when(mapper.find(12L,27L)).thenReturn(before,after);
+        when(mapper.updateAllocationNote(27L,"租戶已付 RM 80，屋主已付 RM 20")).thenReturn(1);
+        when(mapper.upsertAllocationNoteDefault(12L,"expense","utilities","租戶已付 RM 80，屋主已付 RM 20",1L)).thenReturn(1);
+
+        service.updateAllocationNote(1L,1L,10L,27L," 租戶已付 RM 80，屋主已付 RM 20 ",true);
+
+        verify(mapper).updateAllocationNote(27L,"租戶已付 RM 80，屋主已付 RM 20");
+        verify(mapper).upsertAllocationNoteDefault(12L,"expense","utilities","租戶已付 RM 80，屋主已付 RM 20",1L);
+        verify(mapper,times(2)).find(12L,27L);
+        verify(mapper,never()).updateFinance(org.mockito.ArgumentMatchers.any());
     }
 }

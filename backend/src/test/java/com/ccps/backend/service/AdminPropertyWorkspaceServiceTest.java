@@ -42,9 +42,9 @@ class AdminPropertyWorkspaceServiceTest {
                 null, "E-09-03", "一房", new BigDecimal("52.6"), 1, "available", "OPERATING",
                 null, LocalDate.of(2024, 6, 18), List.of("RENTAL"), new BigDecimal("100"), true,
                 LocalDate.of(2024, 6, 18), null, new BigDecimal("680000"), new BigDecimal("680000"),
-                BigDecimal.ZERO, "not_applicable");
+                BigDecimal.ZERO, "not_applicable", null, null, null, null, null, null, null);
         AdminOwnerResponse owner = new AdminOwnerResponse(7L, "000397", "陳偉明", null, "+60123",
-                "+60123", null, null, null, "owner@example.com", "active", List.of(property));
+                "+60123", null, null, null, "owner@example.com", "Owner address", "active", List.of(property));
         AdminPropertyOwnershipResponse ownership = new AdminPropertyOwnershipResponse(1L, 120L, 7L,
                 "000397", "陳偉明", null, "+60123", "owner@example.com", new BigDecimal("100"), true,
                 LocalDate.of(2024, 6, 18), null, "active");

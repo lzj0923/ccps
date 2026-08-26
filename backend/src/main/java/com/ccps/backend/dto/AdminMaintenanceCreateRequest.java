@@ -14,4 +14,16 @@ public record AdminMaintenanceCreateRequest(
         @NotBlank @Size(max = 180) String title,
         @Size(max = 1000) String description,
         @NotNull LocalDateTime requestedAt,
-        BigDecimal estimatedAmount) { }
+        BigDecimal estimatedAmount,
+        @Size(max = 160) String payerName,
+        @Size(max = 120) String bankName,
+        @Size(max = 120) String paymentAccountNo,
+        @Size(max = 40) String feeAccountKey,
+        @Size(max = 120) String feeAccountNo) {
+
+    /** Backwards-compatible constructor for property and test callers. */
+    public AdminMaintenanceCreateRequest(Long unitId, Long vendorId, String category, String title,
+            String description, LocalDateTime requestedAt, BigDecimal estimatedAmount) {
+        this(unitId, vendorId, category, title, description, requestedAt, estimatedAmount, null, null, null, null, null);
+    }
+}

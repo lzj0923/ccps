@@ -19,11 +19,22 @@ public interface AdminReminderMapper {
     @Select("""
             SELECT (SELECT COUNT(*) FROM notification_rules) AS rule_count,
                    (SELECT COUNT(*) FROM notification_rules WHERE enabled = 1) AS enabled_rule_count,
-                   (SELECT COUNT(*) FROM notifications WHERE rule_id IS NOT NULL) AS notification_count,
+                   (SELECT COUNT(*) FROM notifications n WHERE n.rule_id IS NOT NULL
+                     OR EXISTS (SELECT 1 FROM system_financial_notification_actions a WHERE a.notification_id = n.id)
+                     OR EXISTS (SELECT 1 FROM rent_collection_actions rca WHERE rca.notification_id = n.id)
+                     OR n.related_type = 'electronic_signature') AS notification_count,
                    (SELECT COUNT(*) FROM notification_deliveries d JOIN notifications n ON n.id = d.notification_id
-                    WHERE n.rule_id IS NOT NULL AND d.status = 'pending') AS pending_delivery_count,
+                     WHERE (n.rule_id IS NOT NULL
+                       OR EXISTS (SELECT 1 FROM system_financial_notification_actions a WHERE a.notification_id = n.id)
+                       OR EXISTS (SELECT 1 FROM rent_collection_actions rca WHERE rca.notification_id = n.id)
+                       OR n.related_type = 'electronic_signature')
+                       AND d.status = 'pending') AS pending_delivery_count,
                    (SELECT COUNT(*) FROM notification_deliveries d JOIN notifications n ON n.id = d.notification_id
-                    WHERE n.rule_id IS NOT NULL AND d.status = 'failed') AS failed_delivery_count
+                     WHERE (n.rule_id IS NOT NULL
+                       OR EXISTS (SELECT 1 FROM system_financial_notification_actions a WHERE a.notification_id = n.id)
+                       OR EXISTS (SELECT 1 FROM rent_collection_actions rca WHERE rca.notification_id = n.id)
+                       OR n.related_type = 'electronic_signature')
+                       AND d.status = 'failed') AS failed_delivery_count
             """)
     SummaryRow findSummary();
 
@@ -71,19 +82,36 @@ public interface AdminReminderMapper {
     int deleteUnusedRule(@Param("ruleId") Long ruleId);
 
     @Select("""
-            SELECT n.id, n.rule_id, r.name AS rule_name, r.event_type, n.title, n.body,
-                   o.full_name AS recipient_name, COALESCE(s.destination, o.email, u.email) AS recipient_email,
+            SELECT n.id, n.rule_id,
+                   COALESCE(r.name, CASE
+                     WHEN sfa.action_type = 'building_payment' THEN '系统房款通知'
+                     WHEN sfa.action_type = 'reserve' THEN '系统预备金通知'
+                     WHEN rca.id IS NOT NULL THEN '系统租金催缴'
+                     ELSE '系统通知' END) AS rule_name,
+                   COALESCE(r.event_type, CASE
+                     WHEN sfa.action_type = 'building_payment' THEN 'payment_due'
+                     WHEN sfa.action_type = 'reserve' THEN 'reserve_low'
+                     WHEN rca.id IS NOT NULL THEN 'rent_due'
+                     ELSE 'system' END) AS event_type,
+                   n.title, n.body,
+                   COALESCE(o.full_name, u.display_name, u.username) AS recipient_name,
+                   COALESCE(s.destination, o.email, u.email) AS recipient_email,
                    n.related_type, n.related_id, n.priority, n.status AS notice_status,
                    COALESCE(GROUP_CONCAT(CONCAT(d.channel, ':', d.status) ORDER BY d.channel SEPARATOR ','), 'in_app:sent') AS delivery_summary,
                    MAX(d.failure_reason) AS failure_reason, n.created_at
             FROM notifications n
-            JOIN notification_rules r ON r.id = n.rule_id
+            LEFT JOIN notification_rules r ON r.id = n.rule_id
             LEFT JOIN owners o ON o.id = n.recipient_owner_id
             LEFT JOIN users u ON u.id = n.recipient_user_id
+            LEFT JOIN system_financial_notification_actions sfa ON sfa.notification_id = n.id
+            LEFT JOIN rent_collection_actions rca ON rca.notification_id = n.id
             LEFT JOIN notification_subscriptions s ON s.user_id = COALESCE(n.recipient_user_id, o.user_id)
               AND s.channel = 'email'
             LEFT JOIN notification_deliveries d ON d.notification_id = n.id
-            GROUP BY n.id, n.rule_id, r.name, r.event_type, n.title, n.body, o.full_name,
+            WHERE r.id IS NOT NULL OR sfa.id IS NOT NULL OR rca.id IS NOT NULL
+               OR n.related_type = 'electronic_signature'
+            GROUP BY n.id, n.rule_id, r.name, r.event_type, sfa.action_type, rca.id,
+                     n.title, n.body, o.full_name, u.display_name, u.username,
                      s.destination, o.email, u.email, n.related_type, n.related_id, n.priority,
                      n.status, n.created_at
             ORDER BY n.created_at DESC, n.id DESC
@@ -92,14 +120,24 @@ public interface AdminReminderMapper {
     List<NotificationRow> findNotifications();
 
     @Select("""
-            SELECT d.id, d.notification_id, r.name AS rule_name, n.title,
-                   o.full_name AS recipient_name, d.channel, d.destination, d.status,
+            SELECT d.id, d.notification_id,
+                   COALESCE(r.name, CASE
+                     WHEN sfa.action_type = 'building_payment' THEN '系统房款通知'
+                     WHEN sfa.action_type = 'reserve' THEN '系统预备金通知'
+                     WHEN rca.id IS NOT NULL THEN '系统租金催缴'
+                     ELSE '系统通知' END) AS rule_name,
+                   n.title, COALESCE(o.full_name, u.display_name, u.username) AS recipient_name,
+                   d.channel, d.destination, d.status,
                    d.attempt_count, d.sent_at, d.failed_at, d.failure_reason
             FROM notification_deliveries d
             JOIN notifications n ON n.id = d.notification_id
             LEFT JOIN notification_rules r ON r.id = n.rule_id
             LEFT JOIN owners o ON o.id = n.recipient_owner_id
-            WHERE n.rule_id IS NOT NULL
+            LEFT JOIN users u ON u.id = n.recipient_user_id
+            LEFT JOIN system_financial_notification_actions sfa ON sfa.notification_id = n.id
+            LEFT JOIN rent_collection_actions rca ON rca.notification_id = n.id
+            WHERE r.id IS NOT NULL OR sfa.id IS NOT NULL OR rca.id IS NOT NULL
+               OR n.related_type = 'electronic_signature'
             ORDER BY COALESCE(d.sent_at, d.failed_at, n.created_at) DESC, d.id DESC
             LIMIT 300
             """)
@@ -129,42 +167,48 @@ public interface AdminReminderMapper {
 
     @Select("""
             SELECT ri.id AS related_id, 'rent_invoice' AS related_type,
-                   o.user_id AS recipient_user_id, o.id AS recipient_owner_id,
-                   o.full_name AS recipient_name, o.email AS recipient_email,
+                   t.user_id AS recipient_user_id, NULL AS recipient_owner_id,
+                   t.id AS tenant_id, t.full_name AS recipient_name, t.email AS recipient_email,
+                   COALESCE(ws.enabled, 0) AS whatsapp_enabled,
+                   ws.destination AS whatsapp_destination,
                    p.name AS project_name, u.unit_no,
-                   GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) AS due_date,
+                   ri.due_date AS due_date,
                    GREATEST(ri.amount_due - ri.amount_paid, 0) AS amount,
                    DATE_FORMAT(ri.billing_month, '%Y-%m') AS label
             FROM rent_invoices ri
             JOIN leases l ON l.id = ri.lease_id AND l.status = 'active'
+            JOIN tenants t ON t.id = l.tenant_id AND t.status = 'active'
             JOIN units u ON u.id = l.unit_id
             JOIN projects p ON p.id = u.project_id
-            JOIN owner_units ou ON ou.unit_id = u.id AND ou.status = 'active'
-            JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
+            LEFT JOIN tenant_whatsapp_subscriptions ws ON ws.tenant_id = t.id
             WHERE ri.due_date IS NOT NULL AND ri.amount_due > ri.amount_paid
-              AND GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) <= DATE_ADD(CURDATE(), INTERVAL #{daysBefore} DAY)
+              AND ri.due_date <= DATE_ADD(CURDATE(), INTERVAL #{daysBefore} DAY)
               AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.rule_id = #{ruleId}
-                  AND n.related_type = 'rent_invoice' AND n.related_id = ri.id
-                  AND n.recipient_owner_id = o.id)
+                   AND n.related_type = 'rent_invoice' AND n.related_id = ri.id)
             """)
     List<EventContext> findRentDueEvents(@Param("ruleId") Long ruleId, @Param("daysBefore") int daysBefore);
 
     @Select("""
             SELECT l.id AS related_id, 'lease' AS related_type,
-                   o.user_id AS recipient_user_id, o.id AS recipient_owner_id,
-                   o.full_name AS recipient_name, o.email AS recipient_email,
+                   responsible.id AS recipient_user_id, NULL AS recipient_owner_id,
+                   responsible.display_name AS recipient_name, responsible.email AS recipient_email,
+                   CASE WHEN NULLIF(TRIM(responsible.phone), '') IS NULL THEN 0 ELSE 1 END AS whatsapp_enabled,
+                   responsible.phone AS whatsapp_destination,
                    p.name AS project_name, u.unit_no, l.end_date AS due_date,
                    l.monthly_rent AS amount, l.lease_no AS label
             FROM leases l
+            JOIN rental_mandates rm ON rm.id = l.rental_mandate_id
+              AND rm.status IN ('active', 'suspended')
+            JOIN users responsible ON responsible.id = COALESCE(rm.responsible_user_id, rm.created_by)
+              AND responsible.status = 'active' AND responsible.account_type = 'ADMIN'
             JOIN units u ON u.id = l.unit_id
             JOIN projects p ON p.id = u.project_id
-            JOIN owner_units ou ON ou.unit_id = u.id AND ou.status = 'active'
-            JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
             WHERE l.status = 'active' AND l.end_date IS NOT NULL
+              AND l.end_date >= CURDATE()
               AND l.end_date <= DATE_ADD(CURDATE(), INTERVAL #{daysBefore} DAY)
               AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.rule_id = #{ruleId}
                   AND n.related_type = 'lease' AND n.related_id = l.id
-                  AND n.recipient_owner_id = o.id)
+                  AND n.recipient_user_id = responsible.id)
             """)
     List<EventContext> findLeaseExpiryEvents(@Param("ruleId") Long ruleId, @Param("daysBefore") int daysBefore);
 
@@ -253,6 +297,38 @@ public interface AdminReminderMapper {
     @Insert("""
             INSERT INTO notification_deliveries
               (notification_id, channel, destination, status, attempt_count, failed_at, failure_reason)
+            VALUES (#{notificationId}, 'whatsapp', NULL, 'failed', 0, NOW(),
+                    '收件人尚未完成 WhatsApp 授权或 Meta 服务尚未配置')
+            ON DUPLICATE KEY UPDATE status = 'failed', failed_at = NOW(),
+              failure_reason = VALUES(failure_reason)
+            """)
+    int insertUnavailableWhatsAppDelivery(@Param("notificationId") Long notificationId);
+
+    @Insert("""
+            INSERT INTO notification_deliveries
+              (notification_id, channel, destination, status, attempt_count)
+            SELECT #{notificationId}, 'whatsapp', destination, 'pending', 0
+            FROM tenant_whatsapp_subscriptions
+            WHERE tenant_id = #{tenantId} AND enabled = 1 AND opted_in_at IS NOT NULL
+            ON DUPLICATE KEY UPDATE destination = VALUES(destination), status = 'pending',
+              failed_at = NULL, failure_reason = NULL
+            """)
+    int insertWhatsAppDelivery(@Param("notificationId") Long notificationId,
+                               @Param("tenantId") Long tenantId);
+
+    @Insert("""
+            INSERT INTO notification_deliveries
+              (notification_id, channel, destination, status, attempt_count)
+            VALUES (#{notificationId}, 'whatsapp', #{destination}, 'pending', 0)
+            ON DUPLICATE KEY UPDATE destination = VALUES(destination), status = 'pending',
+              failed_at = NULL, failure_reason = NULL
+            """)
+    int insertDirectWhatsAppDelivery(@Param("notificationId") Long notificationId,
+                                     @Param("destination") String destination);
+
+    @Insert("""
+            INSERT INTO notification_deliveries
+              (notification_id, channel, destination, status, attempt_count, failed_at, failure_reason)
             VALUES (#{notificationId}, 'line', NULL, 'failed', 0, NOW(), 'LINE 通知尚未設定')
             ON DUPLICATE KEY UPDATE status = 'failed', failed_at = NOW(), failure_reason = VALUES(failure_reason)
             """)
@@ -277,6 +353,36 @@ public interface AdminReminderMapper {
             WHERE id = #{deliveryId} AND channel = 'email' AND status = 'failed'
             """)
     int retryEmailDelivery(@Param("deliveryId") Long deliveryId);
+
+    @Update("""
+            UPDATE notification_deliveries d
+            JOIN notifications n ON n.id = d.notification_id
+              AND n.related_type = 'rent_invoice'
+            JOIN rent_invoices ri ON ri.id = n.related_id
+            JOIN leases l ON l.id = ri.lease_id
+            JOIN tenant_whatsapp_subscriptions ws ON ws.tenant_id = l.tenant_id
+              AND ws.enabled = 1 AND ws.opted_in_at IS NOT NULL
+            SET d.destination = ws.destination, d.status = 'pending',
+                d.failed_at = NULL, d.failure_reason = NULL
+            WHERE d.id = #{deliveryId} AND d.channel = 'whatsapp'
+              AND d.status IN ('failed', 'unknown')
+            """)
+    int retryWhatsAppDelivery(@Param("deliveryId") Long deliveryId);
+
+    @Update("""
+            UPDATE notification_deliveries d
+            JOIN notifications n ON n.id = d.notification_id AND n.related_type = 'lease'
+            JOIN leases l ON l.id = n.related_id
+            JOIN rental_mandates rm ON rm.id = l.rental_mandate_id
+            JOIN users responsible ON responsible.id = COALESCE(rm.responsible_user_id, rm.created_by)
+              AND responsible.id = n.recipient_user_id AND responsible.status = 'active'
+              AND NULLIF(TRIM(responsible.phone), '') IS NOT NULL
+            SET d.destination = responsible.phone, d.status = 'pending',
+                d.failed_at = NULL, d.failure_reason = NULL
+            WHERE d.id = #{deliveryId} AND d.channel = 'whatsapp'
+              AND d.status IN ('failed', 'unknown')
+            """)
+    int retryLeaseExpiryWhatsAppDelivery(@Param("deliveryId") Long deliveryId);
 
     @Insert("""
             INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, after_data)
@@ -326,18 +432,23 @@ public interface AdminReminderMapper {
     }
 
     class EventContext {
-        private Long relatedId, recipientUserId, recipientOwnerId;
-        private String relatedType, recipientName, recipientEmail, projectName, unitNo, label;
+        private Long relatedId, recipientUserId, recipientOwnerId, tenantId;
+        private String relatedType, recipientName, recipientEmail, projectName, unitNo, label,
+                whatsappDestination;
+        private Boolean whatsappEnabled;
         private LocalDate dueDate; private BigDecimal amount;
         public Long getRelatedId() { return relatedId; } public void setRelatedId(Long v) { relatedId = v; }
         public Long getRecipientUserId() { return recipientUserId; } public void setRecipientUserId(Long v) { recipientUserId = v; }
         public Long getRecipientOwnerId() { return recipientOwnerId; } public void setRecipientOwnerId(Long v) { recipientOwnerId = v; }
+        public Long getTenantId() { return tenantId; } public void setTenantId(Long v) { tenantId = v; }
         public String getRelatedType() { return relatedType; } public void setRelatedType(String v) { relatedType = v; }
         public String getRecipientName() { return recipientName; } public void setRecipientName(String v) { recipientName = v; }
         public String getRecipientEmail() { return recipientEmail; } public void setRecipientEmail(String v) { recipientEmail = v; }
         public String getProjectName() { return projectName; } public void setProjectName(String v) { projectName = v; }
         public String getUnitNo() { return unitNo; } public void setUnitNo(String v) { unitNo = v; }
         public String getLabel() { return label; } public void setLabel(String v) { label = v; }
+        public String getWhatsappDestination() { return whatsappDestination; } public void setWhatsappDestination(String v) { whatsappDestination = v; }
+        public Boolean getWhatsappEnabled() { return whatsappEnabled; } public void setWhatsappEnabled(Boolean v) { whatsappEnabled = v; }
         public LocalDate getDueDate() { return dueDate; } public void setDueDate(LocalDate v) { dueDate = v; }
         public BigDecimal getAmount() { return amount; } public void setAmount(BigDecimal v) { amount = v; }
     }

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.math.RoundingMode;
 import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,7 @@ import com.ccps.backend.dto.AdminDepositAccountResponse;
 import com.ccps.backend.dto.AdminRentFinanceResponse;
 import com.ccps.backend.dto.AdminRentCollectionResponse;
 import com.ccps.backend.dto.AdminRentCollectionRequest;
+import com.ccps.backend.dto.AdminRentCollectionBatchRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.AdminTenancyOptionsResponse;
 import com.ccps.backend.dto.AdminTenancyResponse;
@@ -63,6 +65,7 @@ import com.ccps.backend.mapper.AdminTenancyMapper.LeasePeriodRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeasePeriodContractContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewLease;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewLeasePeriod;
+import com.ccps.backend.mapper.AdminTenancyMapper.NewRentCredit;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewSecurityDeposit;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewTenantDepositTransaction;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewContractDocument;
@@ -76,9 +79,9 @@ import com.ccps.backend.mapper.AdminTenancyMapper.RentCollectionContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentInvoiceAdvanceRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentReceiptRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewRentCollection;
-import com.ccps.backend.mapper.AdminTenancyMapper.NewRentCredit;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentCreditRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentInvoiceCreditRow;
+import com.ccps.backend.mapper.AdminTenancyMapper.RentalSpaceContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.SummaryRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.TenancyRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.TenantDirectoryRow;
@@ -86,17 +89,11 @@ import com.ccps.backend.mapper.AdminTenancyMapper.TenantDirectorySummaryRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.TenantDirectoryOverviewRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.TenantLeaseHistoryRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.ExpiredLeaseRow;
-import com.lowagie.text.Document;
-import com.lowagie.text.Element;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfContentByte;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
 
 @Service
 public class AdminTenancyService {
+    private static final int LEASE_AUTO_TERMINATION_GRACE_MONTHS = 2;
     private static final Set<String> STATUSES = Set.of("paid", "partial", "unpaid", "overdue", "pending_review");
     private static final Set<String> RENT_PAYMENT_METHODS = Set.of("bank_transfer", "online_payment", "cash", "cheque", "security_deposit");
     private static final Set<String> RENT_CALCULATION_METHODS = Set.of("daily_prorated");
@@ -110,6 +107,7 @@ public class AdminTenancyService {
     private final Path contractStorageRoot;
     private final Path rentProofStorageRoot;
     private final Path electronicSignatureStorageRoot;
+    private PropertyExpensePostingService propertyExpensePostingService;
 
     @Autowired
     public AdminTenancyService(AdminTenancyMapper mapper,
@@ -136,6 +134,11 @@ public class AdminTenancyService {
             Path electronicSignatureStorageRoot) {
         this.mapper = mapper; this.clock = clock; this.contractStorageRoot = contractStorageRoot;
         this.rentProofStorageRoot = rentProofStorageRoot; this.electronicSignatureStorageRoot = electronicSignatureStorageRoot;
+    }
+
+    @Autowired(required = false)
+    void setPropertyExpensePostingService(PropertyExpensePostingService service) {
+        this.propertyExpensePostingService = service;
     }
 
     @Transactional
@@ -333,7 +336,8 @@ public class AdminTenancyService {
     @Transactional
     public AdminTenancyOptionsResponse options() {
         expireEndedLeases();
-        return new AdminTenancyOptionsResponse(mapper.findProjects(), mapper.findTenantOptions(), mapper.findAvailableUnits());
+        return new AdminTenancyOptionsResponse(mapper.findProjects(), mapper.findTenantOptions(),
+                mapper.findAvailableUnits(), mapper.findRentalSpaceOptions());
     }
 
     @Transactional(readOnly = true)
@@ -419,11 +423,8 @@ public class AdminTenancyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid rent payment method");
         }
         LocalDate today = LocalDate.now(clock);
-        if (request.paymentDate().isAfter(today)) {
+        if (request.receivedDate().isAfter(today)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rent payment date cannot be in the future");
-        }
-        if (!Set.of("cash", "security_deposit").contains(request.paymentMethod()) && normalize(request.paymentReference()) == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment reference is required for non-cash rent collection");
         }
         RentCollectionContext context = mapper.lockRentCollection(invoiceId);
         if (context == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rent invoice not found");
@@ -447,62 +448,130 @@ public class AdminTenancyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Received amount exceeds the remaining rent for this lease");
         }
-        String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         String timestamp = LocalDateTime.now(clock).format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        String transactionNo = "RENT-ADM-" + timestamp + "-" + token;
-        String receiptNo = "RENT-RCP-" + timestamp + "-" + token;
         String payerName = normalize(request.payerName()) == null ? context.getTenantName() : request.payerName().trim();
         String reference = normalize(request.paymentReference());
         String note = normalize(request.note()) == null ? "管理員確認租金收款" : request.note().trim();
+        String allocationNote = normalize(request.allocationNote());
+        if (allocationNote == null) allocationNote = normalize(mapper.findRentAllocationNoteDefault(context.getUnitId()));
         BigDecimal appliedToCurrentInvoice = request.amount().min(outstanding);
         BigDecimal prepaymentAmount = request.amount().subtract(appliedToCurrentInvoice);
-        BigDecimal afterPaid = beforePaid.add(appliedToCurrentInvoice);
         if (prepaymentAmount.signum() > 0) {
-            ensureAdvanceInvoices(context, prepaymentAmount, lockedInvoices);
+            lockedInvoices = ensureAdvanceInvoices(context, prepaymentAmount, lockedInvoices);
         }
-
-        NewRentCollection record = new NewRentCollection();
-        record.setTransactionNo(transactionNo); record.setUnitId(context.getUnitId()); record.setOwnerId(context.getOwnerId());
-        record.setTenantId(context.getTenantId()); record.setAmount(request.amount()); record.setPaymentDate(request.paymentDate());
-        record.setPaymentMethod(request.paymentMethod()); record.setActorId(actorId);
-        if (mapper.insertConfirmedRentPayment(record) != 1 || record.getId() == null
-                || mapper.linkRentPayment(invoiceId, record.getId()) != 1
-                || mapper.insertRentCollectionReceipt(record.getId(), receiptNo, payerName, reference, note) != 1
-                || mapper.insertRentCashflow(record.getId(),context.getUnitId(),context.getOwnerId(),context.getTenantId(),
-                        prepaymentAmount.signum() > 0 ? "租金收款及預收 · "+context.getLeaseNo() : "租金收款 · "+context.getLeaseNo(),request.paymentDate()) != 1
-                || mapper.applyRentCollection(invoiceId, appliedToCurrentInvoice) != 1) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Rent collection state changed; reload and try again");
+        List<RentPaymentAllocation> allocations = rentPaymentAllocations(lockedInvoices, request.amount());
+        RentPaymentAllocation partialFuture = allocations.size() > 1
+                && !allocations.get(allocations.size() - 1).fullyCovered()
+                        ? allocations.get(allocations.size() - 1) : null;
+        BigDecimal partialPrepayment = partialFuture == null ? BigDecimal.ZERO : partialFuture.amount();
+        List<RentPaymentAllocation> recordAllocations = partialFuture == null
+                ? allocations : allocations.subList(0, allocations.size() - 1);
+        List<AdminRecordCreateResponse> createdRecords = new ArrayList<>(recordAllocations.size());
+        for (int allocationIndex = 0; allocationIndex < recordAllocations.size(); allocationIndex++) {
+            RentPaymentAllocation allocation = recordAllocations.get(allocationIndex);
+            String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+            String transactionNo = "RENT-ADM-" + timestamp + "-" + token;
+            String receiptNo = "RENT-RCP-" + timestamp + "-" + token;
+            String billingMonth = allocation.billingMonth().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+            BigDecimal financeAmount = allocation.amount().add(allocationIndex == 0 ? partialPrepayment : BigDecimal.ZERO);
+            LocalDate postingDate = allocationIndex == 0 ? request.postingDate() : allocation.billingMonth();
+            String receiptNote = recordAllocations.size() > 1 ? note + "；租金月份 " + billingMonth : note;
+            if (allocationIndex == 0 && partialPrepayment.signum() > 0) {
+                receiptNote += "；未足月预收余额 RM " + money(partialPrepayment);
+            }
+            NewRentCollection record = new NewRentCollection();
+            record.setTransactionNo(transactionNo); record.setUnitId(context.getUnitId()); record.setOwnerId(context.getOwnerId());
+            record.setTenantId(context.getTenantId()); record.setAmount(financeAmount); record.setReceivedDate(request.receivedDate());
+            record.setPostingDate(postingDate);
+            record.setPaymentMethod(request.paymentMethod()); record.setAllocationNote(allocationNote); record.setActorId(actorId);
+            if (mapper.insertConfirmedRentPayment(record) != 1 || record.getId() == null
+                    || mapper.linkRentPayment(allocation.invoiceId(), record.getId(), allocation.amount()) != 1
+                    || mapper.insertRentCollectionReceipt(record.getId(), receiptNo, payerName, reference, receiptNote) != 1
+                    || mapper.insertRentCashflow(record.getId(),context.getUnitId(),context.getOwnerId(),context.getTenantId(),
+                            "租金收款 · " + billingMonth + " · " + context.getLeaseNo(),postingDate) != 1
+                    || mapper.applyRentCollection(allocation.invoiceId(), allocation.amount()) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Rent collection state changed; reload and try again");
+            }
+            if (allocationNote != null) mapper.updateRentCashflowAllocationNote(record.getId(), allocationNote);
+            mapper.insertRentCollectionAudit(actorId, record.getId(), allocation.invoiceId(), allocation.beforePaid(),
+                    allocation.amount(), allocation.beforePaid().add(allocation.amount()),
+                    recordAllocations.size() > 1 ? receiptNote + "；跨月租金已分项入账" : receiptNote);
+            createdRecords.add(new AdminRecordCreateResponse(record.getId(), transactionNo, receiptNo));
+        }
+        if (Boolean.TRUE.equals(request.reuseAllocationNote()) && allocationNote != null) {
+            mapper.upsertRentAllocationNoteDefault(context.getUnitId(), allocationNote, actorId);
         }
         if (fromDeposit) {
+            AdminRecordCreateResponse primaryRecord = createdRecords.get(0);
             NewTenantDepositTransaction deposit = new NewTenantDepositTransaction();
             deposit.setLeaseId(context.getLeaseId()); deposit.setTenantId(context.getTenantId()); deposit.setUnitId(context.getUnitId());
-            deposit.setFinanceRecordId(record.getId()); deposit.setTransactionNo(transactionNo);
+            deposit.setFinanceRecordId(primaryRecord.id()); deposit.setTransactionNo(primaryRecord.referenceNo());
             deposit.setTransactionType("rent_deduction"); deposit.setDirection("debit"); deposit.setAmount(request.amount());
-            deposit.setOccurredOn(request.paymentDate()); deposit.setDescription("扣租客押金支付租金 · " + context.getLeaseNo());
+            deposit.setOccurredOn(request.receivedDate()); deposit.setDescription("扣租客押金支付租金 · " + context.getLeaseNo());
             deposit.setStatus("posted"); deposit.setCreatedBy(actorId);
             if (mapper.insertTenantDepositTransaction(deposit) != 1 || deposit.getId() == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to deduct the tenant deposit balance");
             }
             mapper.insertTenantDepositAudit(actorId, deposit.getId(), context.getLeaseId(), "rent_deduction", "debit",
-                    request.amount(), record.getId(), deposit.getDescription());
+                    request.amount(), primaryRecord.id(), deposit.getDescription());
         }
-        if (prepaymentAmount.signum() > 0) {
+        if (partialPrepayment.signum() > 0) {
             NewRentCredit credit = new NewRentCredit();
-            credit.setLeaseId(context.getLeaseId()); credit.setFinanceRecordId(record.getId());
-            credit.setReceivedAmount(prepaymentAmount); credit.setRemainingAmount(prepaymentAmount); credit.setActorId(actorId);
+            credit.setLeaseId(context.getLeaseId()); credit.setFinanceRecordId(createdRecords.get(0).id());
+            credit.setReceivedAmount(partialPrepayment); credit.setRemainingAmount(partialPrepayment); credit.setActorId(actorId);
             if (mapper.insertRentCredit(credit) != 1 || credit.getId() == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create rent prepayment balance");
             }
             applyAvailableRentCredits(actorId, context.getLeaseId());
         }
-        mapper.insertRentCollectionAudit(actorId, record.getId(), invoiceId, beforePaid, appliedToCurrentInvoice, afterPaid,
-                prepaymentAmount.signum() > 0 ? note + "；預收租金 RM " + money(prepaymentAmount) : note);
+        String coveredMonths = recordAllocations.stream().map(item -> item.billingMonth().format(DateTimeFormatter.ofPattern("yyyy-MM")))
+                .distinct().reduce((left, right) -> left + "、" + right).orElse("");
+        String partialNotice = partialPrepayment.signum() > 0
+                ? "；另有未足月预收余额 RM " + money(partialPrepayment) : "";
         mapper.insertTenantNotification(context.getTenantId(), "租金收款已確認",
-                "%s %s 已確認收到租金 RM %s，本期尚欠 RM %s。".formatted(context.getProjectName(), context.getUnitNo(),
-                        money(appliedToCurrentInvoice), money(outstanding.subtract(appliedToCurrentInvoice))),
+                "%s %s 已確認收到 %s 月租金，共 RM %s%s。".formatted(context.getProjectName(), context.getUnitNo(),
+                        coveredMonths, money(request.amount()), partialNotice),
                 "rent_invoice", invoiceId, "normal");
-        if (proof != null && !proof.isEmpty()) uploadRentProof(actorId, record.getId(), proof);
-        return new AdminRecordCreateResponse(record.getId(), transactionNo, receiptNo);
+        if (proof != null && !proof.isEmpty()) {
+            Long documentId = uploadRentProof(actorId, createdRecords.get(0).id(), proof);
+            for (int index = 1; index < createdRecords.size(); index++) {
+                Long financeRecordId = createdRecords.get(index).id();
+                if (mapper.insertRentProofLink(documentId, financeRecordId) != 1
+                        || mapper.updateRentReceiptProof(financeRecordId, documentId) != 1) {
+                    throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                            "Unable to link rent payment proof to monthly record");
+                }
+                mapper.insertRentProofAudit(actorId, financeRecordId, null, documentId,
+                        proof.getOriginalFilename(), "link_rent_proof_to_monthly_record");
+            }
+        }
+        return createdRecords.get(0);
+    }
+
+    @Transactional
+    public List<AdminRecordCreateResponse> confirmRentCollections(Long actorId,
+            AdminRentCollectionBatchRequest request) {
+        LinkedHashSet<Long> invoiceIds = new LinkedHashSet<>(request.invoiceIds());
+        if (invoiceIds.contains(null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rent invoice id is required");
+        }
+        List<AdminRecordCreateResponse> results = new ArrayList<>(invoiceIds.size());
+        for (Long invoiceId : invoiceIds) {
+            RentCollectionContext context = mapper.lockRentCollection(invoiceId);
+            if (context == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rent invoice not found");
+            }
+            BigDecimal outstanding = zero(context.getAmountDue()).subtract(zero(context.getAmountPaid()))
+                    .max(BigDecimal.ZERO);
+            if (outstanding.signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Rent invoice is already paid");
+            }
+            AdminRentCollectionRequest item = new AdminRentCollectionRequest(
+                    outstanding, request.receivedDate(), request.postingDate(), request.paymentMethod(), context.getTenantName(),
+                    request.paymentReference(), request.note(), request.allocationNote(), request.reuseAllocationNote(), false);
+            results.add(confirmRentCollection(actorId, invoiceId, item, null));
+        }
+        return results;
     }
 
     @Transactional
@@ -510,7 +579,6 @@ public class AdminTenancyService {
         String identity = normalize(request.identityNo());
         String email = normalize(request.email());
         if (identity != null && mapper.countTenantIdentity(identity) > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant identity number already exists");
-        if (email != null && mapper.countTenantEmail(email) > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant email already exists");
         NewTenant tenant = new NewTenant(); tenant.setFullName(request.fullName().trim()); tenant.setIdentityNo(identity);
         tenant.setPhone(normalize(request.phone())); tenant.setEmail(email); tenant.setStatus(request.status());
         if (mapper.insertTenant(tenant) != 1 || tenant.getId() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create tenant");
@@ -522,7 +590,6 @@ public class AdminTenancyService {
         if(mapper.countTenant(tenantId)!=1) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found");
         String identity=normalize(request.identityNo()); String email=normalize(request.email());
         if(identity!=null&&mapper.countTenantIdentityExcluding(identity,tenantId)>0) throw new ResponseStatusException(HttpStatus.CONFLICT,"Tenant identity number already exists");
-        if(email!=null&&mapper.countTenantEmailExcluding(email,tenantId)>0) throw new ResponseStatusException(HttpStatus.CONFLICT,"Tenant email already exists");
         NewTenant tenant=new NewTenant();tenant.setId(tenantId);tenant.setFullName(request.fullName().trim());tenant.setIdentityNo(identity);
         tenant.setPhone(normalize(request.phone()));tenant.setEmail(email);tenant.setStatus(request.status());
         if(mapper.updateTenant(tenant)!=1) throw new ResponseStatusException(HttpStatus.CONFLICT,"Unable to update tenant");
@@ -549,16 +616,20 @@ public class AdminTenancyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current rental mandate does not cover this lease");
         }
         if (mapper.countOperatingUnit(request.unitId()) != 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Operating unit not found");
-        if (mapper.countOverlappingLease(request.unitId(), request.startDate(), request.endDate()) > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unit already has an overlapping active lease");
+        Long rentalSpaceId = requireAvailableRentalSpace(request.unitId(), request.rentalSpaceId(),
+                request.startDate(), request.endDate(), null);
         String rentCalculationMethod = rentCalculationMethod(request.rentCalculationMethod());
+        BigDecimal depositAmount = request.monthlyRent().multiply(new BigDecimal("2.5"))
+                .setScale(2, RoundingMode.HALF_UP);
         NewLease lease = new NewLease(); lease.setTenantId(request.tenantId()); lease.setUnitId(request.unitId());
+        lease.setRentalSpaceId(rentalSpaceId);
         lease.setRentalMandateId(request.rentalMandateId());
         lease.setLeaseNo("LEASE-" + LocalDate.now(clock).toString().replace("-", "") + "-" + Long.toHexString(System.nanoTime()).toUpperCase());
         lease.setStartDate(request.startDate()); lease.setEndDate(request.endDate()); lease.setMonthlyRent(request.monthlyRent());
-        lease.setDepositAmount(request.depositAmount()); lease.setPaymentDay(request.paymentDay()); lease.setRentCalculationMethod(rentCalculationMethod);
+        lease.setDepositAmount(depositAmount); lease.setPaymentDay(request.paymentDay()); lease.setRentCalculationMethod(rentCalculationMethod);
         if (mapper.insertLease(lease) != 1 || lease.getId() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create lease");
         NewLeasePeriod initialPeriod = leasePeriod(lease.getId(), 1, request.startDate(), request.endDate(),
-                request.monthlyRent(), request.depositAmount(), request.paymentDay(), rentCalculationMethod, null);
+                request.monthlyRent(), depositAmount, request.paymentDay(), rentCalculationMethod, null);
         if (mapper.insertLeasePeriod(initialPeriod) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create initial lease period");
         }
@@ -570,8 +641,10 @@ public class AdminTenancyService {
         for (LocalDate month = request.startDate().withDayOfMonth(1);
                 !month.isAfter(lastBillingMonth); month = month.plusMonths(1)) {
             LocalDate due = month.withDayOfMonth(Math.min(request.paymentDay(), month.lengthOfMonth()));
-            mapper.insertInvoice(lease.getId(), month, due,
-                    rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod));
+            if (mapper.insertInvoice(lease.getId(), month, due,
+                    rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod)) == 1) {
+                syncManagementFee(request.rentalMandateId(), null, month);
+            }
         }
         return lease.getId();
     }
@@ -598,12 +671,14 @@ public class AdminTenancyService {
                 rentCalculationMethod(method));
         if (mapper.repairZeroAmountInvoice(leaseId, billingMonth, dueDate, amountDue) == 1) {
             applyAvailableRentCredits(null, leaseId);
+            syncManagementFee(lease.getRentalMandateId(), null, billingMonth);
             return;
         }
         if (mapper.insertInvoice(leaseId, billingMonth, dueDate, amountDue) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice already exists or could not be created");
         }
         applyAvailableRentCredits(null, leaseId);
+        syncManagementFee(lease.getRentalMandateId(), null, billingMonth);
     }
 
     @Transactional(readOnly = true)
@@ -656,6 +731,7 @@ public class AdminTenancyService {
                 request.depositAmount(), request.paymentDay(), method) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Lease state changed; reload and try again");
         }
+        createRenewalSecurityDeposit(lease, nextPeriodNo, request.depositAmount(), request.startDate());
         mapper.insertLeaseRenewalAudit(actorId, leaseId, period.getId(), nextPeriodNo, lease.getEndDate(),
                 request.startDate(), request.endDate(), request.monthlyRent(), request.depositAmount(),
                 request.paymentDay());
@@ -665,8 +741,10 @@ public class AdminTenancyService {
         for (LocalDate month = request.startDate().withDayOfMonth(1);
                 !month.isAfter(lastMonth); month = month.plusMonths(1)) {
             LocalDate due = month.withDayOfMonth(Math.min(request.paymentDay(), month.lengthOfMonth()));
-            mapper.insertInvoice(leaseId, month, due,
-                    rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), method));
+            if (mapper.insertInvoice(leaseId, month, due,
+                    rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), method)) == 1) {
+                syncManagementFee(lease.getRentalMandateId(), actorId, month);
+            }
         }
         LeasePeriodRow created = new LeasePeriodRow();
         created.setId(period.getId()); created.setLeaseId(leaseId); created.setPeriodNo(nextPeriodNo);
@@ -691,8 +769,13 @@ public class AdminTenancyService {
         }
         Long tenantId = request.tenantId() != null ? request.tenantId() : current.getTenantId();
         Long unitId = request.unitId() != null ? request.unitId() : current.getUnitId();
+        Long requestedSpaceId = request.rentalSpaceId() != null ? request.rentalSpaceId()
+                : Objects.equals(unitId, current.getUnitId()) ? current.getRentalSpaceId() : null;
+        Long rentalSpaceId = requireAvailableRentalSpace(unitId, requestedSpaceId,
+                request.startDate(), request.endDate(), leaseId);
         boolean partiesChanged = !Objects.equals(current.getTenantId(), tenantId)
-                || !Objects.equals(current.getUnitId(), unitId);
+                || !Objects.equals(current.getUnitId(), unitId)
+                || !Objects.equals(current.getRentalSpaceId(), rentalSpaceId);
         if (request.tenantId() != null && mapper.countActiveTenant(tenantId) != 1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active tenant not found");
         }
@@ -700,15 +783,19 @@ public class AdminTenancyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Operating unit not found");
         }
         requireAgencyContract(unitId, request.startDate(), request.endDate());
-        if (mapper.countOtherOverlappingLease(leaseId, unitId, request.startDate(), request.endDate()) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unit has another overlapping active lease");
-        }
         String rentCalculationMethod = rentCalculationMethod(request.rentCalculationMethod());
-        int updated = partiesChanged
-                ? mapper.updateLeasePartiesAndTerms(leaseId, tenantId, unitId, request.startDate(), request.endDate(),
-                        request.monthlyRent(), request.depositAmount(), request.paymentDay(), rentCalculationMethod)
-                : mapper.updateLeaseTerms(leaseId, request.startDate(), request.endDate(), request.monthlyRent(),
-                        request.depositAmount(), request.paymentDay(), rentCalculationMethod);
+        int updated;
+        if (partiesChanged && rentalSpaceId == null) {
+            updated = mapper.updateLeasePartiesAndTerms(leaseId, tenantId, unitId, request.startDate(), request.endDate(),
+                    request.monthlyRent(), request.depositAmount(), request.paymentDay(), rentCalculationMethod);
+        } else if (partiesChanged) {
+            updated = mapper.updateLeasePartiesAndTerms(leaseId, tenantId, unitId, rentalSpaceId,
+                    request.startDate(), request.endDate(), request.monthlyRent(), request.depositAmount(),
+                    request.paymentDay(), rentCalculationMethod);
+        } else {
+            updated = mapper.updateLeaseTerms(leaseId, request.startDate(), request.endDate(), request.monthlyRent(),
+                    request.depositAmount(), request.paymentDay(), rentCalculationMethod);
+        }
         if (updated != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Lease state changed; reload and try again");
         }
@@ -739,8 +826,10 @@ public class AdminTenancyService {
         for (LocalDate month = request.startDate().withDayOfMonth(1);
                 !month.isAfter(lastBillingMonth); month = month.plusMonths(1)) {
             LocalDate due = month.withDayOfMonth(Math.min(request.paymentDay(), month.lengthOfMonth()));
-            mapper.insertInvoice(leaseId, month, due,
-                    rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod));
+            if (mapper.insertInvoice(leaseId, month, due,
+                    rentAmount(month, request.startDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod)) == 1) {
+                syncManagementFee(current.getRentalMandateId(), actorId, month);
+            }
         }
         if (partiesChanged) {
             mapper.insertLeasePartyUpdateAudit(actorId, leaseId, current.getTenantId(), current.getUnitId(),
@@ -800,9 +889,8 @@ public class AdminTenancyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New lease end date must not be before transfer date");
         }
         requireAgencyContract(current.getUnitId(), request.transferDate(), request.endDate());
-        if (mapper.countOtherOverlappingLease(leaseId, current.getUnitId(), request.transferDate(), request.endDate()) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unit has another overlapping active lease");
-        }
+        requireAvailableRentalSpace(current.getUnitId(), current.getRentalSpaceId(),
+                request.transferDate(), request.endDate(), leaseId);
         if (mapper.closeLeaseForTransfer(leaseId, request.transferDate().minusDays(1)) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Lease state changed; reload and try again");
         }
@@ -810,6 +898,8 @@ public class AdminTenancyService {
 
         NewLease transferred = new NewLease();
         transferred.setTenantId(request.newTenantId()); transferred.setUnitId(current.getUnitId());
+        transferred.setRentalSpaceId(current.getRentalSpaceId());
+        transferred.setRentalMandateId(current.getRentalMandateId());
         transferred.setLeaseNo("LEASE-TR-" + today.toString().replace("-", "") + "-" + Long.toHexString(System.nanoTime()).toUpperCase());
         transferred.setStartDate(request.transferDate()); transferred.setEndDate(request.endDate());
         transferred.setMonthlyRent(request.monthlyRent()); transferred.setDepositAmount(request.depositAmount());
@@ -830,8 +920,10 @@ public class AdminTenancyService {
         if (!today.isBefore(request.transferDate()) && !today.isAfter(request.endDate())
                 && !firstBillingMonth.isAfter(today.withDayOfMonth(1))) {
             LocalDate due = firstBillingMonth.withDayOfMonth(Math.min(request.paymentDay(), firstBillingMonth.lengthOfMonth()));
-            mapper.insertInvoice(transferred.getId(), firstBillingMonth, due,
-                    rentAmount(firstBillingMonth, request.transferDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod));
+            if (mapper.insertInvoice(transferred.getId(), firstBillingMonth, due,
+                    rentAmount(firstBillingMonth, request.transferDate(), request.endDate(), request.monthlyRent(), rentCalculationMethod)) == 1) {
+                syncManagementFee(current.getRentalMandateId(), actorId, firstBillingMonth);
+            }
         }
         mapper.insertLeaseTransferAudit(actorId, leaseId, transferred.getId(), current.getTenantId(),
                 request.newTenantId(), current.getEndDate(), request.transferDate());
@@ -844,17 +936,25 @@ public class AdminTenancyService {
         expireEndedLeases();
         mapper.generateMonthlyInvoices(LocalDate.now(clock).withDayOfMonth(1));
         mapper.findLeaseIdsWithAvailableRentCredit().forEach(leaseId -> applyAvailableRentCredits(null, leaseId));
+        if (propertyExpensePostingService != null) propertyExpensePostingService.postDueExpenses();
+    }
+
+    private void syncManagementFee(Long mandateId, Long actorId, LocalDate billingMonth) {
+        if (propertyExpensePostingService != null && mandateId != null) {
+            propertyExpensePostingService.syncMandateFee(mandateId, actorId, billingMonth);
+        }
     }
 
     @Transactional
     public int expireEndedLeases() {
         LocalDate today = LocalDate.now(clock);
+        LocalDate graceCutoff = today.minusMonths(LEASE_AUTO_TERMINATION_GRACE_MONTHS);
         int expired = 0;
-        for (ExpiredLeaseRow lease : mapper.findExpiredLeases(today)) {
-            if (mapper.expireLease(lease.getLeaseId(), today) != 1) continue;
+        for (ExpiredLeaseRow lease : mapper.findExpiredLeases(graceCutoff)) {
+            if (mapper.expireLease(lease.getLeaseId(), graceCutoff) != 1) continue;
             mapper.markUnitAvailableIfNoActiveLease(lease.getUnitId());
             mapper.insertLeaseClosureAudit(null, lease.getLeaseId(), lease.getEndDate(), lease.getEndDate(),
-                    "租约自然到期", "系统于到期日次日自动结束租约");
+                    "租约自然到期", "系统于租约结束满2个月宽限期后自动解约");
             expired++;
         }
         return expired;
@@ -877,7 +977,7 @@ public class AdminTenancyService {
         return total;
     }
 
-    private void ensureAdvanceInvoices(RentCollectionContext context, BigDecimal advanceAmount,
+    private List<RentInvoiceAdvanceRow> ensureAdvanceInvoices(RentCollectionContext context, BigDecimal advanceAmount,
             List<RentInvoiceAdvanceRow> invoices) {
         Map<LocalDate, RentInvoiceAdvanceRow> byMonth = invoiceRowsByMonth(invoices);
         LocalDate firstFutureMonth = context.getBillingMonth().withDayOfMonth(1).plusMonths(1);
@@ -904,6 +1004,33 @@ public class AdminTenancyService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Unable to create enough future rent invoices for this payment");
         }
+        return refreshed;
+    }
+
+    private List<RentPaymentAllocation> rentPaymentAllocations(List<RentInvoiceAdvanceRow> invoices,
+            BigDecimal receivedAmount) {
+        List<RentPaymentAllocation> allocations = new ArrayList<>();
+        BigDecimal remaining = receivedAmount;
+        for (RentInvoiceAdvanceRow invoice : invoices) {
+            if (remaining.signum() <= 0) break;
+            BigDecimal beforePaid = zero(invoice.getAmountPaid());
+            BigDecimal outstanding = zero(invoice.getAmountDue()).subtract(beforePaid).max(BigDecimal.ZERO);
+            if (outstanding.signum() <= 0) continue;
+            BigDecimal allocated = remaining.min(outstanding);
+            allocations.add(new RentPaymentAllocation(invoice.getInvoiceId(), invoice.getBillingMonth(), beforePaid,
+                    outstanding, allocated));
+            remaining = remaining.subtract(allocated);
+        }
+        if (remaining.signum() > 0 || allocations.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Unable to allocate rent payment to monthly invoices");
+        }
+        return allocations;
+    }
+
+    private record RentPaymentAllocation(Long invoiceId, LocalDate billingMonth, BigDecimal beforePaid,
+            BigDecimal outstanding, BigDecimal amount) {
+        boolean fullyCovered() { return amount.compareTo(outstanding) == 0; }
     }
 
     private Map<LocalDate, RentInvoiceAdvanceRow> invoiceRowsByMonth(List<RentInvoiceAdvanceRow> invoices) {
@@ -957,11 +1084,6 @@ public class AdminTenancyService {
         }
         LeaseContractContext context = mapper.lockLeaseContract(leaseId);
         if (context == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lease not found");
-        if (context.getContractDocumentId() != null
-                && mapper.countStartedLeaseSignatures(leaseId, context.getContractDocumentId()) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "The lease contract cannot be regenerated after signing has started");
-        }
         String token = UUID.randomUUID().toString().replace("-", "");
         String extension = CONTRACT_EXTENSIONS.get(file.getContentType());
         Path directory = contractStorageRoot.resolve(String.valueOf(leaseId)).normalize();
@@ -981,13 +1103,16 @@ public class AdminTenancyService {
             document.setStorageKey(contractStorageRoot.relativize(target).toString().replace('\\', '/'));
             document.setMimeType(file.getContentType()); document.setFileSize(file.getSize());
             document.setChecksumSha256(sha256(target)); document.setUploadedBy(actorId);
+            Long oldDocumentId = context.getContractDocumentId();
+            if (oldDocumentId != null) {
+                mapper.cancelActiveLeaseSignatures(leaseId, oldDocumentId);
+            }
             if (mapper.insertContractDocument(document) != 1 || document.getId() == null
                     || mapper.insertContractLink(document.getId(), leaseId) != 1
                     || mapper.updateLeaseContract(leaseId, document.getId()) != 1) {
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to save lease contract");
             }
             mapper.updateInitialLeasePeriodContract(leaseId, document.getId());
-            Long oldDocumentId = context.getContractDocumentId();
             if (oldDocumentId != null && mapper.supersedeContractDocument(oldDocumentId) != 1) {
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to replace lease contract");
             }
@@ -1107,22 +1232,32 @@ public class AdminTenancyService {
         try {
             Files.createDirectories(directory);
             try (OutputStream output = Files.newOutputStream(target)) {
-                Document document = new Document();
-                PdfWriter.getInstance(document, output);
-                document.open();
-                BaseFont base = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
-                com.lowagie.text.Font title = new com.lowagie.text.Font(base, 18, com.lowagie.text.Font.BOLD);
-                com.lowagie.text.Font body = new com.lowagie.text.Font(base, 10);
-                Paragraph heading = new Paragraph("Official Receipt / 收據", title); heading.setAlignment(Element.ALIGN_CENTER); document.add(heading);
-                Paragraph no = new Paragraph("收據編號：" + text(row.getReceiptNo()), body); no.setAlignment(Element.ALIGN_RIGHT); document.add(no);
-                document.add(new Paragraph(" ", body));
-                PdfPTable table = new PdfPTable(2); table.setWidthPercentage(100); table.setWidths(new float[]{1.2f, 2.8f});
-                receiptCell(table, "租客", row.getTenantName(), body); receiptCell(table, "建案／單位", text(row.getProjectName()) + " / " + text(row.getUnitNo()), body);
-                receiptCell(table, "租約", row.getLeaseNo(), body); receiptCell(table, "帳單月份", monthText(row.getBillingMonth()), body);
-                receiptCell(table, "收款日期", dateText(row.getTransactionDate()), body); receiptCell(table, "收款金額", text(row.getCurrency()) + " " + money(row.getAmount()), body);
-                receiptCell(table, "付款方式", paymentMethodText(row.getPaymentMethod()), body); receiptCell(table, "付款人", row.getPayerName(), body);
-                receiptCell(table, "付款參考", row.getBankReference(), body); receiptCell(table, "備註", row.getSubmissionNote(), body);
-                document.add(table); document.add(new Paragraph("\n此收據由系統在確認收款後自動產生。", body)); document.close();
+                String billingPeriod = FinanceDocumentPdfRenderer.billingPeriod(row.getBillingMonth());
+                FinanceDocumentPdfRenderer.write(output, new FinanceDocumentPdfRenderer.Data(
+                        false,
+                        "CCPS PROPERTY MANAGEMENT SDN. BHD.",
+                        "",
+                        List.of(),
+                        List.of(
+                                text(row.getTenantName()),
+                                text(row.getProjectName()) + " / " + text(row.getUnitNo()),
+                                "LEASE NO. : " + text(row.getLeaseNo()),
+                                "PAYER : " + text(row.getPayerName())),
+                        text(row.getReceiptNo()),
+                        row.getTransactionDate(),
+                        "RENTAL FOR " + billingPeriod,
+                        List.of(
+                                new FinanceDocumentPdfRenderer.Detail("Transaction No.", text(row.getTransactionNo())),
+                                new FinanceDocumentPdfRenderer.Detail("Lease No.", text(row.getLeaseNo())),
+                                new FinanceDocumentPdfRenderer.Detail("Tenancy Period", billingPeriod),
+                                new FinanceDocumentPdfRenderer.Detail("Billing Month", monthText(row.getBillingMonth())),
+                                new FinanceDocumentPdfRenderer.Detail("Payment Method", paymentMethodText(row.getPaymentMethod())),
+                                new FinanceDocumentPdfRenderer.Detail("Payer", text(row.getPayerName())),
+                                new FinanceDocumentPdfRenderer.Detail("Payment Reference", text(row.getBankReference())),
+                                new FinanceDocumentPdfRenderer.Detail("Note", text(row.getSubmissionNote()))),
+                        zero(row.getAmount()),
+                        row.getCurrency(),
+                        List.of("This receipt was generated automatically after the payment was confirmed.")));
             }
             return new Download(target, safeFileName(row.getReceiptNo()) + ".pdf", "application/pdf", Files.size(target));
         } catch (Exception exception) {
@@ -1187,6 +1322,7 @@ public class AdminTenancyService {
     private AdminTenancyResponse.Item toItem(TenancyRow r) { return new AdminTenancyResponse.Item(
             r.getTenantId(), r.getTenantName(), r.getIdentityNo(), r.getPhone(), r.getEmail(), r.getTenantStatus(),
             r.getLeaseId(), r.getLeaseNo(), r.getProjectId(), r.getProjectName(), r.getUnitId(), r.getUnitNo(),
+            r.getRentalSpaceId(), r.getRentalSpaceName(), r.getRentalSpaceType(),
             r.getLeaseStart(), r.getLeaseEnd(), zero(r.getMonthlyRent()), zero(r.getDepositAmount()), r.getPaymentDay(),
             rentCalculationMethod(r.getRentCalculationMethod()), r.getLeaseStatus(),
             r.getContractDocumentId(), r.getContractDocumentName(), r.getContractDocumentMimeType(), r.getContractDocumentSize(),
@@ -1194,8 +1330,37 @@ public class AdminTenancyService {
             zero(r.getAmountUnpaid()), zero(r.getTotalUnpaid()), zero(r.getPrepaidRentBalance()), r.getRentStatus(), r.getFinanceRecordId(), r.getTransactionNo(), r.getConfirmationStatus(),
              r.getPaymentMethod(), r.getPaymentDate(), r.getReviewNote(), r.getConfirmedByName(), r.getConfirmedAt(),
               r.getOwnerId(), r.getOwnerName(), r.getOwnerIdentity()); }
+
+    private Long requireAvailableRentalSpace(Long unitId, Long requestedSpaceId, LocalDate startDate,
+            LocalDate endDate, Long excludeLeaseId) {
+        Long spaceId = requestedSpaceId != null ? requestedSpaceId : mapper.findWholeRentalSpaceId(unitId);
+        // 兼容尚未执行数据库迁移的单元测试；生产数据库迁移后每套房产必有整套空间。
+        if (spaceId == null || spaceId <= 0) {
+            int overlaps = excludeLeaseId == null
+                    ? mapper.countOverlappingLease(unitId, startDate, endDate)
+                    : mapper.countOtherOverlappingLease(excludeLeaseId, unitId, startDate, endDate);
+            if (overlaps > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "房产已有重叠租约");
+            return null;
+        }
+        RentalSpaceContext space = mapper.findRentalSpace(spaceId);
+        if (space == null || !Objects.equals(space.getUnitId(), unitId) || !"active".equals(space.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "出租空间不存在、已停用或不属于所选房产");
+        }
+        if ("room".equals(space.getSpaceType()) && !"shared".equals(space.getRentalMode())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该房产尚未启用合租模式");
+        }
+        int overlaps = "whole_unit".equals(space.getSpaceType())
+                ? mapper.countAnySpaceOverlap(excludeLeaseId, unitId, startDate, endDate)
+                : mapper.countRoomOverlap(excludeLeaseId, unitId, spaceId, startDate, endDate);
+        if (overlaps > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "所选出租空间在该租期已被占用；整租与房间合租也不能同时存在");
+        }
+        return spaceId;
+    }
     private AdminTenantDirectoryResponse.Item toTenantDirectoryItem(TenantDirectoryRow r) { return new AdminTenantDirectoryResponse.Item(
-            r.getTenantId(), r.getFullName(), r.getIdentityNo(), r.getPhone(), r.getEmail(), r.getStatus(), r.getCurrentLeaseNo(),
+            r.getTenantId(), r.getFullName(), r.getIdentityNo(), r.getPhone(), r.getEmail(), r.getStatus(),
+            Boolean.TRUE.equals(r.getWhatsappEnabled()), r.getWhatsappDestination(), r.getWhatsappOptedInAt(), r.getCurrentLeaseNo(),
             r.getProjectName(), r.getUnitNo(), r.getLeaseStart(), r.getLeaseEnd(), zero(r.getCurrentDepositAmount()),
             zero(r.getCurrentDepositBalance()), r.getCurrentDepositStatus(),
             zero(r.getLeaseCount()), zero(r.getActiveLeaseCount())); }
@@ -1229,7 +1394,7 @@ public class AdminTenancyService {
             r.getId(), r.getTransactionNo(), r.getTenantName(), r.getProjectName(), r.getUnitNo(), r.getLeaseId(), r.getLeaseNo(),
             r.getInvoiceId(), r.getBillingMonth(), r.getDueDate(), zero(r.getInvoiceAmount()), zero(r.getInvoicePaid()),
             zero(r.getAmount()), r.getCurrency(), r.getTransactionDate(), r.getPaymentMethod(), r.getConfirmationStatus(),
-            r.getSyncStatus(), r.getProofDocumentId(), r.getProofName(), r.getProofMimeType(), r.getProofSize(), r.getReceiptNo(), r.getReviewNote(),
+            r.getSyncStatus(), r.getProofDocumentId(), r.getProofName(), r.getProofMimeType(), r.getProofSize(), r.getReceiptNo(), r.getReviewNote(), r.getAllocationNote(),
             r.getConfirmedByName(), r.getConfirmedAt(), r.getSubmittedAt()); }
     private AdminRentCollectionResponse.Item toRentCollectionItem(RentCollectionRow r) {
         return new AdminRentCollectionResponse.Item(r.getInvoiceId(), r.getLeaseId(), r.getLeaseNo(), r.getTenantName(),
@@ -1286,6 +1451,24 @@ public class AdminTenancyService {
                 || mapper.insertSecurityDepositEntry(deposit) != 1
                 || mapper.insertSecurityDepositCashflow(deposit) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create security deposit finance record");
+        }
+    }
+    private void createRenewalSecurityDeposit(LeaseChangeContext lease, int periodNo, BigDecimal newDepositAmount,
+            LocalDate renewalStartDate) {
+        BigDecimal increase = zero(newDepositAmount).subtract(zero(lease.getDepositAmount()))
+                .setScale(2, RoundingMode.HALF_UP);
+        if (increase.signum() <= 0) return;
+        NewSecurityDeposit deposit = new NewSecurityDeposit();
+        deposit.setLeaseId(lease.getLeaseId()); deposit.setUnitId(lease.getUnitId());
+        deposit.setTenantId(lease.getTenantId()); deposit.setAmount(increase);
+        deposit.setTransactionDate(renewalStartDate);
+        deposit.setTransactionNo("DEPOSIT-RENEW-" + lease.getLeaseNo() + "-P" + periodNo);
+        deposit.setDescription("续约补收租客押金 · " + lease.getLeaseNo() + " · 第" + periodNo + "期");
+        if (mapper.insertSecurityDepositFinance(deposit) != 1 || deposit.getFinanceRecordId() == null
+                || mapper.insertSecurityDepositEntry(deposit) != 1
+                || mapper.insertSecurityDepositCashflow(deposit) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Unable to create renewal security deposit finance record");
         }
     }
     private void syncPendingSecurityDeposit(Long leaseId, Long tenantId, Long unitId, BigDecimal amount,
@@ -1351,11 +1534,9 @@ public class AdminTenancyService {
         if (name.isBlank()) name = "lease-contract";
         return name.length() > 255 ? name.substring(name.length() - 255) : name;
     }
-    private void receiptCell(PdfPTable table, String label, String value, com.lowagie.text.Font font) { table.addCell(new Phrase(label, font)); table.addCell(new Phrase(text(value), font)); }
     private String text(String value) { return value == null || value.isBlank() ? "—" : value; }
-    private String dateText(LocalDate value) { return value == null ? "—" : value.toString(); }
     private String monthText(LocalDate value) { return value == null ? "—" : value.toString().substring(0, 7); }
-    private String paymentMethodText(String value) { return switch (value == null ? "" : value) { case "bank_transfer" -> "銀行轉帳"; case "online_payment" -> "線上支付"; case "cash" -> "現金"; case "cheque" -> "支票"; default -> text(value); }; }
+    private String paymentMethodText(String value) { return switch (value == null ? "" : value) { case "bank_transfer" -> "Bank Transfer"; case "online_payment", "online_banking" -> "Online Payment"; case "cash" -> "Cash"; case "cheque" -> "Cheque"; case "security_deposit" -> "Security Deposit"; default -> text(value); }; }
     private String sha256(Path path) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

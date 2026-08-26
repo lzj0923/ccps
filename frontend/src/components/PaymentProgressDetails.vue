@@ -57,7 +57,7 @@
                 <tr v-for="row in installments" :key="row.id" :class="{ current: row.state === 'current' }">
                   <td><i :class="row.state">{{ row.no }}</i>{{ row.name }}<small v-if="row.note">{{ row.note }}</small></td>
                   <td>{{ row.due }}</td><td>{{ row.amount }}</td><td :class="{ green: row.paidValue > 0 }">{{ row.paid }}</td><td :class="{ gold: row.unpaidValue > 0 }">{{ row.unpaid }}</td>
-                  <td>{{ row.paymentDate }}</td><td><span class="table-status" :class="row.state">{{ row.status }}</span></td><td><button v-if="row.receipt" @click="viewReceipt(row)">{{ $t('legacy.t_f7acefd2d4cd') }}</button><span v-else>—</span></td><td class="finance-confirmation-cell"><span v-if="row.confirmed" class="confirmed"><BadgeCheck />{{ $t('legacy.t_d9fea67ad2be') }}</span><span v-else>{{ row.confirmation }}</span><small v-if="row.rejectionReason" class="rejection-reason">{{ $t('legacy.t_0f93c2bb0a58') }}{{ row.rejectionReason }}</small></td>
+                  <td>{{ displayDate(row.paymentDate) }}</td><td><span class="table-status" :class="row.state">{{ row.status }}</span></td><td><button v-if="row.receipt" @click="viewReceipt(row)">{{ $t('legacy.t_f7acefd2d4cd') }}</button><span v-else>—</span></td><td class="finance-confirmation-cell"><span v-if="row.confirmed" class="confirmed"><BadgeCheck />{{ $t('legacy.t_d9fea67ad2be') }}</span><span v-else>{{ row.confirmation }}</span><small v-if="row.rejectionReason" class="rejection-reason">{{ $t('legacy.t_0f93c2bb0a58') }}{{ row.rejectionReason }}</small></td>
                 </tr>
               </tbody>
               <tfoot><tr><td>{{ $t('legacy.t_92bcbf71cb7b') }}</td><td></td><td>{{ money(scheduledAmount) }}</td><td class="green">{{ money(paid) }}</td><td class="gold">{{ money(remaining) }}</td><td colspan="4">{{ paidInstallments }} / {{ totalInstallments }} {{ $t('legacy.t_fc73601f2012') }}</td></tr></tfoot>
@@ -93,6 +93,7 @@ import {
   UserRound, WalletCards
 } from '@lucide/vue';
 import { fetchPaymentProgress } from '../services/propertyApi';
+import { formatDate } from '../utils/dateFormat';
 
 const paymentStatusLabels = {
   paying: '正常缴费中', paid: '已缴清', due_soon: '即将到期', overdue: '已逾期', not_configured: '尚未设置'
@@ -252,6 +253,7 @@ export default {
       const currency = this.paymentDetails?.property?.currency || 'MYR';
       return currency === 'MYR' ? 'RM' : currency;
     },
+    displayDate(value) { return formatDate(value); },
     money(value) { return `${this.currencyPrefix()} ${this.amount(value)}`; },
     amount(value) { return Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
     daysUntil(dateText) {

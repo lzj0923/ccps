@@ -6,6 +6,7 @@ import java.util.List;
 import com.ccps.backend.dto.AdminPropertyContractResponse;
 
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
@@ -94,6 +95,7 @@ public interface AdminOwnerMapper {
               o.office_phone,
               o.passport_no,
               o.email,
+              o.mailing_address,
               o.status AS owner_status,
               ou.id AS owner_unit_id,
               ou.ownership_percent,
@@ -113,9 +115,17 @@ public interface AdminOwnerMapper {
               u.area_sqm,
               u.bedroom_count,
               u.listing_status,
+              u.rental_listing_status,
               p.name AS project_name,
               p.address,
               p.city,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.electricity')) AS electricity_account_no,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.water')) AS water_account_no,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.sewerage')) AS sewerage_account_no,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.gas')) AS gas_account_no,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.withholdingTax')) AS withholding_tax_account_no,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.landTax')) AS land_tax_account_no,
+              JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.assessmentTax')) AS assessment_tax_account_no,
               COALESCE(pay.purchase_price, 0) AS purchase_price,
               CASE WHEN NOT (ou.asset_stage = 'PRE_HANDOVER') THEN COALESCE(pay.purchase_price, 0)
                    ELSE COALESCE(pay.paid_amount, 0) END AS paid_amount,
@@ -134,8 +144,9 @@ public interface AdminOwnerMapper {
             FROM owners o
             LEFT JOIN owner_units ou ON ou.owner_id = o.id AND ou.status = 'active'
             LEFT JOIN units u ON u.id = ou.unit_id
-            LEFT JOIN projects p ON p.id = u.project_id
-            LEFT JOIN (
+             LEFT JOIN projects p ON p.id = u.project_id
+             LEFT JOIN property_basic_profiles pbp ON pbp.owner_unit_id = ou.id
+             LEFT JOIN (
               SELECT owner_unit_id,
                      GROUP_CONCAT(service_type ORDER BY service_type SEPARATOR ',') AS services
               FROM owner_unit_services
@@ -212,6 +223,51 @@ public interface AdminOwnerMapper {
     OwnerPropertyRow findPrimaryOwnerPropertyByUnitId(@Param("unitId") Long unitId);
 
     @Select("""
+            SELECT
+              CASE WHEN (SELECT COUNT(*) FROM owner_units WHERE unit_id = #{unitId}) = 1 THEN 0 ELSE 1 END
+              + (SELECT COUNT(*) FROM unit_rental_listing_status_history WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM finance_records WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM rental_spaces WHERE unit_id = #{unitId} AND NOT (space_type = 'whole_unit' AND space_code = 'WHOLE'))
+              + (SELECT COUNT(*) FROM leases WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM tenant_deposit_transactions WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM cashflow_entries WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM maintenance_work_orders WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM cashflow_note_defaults WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM finance_allocation_note_defaults WHERE unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM document_links WHERE entity_type = 'unit' AND entity_id = #{unitId})
+              + (SELECT COUNT(*) FROM electronic_signature_requests WHERE entity_type = 'unit' AND entity_id = #{unitId})
+              + (SELECT COUNT(*) FROM notifications WHERE related_type = 'unit' AND related_id = #{unitId})
+              + (SELECT COUNT(*) FROM sync_batch_items WHERE entity_type = 'unit' AND entity_id = #{unitId})
+              + (SELECT COUNT(*) FROM owner_unit_services service JOIN owner_units ou ON ou.id = service.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_basic_profiles profile JOIN owner_units ou ON ou.id = profile.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM rental_mandates rm JOIN owner_units ou ON ou.id = rm.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_expense_postings pep JOIN owner_units ou ON ou.id = pep.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_contract_records pcr JOIN owner_units ou ON ou.id = pcr.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM payment_plans pp JOIN purchase_contracts pc ON pc.id = pp.purchase_contract_id JOIN owner_units ou ON ou.id = pc.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_maintenance_records pmr JOIN owner_units ou ON ou.id = pmr.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_photos photo JOIN owner_units ou ON ou.id = photo.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_attachments attachment JOIN owner_units ou ON ou.id = attachment.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_handover_reports report JOIN owner_units ou ON ou.id = report.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_handover_checklist_items item JOIN owner_units ou ON ou.id = item.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_important_messages message JOIN owner_units ou ON ou.id = message.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM property_bank_accounts account JOIN owner_units ou ON ou.id = account.owner_unit_id WHERE ou.unit_id = #{unitId})
+              + (SELECT COUNT(*) FROM reserve_accounts account JOIN owner_units ou ON ou.id = account.owner_unit_id WHERE ou.unit_id = #{unitId})
+            """)
+    int countPropertyDeleteBlockers(@Param("unitId") Long unitId);
+
+    @Delete("DELETE FROM rental_spaces WHERE unit_id = #{unitId} AND space_type = 'whole_unit' AND space_code = 'WHOLE'")
+    int deleteDefaultPropertyRentalSpace(@Param("unitId") Long unitId);
+
+    @Delete("DELETE FROM purchase_contracts WHERE owner_unit_id IN (SELECT id FROM owner_units WHERE unit_id = #{unitId})")
+    int deletePropertyPurchaseContracts(@Param("unitId") Long unitId);
+
+    @Delete("DELETE FROM owner_units WHERE unit_id = #{unitId}")
+    int deletePropertyOwnerships(@Param("unitId") Long unitId);
+
+    @Delete("DELETE FROM units WHERE id = #{unitId}")
+    int deletePropertyUnit(@Param("unitId") Long unitId);
+
+    @Select("""
             SELECT COUNT(*)
             FROM units
             WHERE project_id = #{projectId}
@@ -234,11 +290,11 @@ public interface AdminOwnerMapper {
     @Select("SELECT COUNT(*) FROM owners WHERE LOWER(email) = LOWER(#{email}) AND id <> #{ownerId}")
     int countOtherOwnersByEmail(@Param("ownerId") Long ownerId, @Param("email") String email);
 
-    @Update("UPDATE owners SET full_name=#{fullName}, identity_no=#{identityNo}, phone=#{phone}, mobile_phone=#{mobilePhone}, home_phone=#{homePhone}, office_phone=#{officePhone}, passport_no=#{passportNo}, email=#{email}, status=#{status} WHERE id=#{ownerId}")
+    @Update("UPDATE owners SET full_name=#{fullName}, identity_no=#{identityNo}, phone=#{phone}, mobile_phone=#{mobilePhone}, home_phone=#{homePhone}, office_phone=#{officePhone}, passport_no=#{passportNo}, email=#{email}, mailing_address=#{mailingAddress}, status=#{status} WHERE id=#{ownerId}")
     int updateOwner(@Param("ownerId") Long ownerId, @Param("fullName") String fullName,
             @Param("identityNo") String identityNo, @Param("phone") String phone, @Param("mobilePhone") String mobilePhone,
             @Param("homePhone") String homePhone, @Param("officePhone") String officePhone, @Param("passportNo") String passportNo,
-            @Param("email") String email, @Param("status") String status);
+            @Param("email") String email, @Param("mailingAddress") String mailingAddress, @Param("status") String status);
 
     @Insert("""
             INSERT INTO owners (user_id, owner_no, full_name, identity_no, phone, mobile_phone, home_phone, office_phone, passport_no, email, status)
@@ -288,6 +344,19 @@ public interface AdminOwnerMapper {
     int insertUnit(NewUnit unit);
 
     @Insert("""
+            INSERT INTO rental_spaces
+              (unit_id, space_code, space_name, space_type, capacity, area_sqm, recommended_rent, status, sort_order)
+            SELECT id, 'WHOLE', '整套房产', 'whole_unit', 1, area_sqm, NULL, 'active', 0
+            FROM units
+            WHERE id = #{unitId}
+              AND NOT EXISTS (
+                SELECT 1 FROM rental_spaces
+                WHERE unit_id = #{unitId} AND space_type = 'whole_unit'
+              )
+            """)
+    int insertDefaultRentalSpace(@Param("unitId") Long unitId);
+
+    @Insert("""
             INSERT INTO owner_units (owner_id, unit_id, ownership_percent, is_primary, start_date,
                                      asset_stage, expected_handover_date, actual_handover_date, status)
             VALUES (#{ownerId}, #{unitId}, #{ownershipPercent}, #{primaryOwnership}, #{startDate},
@@ -331,8 +400,9 @@ public interface AdminOwnerMapper {
                                  @Param("serviceType") String serviceType);
 
     @Insert("""
-            INSERT INTO reserve_accounts (owner_unit_id, minimum_balance, current_balance, status, low_balance_alert_enabled)
-            SELECT #{ownerUnitId}, 0, 0, 'active', 1
+            INSERT INTO reserve_accounts (owner_unit_id, minimum_balance, current_balance, status,
+                                          low_balance_alert_enabled, minimum_balance_mode)
+            SELECT #{ownerUnitId}, 0, 0, 'active', 1, 'auto'
             WHERE NOT EXISTS (SELECT 1 FROM reserve_accounts WHERE owner_unit_id = #{ownerUnitId})
             """)
     int ensureReserveAccount(@Param("ownerUnitId") Long ownerUnitId);
@@ -411,6 +481,7 @@ public interface AdminOwnerMapper {
         private String officePhone;
         private String passportNo;
         private String email;
+        private String mailingAddress;
         private String ownerStatus;
         private Long ownerUnitId;
         private BigDecimal ownershipPercent;
@@ -430,9 +501,17 @@ public interface AdminOwnerMapper {
         private BigDecimal areaSqm;
         private Integer bedroomCount;
         private String listingStatus;
+        private String rentalListingStatus;
         private String projectName;
         private String address;
         private String city;
+        private String electricityAccountNo;
+        private String waterAccountNo;
+        private String sewerageAccountNo;
+        private String gasAccountNo;
+        private String withholdingTaxAccountNo;
+        private String landTaxAccountNo;
+        private String assessmentTaxAccountNo;
         private BigDecimal purchasePrice;
         private BigDecimal paidAmount;
         private BigDecimal remainingAmount;
@@ -458,6 +537,8 @@ public interface AdminOwnerMapper {
         public void setPassportNo(String passportNo) { this.passportNo = passportNo; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
+        public String getMailingAddress() { return mailingAddress; }
+        public void setMailingAddress(String mailingAddress) { this.mailingAddress = mailingAddress; }
         public String getOwnerStatus() { return ownerStatus; }
         public void setOwnerStatus(String ownerStatus) { this.ownerStatus = ownerStatus; }
         public Long getOwnerUnitId() { return ownerUnitId; }
@@ -496,12 +577,28 @@ public interface AdminOwnerMapper {
         public void setBedroomCount(Integer bedroomCount) { this.bedroomCount = bedroomCount; }
         public String getListingStatus() { return listingStatus; }
         public void setListingStatus(String listingStatus) { this.listingStatus = listingStatus; }
+        public String getRentalListingStatus() { return rentalListingStatus; }
+        public void setRentalListingStatus(String rentalListingStatus) { this.rentalListingStatus = rentalListingStatus; }
         public String getProjectName() { return projectName; }
         public void setProjectName(String projectName) { this.projectName = projectName; }
         public String getAddress() { return address; }
         public void setAddress(String address) { this.address = address; }
         public String getCity() { return city; }
         public void setCity(String city) { this.city = city; }
+        public String getElectricityAccountNo() { return electricityAccountNo; }
+        public void setElectricityAccountNo(String value) { this.electricityAccountNo = value; }
+        public String getWaterAccountNo() { return waterAccountNo; }
+        public void setWaterAccountNo(String value) { this.waterAccountNo = value; }
+        public String getSewerageAccountNo() { return sewerageAccountNo; }
+        public void setSewerageAccountNo(String value) { this.sewerageAccountNo = value; }
+        public String getGasAccountNo() { return gasAccountNo; }
+        public void setGasAccountNo(String value) { this.gasAccountNo = value; }
+        public String getWithholdingTaxAccountNo() { return withholdingTaxAccountNo; }
+        public void setWithholdingTaxAccountNo(String value) { this.withholdingTaxAccountNo = value; }
+        public String getLandTaxAccountNo() { return landTaxAccountNo; }
+        public void setLandTaxAccountNo(String value) { this.landTaxAccountNo = value; }
+        public String getAssessmentTaxAccountNo() { return assessmentTaxAccountNo; }
+        public void setAssessmentTaxAccountNo(String value) { this.assessmentTaxAccountNo = value; }
         public BigDecimal getPurchasePrice() { return purchasePrice; }
         public void setPurchasePrice(BigDecimal purchasePrice) { this.purchasePrice = purchasePrice; }
         public BigDecimal getPaidAmount() { return paidAmount; }

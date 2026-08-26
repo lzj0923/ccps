@@ -397,6 +397,7 @@ CREATE TABLE `finance_records` (
   `amount` decimal(18,2) NOT NULL,
   `currency` char(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'MYR',
   `transaction_date` date NOT NULL,
+  `receipt_date` date DEFAULT NULL COMMENT 'Actual cash receipt date used for accounting reconciliation',
   `payment_method` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `payment_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unpaid',
   `confirmation_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
@@ -411,6 +412,7 @@ CREATE TABLE `finance_records` (
   UNIQUE KEY `uk_finance_records_no` (`transaction_no`),
   KEY `idx_finance_records_review` (`confirmation_status`,`transaction_date`),
   KEY `idx_finance_records_unit_date` (`unit_id`,`transaction_date`),
+  KEY `idx_finance_records_receipt_date` (`receipt_date`,`record_type`,`confirmation_status`),
   KEY `idx_finance_records_sync` (`sync_status`,`sync_batch_id`),
   KEY `fk_finance_records_owner` (`owner_id`),
   KEY `fk_finance_records_tenant` (`tenant_id`),
@@ -736,6 +738,11 @@ CREATE TABLE `maintenance_work_orders` (
   `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
   `estimated_amount` decimal(18,2) DEFAULT NULL,
   `actual_amount` decimal(18,2) DEFAULT NULL,
+  `payer_name` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bank_name` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payment_account_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fee_account_type` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fee_account_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_by` bigint(20) unsigned DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1180,6 +1187,8 @@ CREATE TABLE `payment_receipts` (
   `receipt_no` varchar(60) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `payer_name` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `bank_reference` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fee_account_type` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fee_account_no` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `proof_document_id` bigint(20) unsigned DEFAULT NULL,
   `submission_note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `review_note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1815,6 +1824,7 @@ CREATE TABLE `rent_payments` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `rent_invoice_id` bigint(20) unsigned NOT NULL,
   `finance_record_id` bigint(20) unsigned NOT NULL,
+  `allocated_amount` decimal(18,2) NOT NULL DEFAULT '0.00' COMMENT 'Amount recognized for the linked rental month',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_rent_payments_finance` (`finance_record_id`),
@@ -2556,6 +2566,45 @@ UNLOCK TABLES;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
+CREATE TABLE IF NOT EXISTS `tenant_whatsapp_subscriptions` (
+  `tenant_id` bigint(20) unsigned NOT NULL,
+  `destination` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `opted_in_at` datetime DEFAULT NULL,
+  `opted_out_at` datetime DEFAULT NULL,
+  `opt_in_source` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`tenant_id`),
+  KEY `idx_tenant_whatsapp_enabled` (`enabled`,`updated_at`),
+  CONSTRAINT `fk_tenant_whatsapp_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `whatsapp_delivery_attempts` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `delivery_id` bigint(20) unsigned NOT NULL,
+  `attempt_number` smallint(5) unsigned NOT NULL,
+  `provider_message_id` varchar(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_wa_id` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `template_name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `template_language` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sending',
+  `status_at` datetime DEFAULT NULL,
+  `delivered_at` datetime DEFAULT NULL,
+  `read_at` datetime DEFAULT NULL,
+  `meta_error_code` int(11) DEFAULT NULL,
+  `meta_error_subcode` int(11) DEFAULT NULL,
+  `meta_error_details` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fbtrace_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_whatsapp_delivery_attempt` (`delivery_id`,`attempt_number`),
+  UNIQUE KEY `uk_whatsapp_provider_message` (`provider_message_id`),
+  KEY `idx_whatsapp_attempt_status` (`status`,`status_at`),
+  CONSTRAINT `fk_whatsapp_attempt_delivery` FOREIGN KEY (`delivery_id`) REFERENCES `notification_deliveries` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

@@ -1,3 +1,21 @@
+-- MySQL 5.7 does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
+-- Use an information_schema guard so startup remains idempotent on 5.7 and 8.x.
+SET @requested_transaction_date_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'finance_records'
+    AND COLUMN_NAME = 'requested_transaction_date'
+);
+SET @add_requested_transaction_date_sql = IF(
+  @requested_transaction_date_exists = 0,
+  'ALTER TABLE finance_records ADD COLUMN requested_transaction_date DATE NULL COMMENT ''Business-proposed date retained when finance determines the final date'' AFTER currency',
+  'SELECT 1'
+);
+PREPARE add_requested_transaction_date_stmt FROM @add_requested_transaction_date_sql;
+EXECUTE add_requested_transaction_date_stmt;
+DEALLOCATE PREPARE add_requested_transaction_date_stmt;
+
 CREATE TABLE IF NOT EXISTS property_expense_postings (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   owner_unit_id BIGINT UNSIGNED NOT NULL,
@@ -12,6 +30,33 @@ CREATE TABLE IF NOT EXISTS property_expense_postings (
   KEY idx_property_expense_finance (finance_record_id),
   CONSTRAINT fk_property_expense_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
   CONSTRAINT fk_property_expense_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS admin_recycle_bin (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  entity_type VARCHAR(20) NOT NULL,
+  entity_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NULL,
+  work_order_id BIGINT UNSIGNED NULL,
+  previous_payment_status VARCHAR(30) NULL,
+  previous_confirmation_status VARCHAR(30) NULL,
+  previous_sync_status VARCHAR(30) NULL,
+  previous_payment_method VARCHAR(40) NULL,
+  previous_reserve_account_id BIGINT UNSIGNED NULL,
+  previous_reserve_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  previous_maintenance_status VARCHAR(30) NULL,
+  deleted_by BIGINT UNSIGNED NULL,
+  deleted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  restored_by BIGINT UNSIGNED NULL,
+  restored_at DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_admin_recycle_active (entity_type, entity_id, restored_at, expires_at),
+  KEY idx_admin_recycle_expiry (expires_at, restored_at),
+  CONSTRAINT fk_admin_recycle_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT fk_admin_recycle_work_order FOREIGN KEY (work_order_id) REFERENCES maintenance_work_orders (id),
+  CONSTRAINT fk_admin_recycle_deleted_by FOREIGN KEY (deleted_by) REFERENCES users (id),
+  CONSTRAINT fk_admin_recycle_restored_by FOREIGN KEY (restored_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS electronic_signature_requests (
@@ -50,6 +95,23 @@ CREATE TABLE IF NOT EXISTS electronic_signature_requests (
   CONSTRAINT fk_e_signature_requester FOREIGN KEY (requested_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS electronic_signature_participants (
+  root_document_id BIGINT UNSIGNED NOT NULL,
+  document_kind VARCHAR(64) NOT NULL,
+  signer_role VARCHAR(32) NOT NULL,
+  signing_order INT NOT NULL,
+  signer_name VARCHAR(190) NOT NULL,
+  signer_email VARCHAR(190) NOT NULL,
+  expires_in_days INT NOT NULL DEFAULT 7,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (root_document_id, signer_role),
+  UNIQUE KEY uk_e_signature_participant_order (root_document_id, signing_order),
+  CONSTRAINT fk_e_signature_participant_document FOREIGN KEY (root_document_id) REFERENCES documents (id),
+  CONSTRAINT fk_e_signature_participant_user FOREIGN KEY (updated_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS electronic_signature_events (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   signature_request_id BIGINT UNSIGNED NOT NULL,
@@ -81,6 +143,7 @@ CREATE TABLE IF NOT EXISTS property_handover_checklist_items (
 CREATE TABLE IF NOT EXISTS rent_invoice_items (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   invoice_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NULL COMMENT '待财务确认的租客账单费用；历史记录为空即视为已确认',
   charge_type VARCHAR(40) NOT NULL COMMENT 'management / utilities / maintenance / other',
   description VARCHAR(255) NOT NULL,
   amount DECIMAL(18,2) NOT NULL,
@@ -92,8 +155,10 @@ CREATE TABLE IF NOT EXISTS rent_invoice_items (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_invoice_items_invoice (invoice_id),
+  UNIQUE KEY uk_invoice_items_finance (finance_record_id),
   KEY idx_invoice_items_source (source_type, source_id),
   CONSTRAINT fk_invoice_items_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_invoice_items_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
   CONSTRAINT fk_invoice_items_creator FOREIGN KEY (created_by) REFERENCES users (id),
   CONSTRAINT chk_invoice_items_amount CHECK (amount > 0),
   CONSTRAINT chk_invoice_items_payer CHECK (payer IN ('tenant', 'owner', 'agency'))
@@ -148,7 +213,7 @@ CREATE TABLE IF NOT EXISTS security_deposit_entries (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_security_deposit_lease (lease_id),
+  KEY idx_security_deposit_lease (lease_id),
   UNIQUE KEY uk_security_deposit_finance (finance_record_id),
   KEY idx_security_deposit_status (status, created_at),
   CONSTRAINT fk_security_deposit_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
@@ -198,6 +263,19 @@ JOIN finance_records fr ON fr.id=sde.finance_record_id
 WHERE sde.status='confirmed' AND fr.confirmation_status='confirmed'
   AND NOT EXISTS (SELECT 1 FROM tenant_deposit_transactions tdt
                   WHERE tdt.finance_record_id=sde.finance_record_id AND tdt.transaction_type='collection');
+
+INSERT INTO notification_rules
+  (code, name, event_type, days_before, channels, recipient_role, enabled, created_by)
+VALUES
+  ('LEASE_EXPIRY_BUSINESS_30D', '租约结束前一个月通知业务人员', 'lease_expiry', 30,
+   JSON_ARRAY('whatsapp'), 'business', 1, NULL)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  event_type = 'lease_expiry',
+  days_before = 30,
+  channels = JSON_ARRAY('whatsapp'),
+  recipient_role = 'business',
+  enabled = 1;
 
 -- A lease keeps one identity across consecutive renewals. Each period preserves
 -- the dates, rent terms and contract that were effective for that renewal.
@@ -290,3 +368,100 @@ WHERE fr.record_type = 'property_expense'
   AND fr.payment_method = 'direct_payment'
   AND fr.payment_status = 'unpaid'
   AND fr.confirmation_status = 'pending';
+CREATE TABLE IF NOT EXISTS rent_collection_workflows (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  invoice_id BIGINT UNSIGNED NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  hold_reason VARCHAR(500) NULL,
+  held_by BIGINT UNSIGNED NULL,
+  held_at DATETIME NULL,
+  resolved_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_rent_collection_workflow_invoice (invoice_id),
+  KEY idx_rent_collection_workflow_status (status, updated_at),
+  CONSTRAINT fk_rent_collection_workflow_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_rent_collection_workflow_holder FOREIGN KEY (held_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS rent_collection_actions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  invoice_id BIGINT UNSIGNED NOT NULL,
+  stage VARCHAR(32) NOT NULL,
+  threshold_days SMALLINT UNSIGNED NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sent',
+  title VARCHAR(200) NOT NULL,
+  body VARCHAR(1000) NOT NULL,
+  notification_id BIGINT UNSIGNED NULL,
+  acted_by BIGINT UNSIGNED NULL,
+  acted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_rent_collection_action_stage (invoice_id, stage),
+  KEY idx_rent_collection_action_date (scheduled_date, status),
+  CONSTRAINT fk_rent_collection_action_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_rent_collection_action_notification FOREIGN KEY (notification_id) REFERENCES notifications (id),
+  CONSTRAINT fk_rent_collection_action_actor FOREIGN KEY (acted_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS system_financial_notification_actions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  action_type VARCHAR(40) NOT NULL,
+  related_id BIGINT UNSIGNED NOT NULL,
+  stage VARCHAR(40) NOT NULL,
+  period_key VARCHAR(20) NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sent',
+  notification_id BIGINT UNSIGNED NULL,
+  title VARCHAR(200) NOT NULL,
+  body VARCHAR(1000) NOT NULL,
+  sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_system_financial_notice (action_type, related_id, stage, period_key),
+  KEY idx_system_financial_notice_schedule (scheduled_date, status),
+  KEY idx_system_financial_notice_notification (notification_id),
+  CONSTRAINT fk_system_financial_notice_notification
+    FOREIGN KEY (notification_id) REFERENCES notifications (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS tenant_whatsapp_subscriptions (
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  destination VARCHAR(40) NOT NULL,
+  enabled TINYINT(1) NOT NULL DEFAULT 0,
+  opted_in_at DATETIME NULL,
+  opted_out_at DATETIME NULL,
+  opt_in_source VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (tenant_id),
+  KEY idx_tenant_whatsapp_enabled (enabled, updated_at),
+  CONSTRAINT fk_tenant_whatsapp_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS whatsapp_delivery_attempts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  delivery_id BIGINT UNSIGNED NOT NULL,
+  attempt_number SMALLINT UNSIGNED NOT NULL,
+  provider_message_id VARCHAR(191) NULL,
+  provider_wa_id VARCHAR(40) NULL,
+  template_name VARCHAR(160) NOT NULL,
+  template_language VARCHAR(20) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sending',
+  status_at DATETIME NULL,
+  delivered_at DATETIME NULL,
+  read_at DATETIME NULL,
+  meta_error_code INT NULL,
+  meta_error_subcode INT NULL,
+  meta_error_details VARCHAR(500) NULL,
+  fbtrace_id VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_whatsapp_delivery_attempt (delivery_id, attempt_number),
+  UNIQUE KEY uk_whatsapp_provider_message (provider_message_id),
+  KEY idx_whatsapp_attempt_status (status, status_at),
+  CONSTRAINT fk_whatsapp_attempt_delivery FOREIGN KEY (delivery_id) REFERENCES notification_deliveries (id)
+) ENGINE=InnoDB;

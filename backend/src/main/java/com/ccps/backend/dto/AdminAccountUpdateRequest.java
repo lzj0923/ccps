@@ -11,5 +11,6 @@ public record AdminAccountUpdateRequest(
         @Email @Size(max = 190) String email,
         @Size(max = 40) String phone,
         @Pattern(regexp = "ADMIN|OWNER") String accountType,
+        @Pattern(regexp = "SUPER_ADMIN|FINANCE|BUSINESS|CUSTOMER_SERVICE|ADMINISTRATION") String staffRole,
         @Pattern(regexp = "active|inactive") String status) {
 }

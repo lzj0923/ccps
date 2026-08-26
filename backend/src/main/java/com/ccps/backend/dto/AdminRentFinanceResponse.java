@@ -14,5 +14,5 @@ public record AdminRentFinanceResponse(Summary summary, List<Item> rows, Page pa
             BigDecimal invoiceAmount, BigDecimal invoicePaid, BigDecimal amount, String currency,
             LocalDate transactionDate, String paymentMethod, String confirmationStatus, String syncStatus,
             Long proofDocumentId, String proofName, String proofMimeType, Long proofSize, String receiptNo,
-            String reviewNote, String confirmedByName, LocalDateTime confirmedAt, LocalDateTime submittedAt) { }
+            String reviewNote, String allocationNote, String confirmedByName, LocalDateTime confirmedAt, LocalDateTime submittedAt) { }
 }

@@ -14,4 +14,16 @@ public record AdminExpenseCreateRequest(
         @NotBlank @Size(max = 500) String description,
         @NotNull @DecimalMin("0.01") BigDecimal amount,
         @NotNull LocalDate occurredOn,
-        @NotBlank String settlementMethod) { }
+        @NotBlank String settlementMethod,
+        @Size(max = 160) String payerName,
+        @Size(max = 120) String bankName,
+        @Size(max = 120) String paymentAccountNo,
+        @Size(max = 40) String feeAccountKey,
+        @Size(max = 120) String feeAccountNo) {
+
+    /** Backwards-compatible constructor for existing callers and tests. */
+    public AdminExpenseCreateRequest(Long unitId, String category, String description,
+            BigDecimal amount, LocalDate occurredOn, String settlementMethod) {
+        this(unitId, category, description, amount, occurredOn, settlementMethod, null, null, null, null, null);
+    }
+}

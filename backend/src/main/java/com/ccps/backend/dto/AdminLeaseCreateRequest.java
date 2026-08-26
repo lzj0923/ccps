@@ -18,14 +18,22 @@ public record AdminLeaseCreateRequest(
         @NotNull @DecimalMin(value = "0.00") BigDecimal depositAmount,
         @Min(1) @Max(31) int paymentDay,
         @Pattern(regexp = "daily_prorated") String rentCalculationMethod,
-        Long rentalMandateId) {
+        Long rentalMandateId,
+        Long rentalSpaceId) {
     public AdminLeaseCreateRequest(Long tenantId, Long unitId, LocalDate startDate, LocalDate endDate,
             BigDecimal monthlyRent, BigDecimal depositAmount, int paymentDay) {
-        this(tenantId, unitId, startDate, endDate, monthlyRent, depositAmount, paymentDay, "daily_prorated", null);
+        this(tenantId, unitId, startDate, endDate, monthlyRent, depositAmount, paymentDay, "daily_prorated", null, null);
     }
 
     public AdminLeaseCreateRequest(Long tenantId, Long unitId, LocalDate startDate, LocalDate endDate,
             BigDecimal monthlyRent, BigDecimal depositAmount, int paymentDay, String rentCalculationMethod) {
-        this(tenantId, unitId, startDate, endDate, monthlyRent, depositAmount, paymentDay, rentCalculationMethod, null);
+        this(tenantId, unitId, startDate, endDate, monthlyRent, depositAmount, paymentDay, rentCalculationMethod, null, null);
+    }
+
+    public AdminLeaseCreateRequest(Long tenantId, Long unitId, LocalDate startDate, LocalDate endDate,
+            BigDecimal monthlyRent, BigDecimal depositAmount, int paymentDay, String rentCalculationMethod,
+            Long rentalMandateId) {
+        this(tenantId, unitId, startDate, endDate, monthlyRent, depositAmount, paymentDay,
+                rentCalculationMethod, rentalMandateId, null);
     }
 }

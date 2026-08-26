@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
+import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.ArrayList;
@@ -40,11 +41,16 @@ public class TenancyAgreementPdfService {
     public static final String PDF_CONTENT_TYPE = "application/pdf";
     private static final float PAGE_WIDTH = 595.32f;
     private static final float PAGE_HEIGHT = 841.92f;
+    private static final float INVENTORY_FIRST_PAGE_TOP = 585f;
+    private static final float INVENTORY_CONTINUATION_TOP = 735f;
+    private static final float INVENTORY_BOTTOM = 40f;
+    private static final int COMPACT_INVENTORY_THRESHOLD = 50;
+    private static final float REFERENCE_INVENTORY_ROW_HEIGHT = 18.84f;
+    private static final float REFERENCE_INVENTORY_FONT_SIZE = 8.1f;
+    private static final float COMPACT_INVENTORY_ROW_HEIGHT = 14f;
+    private static final float COMPACT_INVENTORY_FONT_SIZE = 7.1f;
+    private static final float MIN_FONT_SIZE = 6.2f;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMMM uuuu", Locale.ENGLISH);
-    private static final List<String> INVENTORY_CATEGORY_ORDER = List.of(
-            "客廳 Living Room", "飯廳 Dining Room", "廚房 Kitchen", "主臥室 Master Bedroom",
-            "主浴室 Master Bathroom", "遙控器 Remote Control", "鑰匙 Keys", "門禁卡 Access Card");
-
     private static final List<PhotoSlot> PHOTO_SLOTS = List.of(
             new PhotoSlot(20, 18.4f, 545.5f, 260f, 195f),
             new PhotoSlot(20, 304.2f, 546.1f, 261.6f, 196.2f),
@@ -71,12 +77,13 @@ public class TenancyAgreementPdfService {
     /**
      * Generates the customer supplied agreement while replacing its Inventory
      * List with the enabled checklist items belonging to the lease's property.
-     * A null inventory list keeps the original template inventory for backwards
-     * compatibility; an empty list intentionally produces an empty inventory.
+     * A null or empty inventory list keeps the reference template inventory. This
+     * prevents a property without a maintained checklist from producing blank
+     * handover pages.
      */
     public byte[] generate(Map<String, String> fields, List<PropertyPhotoAsset> propertyPhotos,
             List<InventoryItem> inventoryItems) {
-        Map<String, String> values = fields == null ? Map.of() : fields;
+        Map<String, String> values = withStandardLeaseDefaults(fields);
         try (InputStream source = TenancyAgreementPdfService.class.getResourceAsStream(TEMPLATE_RESOURCE);
                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             if (source == null) throw new IllegalStateException("Tenancy agreement PDF template is missing");
@@ -88,10 +95,13 @@ public class TenancyAgreementPdfService {
             for (int page = 2; page <= reader.getNumberOfPages(); page++) {
                 fillHeader(stamper.getOverContent(page), latin, cjk, values);
             }
+            repairClauseTenSeventeen(stamper, latin, cjk);
             fillSignaturePage(stamper.getOverContent(12), latin, cjk, values);
             fillFirstSchedule(stamper.getOverContent(13), latin, cjk, values);
             fillSecondSchedule(stamper.getOverContent(14), latin, cjk, values);
-            if (inventoryItems != null) {
+            fillMeterReadings(stamper.getOverContent(18), latin, cjk, values);
+            fillMoveInAcknowledgement(stamper.getOverContent(19), latin, cjk, values);
+            if (inventoryItems != null && !inventoryItems.isEmpty()) {
                 replaceInventory(stamper, latin, cjk, inventoryItems);
                 // Inventory clearing reaches up to the original page header
                 // on continuation pages; paint that header back afterward.
@@ -121,43 +131,76 @@ public class TenancyAgreementPdfService {
         cover(stamper.getOverContent(17), 60, 42, 485, 706);
 
         Map<String, List<InventoryItem>> grouped = new LinkedHashMap<>();
-        for (String category : INVENTORY_CATEGORY_ORDER) grouped.put(category, new ArrayList<>());
         for (InventoryItem item : inventoryItems) {
             if (item == null || item.category() == null || item.itemName() == null || item.itemName().isBlank()) continue;
             grouped.computeIfAbsent(item.category().trim(), ignored -> new ArrayList<>()).add(item);
         }
-        grouped.values().removeIf(List::isEmpty);
         if (grouped.isEmpty()) return;
 
-        int totalRows = grouped.values().stream().mapToInt(List::size).sum();
-        float rowHeight = totalRows > 60 ? 12.5f : 18.84f;
-        float fontSize = totalRows > 60 ? 6.4f : 8.1f;
+        List<Map.Entry<String, List<InventoryItem>>> orderedGroups = new ArrayList<>(grouped.entrySet());
+        orderedGroups.sort((left, right) -> Integer.compare(
+                inventoryCategoryRank(left.getKey()), inventoryCategoryRank(right.getKey())));
+        int totalRows = inventoryItems.size();
+        float rowHeight = totalRows <= COMPACT_INVENTORY_THRESHOLD
+                ? REFERENCE_INVENTORY_ROW_HEIGHT : COMPACT_INVENTORY_ROW_HEIGHT;
+        float fontSize = totalRows <= COMPACT_INVENTORY_THRESHOLD
+                ? REFERENCE_INVENTORY_FONT_SIZE : COMPACT_INVENTORY_FONT_SIZE;
+
         int page = 15;
-        float y = 585;
-        for (Map.Entry<String, List<InventoryItem>> group : grouped.entrySet()) {
+        float y = INVENTORY_FIRST_PAGE_TOP;
+        for (Map.Entry<String, List<InventoryItem>> group : orderedGroups) {
+            float wholeGroupHeight = 18 + 32 + rowHeight * group.getValue().size() + 14;
+            if (wholeGroupHeight > y - INVENTORY_BOTTOM && page < 17
+                    && wholeGroupHeight <= INVENTORY_CONTINUATION_TOP - INVENTORY_BOTTOM) {
+                page++;
+                y = INVENTORY_CONTINUATION_TOP;
+            }
             int start = 0;
             while (start < group.getValue().size()) {
                 boolean showTitle = start == 0;
                 float titleHeight = showTitle ? 18 : 0;
-                int capacity = (int) Math.floor((y - 58 - titleHeight - 32) / rowHeight);
+                int capacity = (int) Math.floor((y - INVENTORY_BOTTOM - titleHeight - 32)
+                        / rowHeight);
                 if (capacity < 1) {
                     page++;
-                    y = 650;
+                    if (page > 17) {
+                        throw new IllegalStateException(
+                                "Property handover checklist exceeds tenancy agreement inventory pages");
+                    }
+                    y = INVENTORY_CONTINUATION_TOP;
                     continue;
                 }
                 int end = Math.min(group.getValue().size(), start + capacity);
                 PdfContentByte canvas = stamper.getOverContent(page);
                 drawInventoryTable(canvas, latin, cjk, group.getKey(), group.getValue().subList(start, end),
                         y, rowHeight, fontSize, showTitle);
-                y -= titleHeight + 32 + rowHeight * (end - start) + 18;
+                y -= titleHeight + 32 + rowHeight * (end - start) + 14;
                 start = end;
-                if (start < group.getValue().size() && y < 90) {
+                if (start < group.getValue().size()) {
                     page++;
-                    y = 650;
+                    if (page > 17) {
+                        throw new IllegalStateException(
+                                "Property handover checklist exceeds tenancy agreement inventory pages");
+                    }
+                    y = INVENTORY_CONTINUATION_TOP;
                 }
-                if (page > 17) throw new IllegalStateException("Property handover checklist exceeds tenancy agreement inventory pages");
             }
         }
+    }
+
+    private int inventoryCategoryRank(String category) {
+        String normalized = category == null ? "" : category.toLowerCase(Locale.ROOT);
+        if (normalized.contains("living room")) return 0;
+        if (normalized.contains("dining room")) return 1;
+        if (normalized.contains("kitchen")) return 2;
+        if (normalized.contains("master bedroom")) return 3;
+        if (normalized.contains("master bathroom")) return 4;
+        if (normalized.contains("bedroom")) return 5;
+        if (normalized.contains("bathroom")) return 6;
+        if (normalized.contains("remote control")) return 7;
+        if (normalized.contains("key")) return 8;
+        if (normalized.contains("access card")) return 9;
+        return 100;
     }
 
     private void drawInventoryTable(PdfContentByte canvas, BaseFont latin, BaseFont cjk, String category,
@@ -199,14 +242,19 @@ public class TenancyAgreementPdfService {
         text(canvas, latin, cjk, "Check In", 420, tableTop - 27, 8.1f, 50);
         text(canvas, latin, cjk, "Check Out", 478, tableTop - 27, 8.1f, 52);
 
-        float baseline = tableTop - headerRowHeight * 2 - rowHeight + Math.min(12, rowHeight - 3);
+        float rowTop = tableTop - headerRowHeight * 2;
+        float baseline = rowTop - rowHeight + Math.max(2.2f, (rowHeight - fontSize) * .5f + .8f);
         int number = 1;
         for (InventoryItem item : items) {
             text(canvas, latin, cjk, Integer.toString(number++), 82, baseline, fontSize, 17);
             text(canvas, latin, cjk, item.itemName(), 108, baseline, fontSize, 245);
-            text(canvas, latin, cjk, item.quantity() == null ? "" : item.quantity(), 375, baseline, fontSize, 42);
+            text(canvas, latin, cjk, displayInventoryQuantity(item.quantity()), 375, baseline, fontSize, 42);
             baseline -= rowHeight;
         }
+    }
+
+    static String displayInventoryQuantity(String quantity) {
+        return quantity == null || quantity.isBlank() ? "1" : quantity.trim();
     }
 
     private void replacePropertyPhotos(PdfStamper stamper, List<PropertyPhotoAsset> propertyPhotos)
@@ -292,10 +340,37 @@ public class TenancyAgreementPdfService {
     private void fillHeader(PdfContentByte canvas, BaseFont latin, BaseFont cjk, Map<String, String> fields)
             throws IOException {
         cover(canvas, 125, 774, 455, 39);
-        text(canvas, latin, cjk, "Tenancy Agreement between " + value(fields, "landlordName"), 136, 797, 9, 385);
-        text(canvas, latin, cjk, "AND " + value(fields, "tenantName") + " (" + date(fields, "leaseStart") + " - "
-                + date(fields, "leaseEnd") + ")", 136, 784, 9, 390);
+        String header = "Tenancy Agreement between " + value(fields, "landlordName") + " AND "
+                + value(fields, "tenantName") + " (" + date(fields, "leaseStart") + " - "
+                + date(fields, "leaseEnd") + ")";
+        BaseFont headerFont = header.chars().allMatch(character -> character < 128) ? latin : cjk;
+        List<String> headerLines = wrapToWidth(header, headerFont, 9, 300);
+        text(canvas, latin, cjk, headerLines.isEmpty() ? "" : headerLines.get(0), 136, 797, 9, 300);
+        if (headerLines.size() > 1) {
+            text(canvas, latin, cjk, String.join(" ", headerLines.subList(1, headerLines.size())),
+                    136, 784, 9, 300);
+        }
         text(canvas, latin, cjk, year(fields, "leaseStart"), 531, 797, 9, 42);
+    }
+
+    private void repairClauseTenSeventeen(PdfStamper stamper, BaseFont latin, BaseFont cjk)
+            throws IOException {
+        // The source template splits clause 10.17 across pages. The approved
+        // manual agreement keeps the whole clause at the bottom of page 10.
+        cover(stamper.getOverContent(10), 65, 70, 470, 76);
+        cover(stamper.getOverContent(11), 65, 704, 470, 48);
+        String clause = "The parties hereto expressly covenant and agree that the tenancy herein created shall "
+                + "in addition to the terms and conditions herein provided be further subject to the special "
+                + "express conditions set out in Section 12 of the First Schedule hereto (hereinafter referred "
+                + "to as \"Special Conditions\") and in the event of any conflict discrepancy or variance the "
+                + "Special Conditions shall prevail.";
+        PdfContentByte pageTen = stamper.getOverContent(10);
+        text(pageTen, latin, cjk, "10.17", 72, 140, 9.2f, 34);
+        float y = 140;
+        for (String line : wrapToWidth(clause, latin, 9.2f, 420)) {
+            text(pageTen, latin, cjk, line, 108, y, 9.2f, 420);
+            y -= 11.4f;
+        }
     }
 
     private void fillFirstSchedule(PdfContentByte canvas, BaseFont latin, BaseFont cjk, Map<String, String> fields)
@@ -325,16 +400,138 @@ public class TenancyAgreementPdfService {
                 value(fields, "termYears"),
                 date(fields, "leaseStart"),
                 date(fields, "leaseEnd")), 248, 300, 8.6f, 265, 48);
+
+        canvas.saveState();
+        canvas.setColorStroke(Color.BLACK);
+        canvas.setLineWidth(.72f);
+        canvas.moveTo(245, 328);
+        canvas.lineTo(529, 328);
+        canvas.stroke();
+        canvas.restoreState();
     }
 
     private void fillSignaturePage(PdfContentByte canvas, BaseFont latin, BaseFont cjk, Map<String, String> fields)
             throws IOException {
-        cover(canvas, 68, 650, 175, 28);
-        text(canvas, latin, cjk, value(fields, "landlordName"), 72, 670, 9, 170);
-        text(canvas, latin, cjk, "Passport No. " + value(fields, "landlordIdentity"), 72, 656, 9, 170);
-        cover(canvas, 68, 422, 175, 28);
-        text(canvas, latin, cjk, value(fields, "tenantName"), 72, 442, 9, 170);
-        text(canvas, latin, cjk, "Passport No. " + value(fields, "tenantIdentity"), 72, 428, 9, 170);
+        cover(canvas, 68, 628, 300, 68);
+        text(canvas, latin, cjk, "Signed by", 72, 684, 9, 285);
+        text(canvas, latin, cjk, value(fields, "landlordName"), 72, 670, 9, 285);
+        text(canvas, latin, cjk, "Passport No. " + value(fields, "landlordIdentity"), 72, 656, 9, 285);
+        text(canvas, latin, cjk, "In the presence of:-", 72, 642, 9, 285);
+        drawSignatureBrackets(canvas, latin, cjk, 684, 670, 656, 642);
+        cover(canvas, 68, 400, 300, 68);
+        text(canvas, latin, cjk, "Signed by", 72, 456, 9, 285);
+        text(canvas, latin, cjk, value(fields, "tenantName"), 72, 442, 9, 285);
+        text(canvas, latin, cjk, "Passport No. " + value(fields, "tenantIdentity"), 72, 428, 9, 285);
+        text(canvas, latin, cjk, "In the presence of:-", 72, 414, 9, 285);
+        drawSignatureBrackets(canvas, latin, cjk, 456, 442, 428, 414);
+    }
+
+    private void drawSignatureBrackets(PdfContentByte canvas, BaseFont latin, BaseFont cjk, float... baselines)
+            throws IOException {
+        for (float baseline : baselines) text(canvas, latin, cjk, "]", 292, baseline, 9, 12);
+    }
+
+    private void fillMeterReadings(PdfContentByte canvas, BaseFont latin, BaseFont cjk,
+            Map<String, String> fields) throws IOException {
+        List<String> meterKeys = List.of("electricityMeter", "waterMeter", "gasMeter",
+                "districtCoolingMeter", "otherMeter");
+        float[] baselines = { 640f, 625f, 610f, 595f, 580f };
+        for (int index = 0; index < meterKeys.size(); index++) {
+            String key = meterKeys.get(index);
+            String checkIn = value(fields, key);
+            String checkOut = value(fields, key + "CheckOut");
+            text(canvas, latin, cjk, checkIn, 281, baselines[index], 7.5f, 64);
+            if (!checkIn.isBlank()) {
+                String readingDate = value(fields, key + "Date");
+                if (readingDate.isBlank()) readingDate = value(fields, "handoverDate");
+                text(canvas, latin, cjk, compactDate(readingDate), 352, baselines[index], 7.1f, 50);
+            }
+            text(canvas, latin, cjk, checkOut, 409, baselines[index], 7.5f, 70);
+            if (!checkOut.isBlank()) {
+                text(canvas, latin, cjk, compactDate(value(fields, key + "CheckOutDate")),
+                        487, baselines[index], 7.1f, 49);
+            }
+        }
+    }
+
+    private void fillMoveInAcknowledgement(PdfContentByte canvas, BaseFont latin, BaseFont cjk,
+            Map<String, String> fields) throws IOException {
+        cover(canvas, 70, 528, 192, 25);
+        cover(canvas, 70, 483, 192, 25);
+        cover(canvas, 70, 459, 192, 25);
+        cover(canvas, 70, 434, 192, 25);
+        text(canvas, latin, cjk, "Name: " + value(fields, "tenantName"), 72, 538, 8.2f, 188);
+        text(canvas, latin, cjk, "Handphone No.: " + value(fields, "tenantPhone"), 72, 493, 7.5f, 188);
+        text(canvas, latin, cjk, "NRIC/Passport No.: " + value(fields, "tenantIdentity"), 72, 469, 7.2f, 188);
+        text(canvas, latin, cjk, "Date: " + date(fields, "handoverDate"), 72, 444, 8.2f, 188);
+        String attendedBy = value(fields, "attendedByName");
+        if (!attendedBy.isBlank()) {
+            text(canvas, latin, cjk, attendedBy, 405, 538, 8.2f, 123);
+            text(canvas, latin, cjk, value(fields, "attendedByDesignation"), 444, 515, 8.2f, 84);
+            text(canvas, latin, cjk, date(fields, "handoverDate"), 399, 492, 8.2f, 129);
+        }
+    }
+
+    private String compactDate(String source) {
+        if (source == null || source.isBlank()) return "";
+        try {
+            return LocalDate.parse(source.trim()).format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        } catch (RuntimeException ignored) {
+            return source.trim();
+        }
+    }
+
+    private Map<String, String> withStandardLeaseDefaults(Map<String, String> fields) {
+        Map<String, String> values = new LinkedHashMap<>();
+        if (fields != null) values.putAll(fields);
+        String monthlyRent = value(values, "monthlyRent");
+        putIfBlank(values, "advanceRental", monthlyRent);
+        putIfBlank(values, "securityDeposit", multiplyAmount(monthlyRent, new BigDecimal("2")));
+        putIfBlank(values, "utilityDeposit", multiplyAmount(monthlyRent, new BigDecimal("0.5")));
+        putIfBlank(values, "use", "For Residential use only");
+        putIfBlank(values, "termYears", leaseTerm(values));
+        putIfBlank(values, "agreementDate", value(values, "leaseStart"));
+        putIfBlank(values, "handoverDate", value(values, "leaseStart"));
+        putIfBlank(values, "paymentDay", "1");
+        putIfBlank(values, "paymentMode", "Bank Transfer");
+        return values;
+    }
+
+    private void putIfBlank(Map<String, String> values, String key, String fallback) {
+        if (value(values, key).isBlank() && fallback != null && !fallback.isBlank()) values.put(key, fallback);
+    }
+
+    private String multiplyAmount(String source, BigDecimal multiplier) {
+        if (source == null || source.isBlank()) return "";
+        String numeric = source.replaceAll("[^0-9.]", "");
+        try {
+            BigDecimal amount = new BigDecimal(numeric).multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+            return "RM " + new DecimalFormat("#,##0.00").format(amount);
+        } catch (NumberFormatException ignored) {
+            return "";
+        }
+    }
+
+    private String leaseTerm(Map<String, String> values) {
+        try {
+            LocalDate start = LocalDate.parse(value(values, "leaseStart"));
+            LocalDate end = LocalDate.parse(value(values, "leaseEnd"));
+            if (end.isBefore(start)) return "";
+            LocalDate calculationEnd = end.plusDays(1).getDayOfMonth() == start.getDayOfMonth()
+                    ? end.plusDays(1) : end;
+            Period period = Period.between(start, calculationEnd);
+            List<String> parts = new ArrayList<>();
+            if (period.getYears() > 0) parts.add(periodPart(period.getYears(), "year"));
+            if (period.getMonths() > 0) parts.add(periodPart(period.getMonths(), "month"));
+            if (parts.isEmpty() && period.getDays() > 0) parts.add(periodPart(period.getDays(), "day"));
+            return String.join(" and ", parts);
+        } catch (RuntimeException ignored) {
+            return "";
+        }
+    }
+
+    private String periodPart(int number, String unit) {
+        return titleCase(numberToWords(number)) + " (" + number + ") " + unit + (number == 1 ? "" : "s");
     }
 
     private void fillSecondSchedule(PdfContentByte canvas, BaseFont latin, BaseFont cjk, Map<String, String> fields)
@@ -343,7 +540,8 @@ public class TenancyAgreementPdfService {
         List<String> payment = new ArrayList<>();
         payment.add(amountPhrase(value(fields, "monthlyRent")));
         payment.add(value(fields, "paymentDay").isBlank() ? "" : ordinal(value(fields, "paymentDay")) + " day of every month");
-        payment.add("Bank Transfer:");
+        String paymentMode = value(fields, "paymentMode");
+        payment.add(paymentMode.endsWith(":") ? paymentMode : paymentMode + ":");
         if (!value(fields, "bankName").isBlank()) payment.add(value(fields, "bankName"));
         if (!value(fields, "bankAccount").isBlank()) payment.add("Account No: " + value(fields, "bankAccount"));
         if (!value(fields, "bankBranch").isBlank()) payment.add("Bank: " + value(fields, "bankBranch"));
@@ -354,7 +552,7 @@ public class TenancyAgreementPdfService {
         cover(canvas, 245, 439, 267, 76);
         drawLines(canvas, latin, cjk, wrap(amountPhrase(value(fields, "securityDeposit")), 54), 248, 495, 8.6f, 255, 12);
         cover(canvas, 245, 370, 267, 64);
-        drawLines(canvas, latin, cjk, wrap(amountPhrase(value(fields, "utilityDeposit")), 54), 248, 430, 8.6f, 255, 12);
+        drawLines(canvas, latin, cjk, wrap(amountPhrase(value(fields, "utilityDeposit")), 54), 248, 420, 8.6f, 255, 12);
         cover(canvas, 245, 315, 267, 51);
         text(canvas, latin, cjk, value(fields, "use"), 248, 350, 8.6f, 255);
         cover(canvas, 245, 232, 267, 77);
@@ -392,12 +590,40 @@ public class TenancyAgreementPdfService {
         String safe = value.replace('\n', ' ').replace('\r', ' ').trim();
         BaseFont font = safe.chars().allMatch(ch -> ch < 128) ? latin : cjk;
         float actual = size;
-        while (actual > 6.2f && font.getWidthPoint(safe, actual) > maxWidth) actual -= .3f;
+        while (actual > MIN_FONT_SIZE && font.getWidthPoint(safe, actual) > maxWidth) actual -= .3f;
+        if (font.getWidthPoint(safe, actual) > maxWidth) safe = ellipsize(safe, font, actual, maxWidth);
         canvas.beginText();
         canvas.setFontAndSize(font, actual);
         canvas.setTextMatrix(x, y);
         canvas.showText(safe);
         canvas.endText();
+    }
+
+    private String ellipsize(String value, BaseFont font, float size, float maxWidth) {
+        String suffix = "...";
+        int end = value.length();
+        while (end > 1 && font.getWidthPoint(value.substring(0, end).stripTrailing() + suffix, size) > maxWidth) {
+            end--;
+        }
+        return value.substring(0, Math.max(1, end)).stripTrailing() + suffix;
+    }
+
+    private List<String> wrapToWidth(String value, BaseFont font, float size, float maxWidth) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : value.split("\\s+")) {
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (!line.isEmpty() && font.getWidthPoint(candidate, size) > maxWidth) {
+                lines.add(line.toString());
+                line.setLength(0);
+                line.append(word);
+            } else {
+                if (!line.isEmpty()) line.append(' ');
+                line.append(word);
+            }
+        }
+        if (!line.isEmpty()) lines.add(line.toString());
+        return lines;
     }
 
     private List<String> wrap(String value, int maxChars) {

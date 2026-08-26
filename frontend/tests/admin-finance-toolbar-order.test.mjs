@@ -16,3 +16,23 @@ test('finance renders the shared toolbar below its type navigation', () => {
   const toolbar = financeSource.indexOf('<ModuleToolbar');
   assert.ok(toolbar > navigationEnd, 'finance toolbar should render after the finance type navigation');
 });
+
+test('finance confirmation tabs prioritize rental workflows', () => {
+  const expectedOrder = [
+    "switchFinanceType('rent')",
+    "switchFinanceType('tenant_deposit')",
+    "switchFinanceType('expense')",
+    "switchFinanceType('cashflow_maintenance')",
+    "switchFinanceType('reserve')",
+    "switchFinanceType('reserve_refund')",
+    "switchFinanceType('property')",
+  ];
+  const positions = expectedOrder.map((marker) => financeSource.indexOf(marker));
+
+  assert.ok(positions.every((position) => position >= 0), 'all finance confirmation tabs should exist');
+  assert.deepEqual(
+    positions,
+    [...positions].sort((left, right) => left - right),
+    'rental-related tabs should appear before reserve and property purchase tabs',
+  );
+});

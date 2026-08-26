@@ -9,10 +9,11 @@ public record AdminOwnerUpdateRequest(
         @Size(max = 30) String ownerNo,
         @NotBlank @Size(max = 160) String fullName,
         @Size(max = 120) String identityNo,
-        @Size(max = 40) String phone,
-        @Size(max = 40) String mobilePhone,
+        @Size(max = 40) @Pattern(regexp = "^$|^\\+[1-9][0-9]{7,14}$", message = "Owner phone number must use E.164 format") String phone,
+        @Size(max = 40) @Pattern(regexp = "^$|^\\+[1-9][0-9]{7,14}$", message = "Owner phone number must use E.164 format") String mobilePhone,
         @Size(max = 40) String homePhone,
         @Size(max = 40) String officePhone,
         @Size(max = 80) String passportNo,
         @Email @Size(max = 190) String email,
+        @Size(max = 500) String mailingAddress,
         @NotBlank @Pattern(regexp = "active|inactive") String status) { }

@@ -28,21 +28,23 @@
             <div class="notification-list-copy"><h3>{{ notice.title }} <b v-if="notice.badge">{{ notice.badge }}</b></h3><p>{{ notice.body }}</p></div>
             <div class="notification-property"><strong>{{ notice.project || $t('legacy.t_c14b00eeef92') }}</strong><small>{{ notice.unit || '—' }}</small></div>
             <div class="notification-meta"><time>{{ formatTime(notice.createdAt) }}</time><small><span v-html="icons[notice.read ? 'clock' : 'unread']"></span>{{ notice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</small></div>
-            <span class="notification-priority" :class="priorityClass(notice.priority)">{{ priorityLabel(notice.priority) }}</span><b class="notification-row-arrow">›</b>
+            <span class="notification-priority" :class="priorityClass(notice.priority)">{{ priorityLabel(notice.priority) }}</span><button type="button" class="notification-view-detail" @click.stop="openNoticeDetail(notice)">查看详情</button>
           </article>
           <div v-if="!loading && !pagedNotifications.length" class="notification-empty">{{ $t('legacy.t_2c97fa76da9e') }}</div>
         </div>
         <footer class="notification-list-footer"><span>{{ $t('legacy.t_3b6ef811b85a') }} {{ filteredNotifications.length }} {{ $t('legacy.t_f4c6088207de') }}</span><div><button :disabled="currentPage === 1" @click="currentPage--">‹</button><button v-for="number in visiblePageNumbers" :key="number" :class="{ active: currentPage === number }" @click="currentPage = number">{{ number }}</button><button :disabled="currentPage === totalPages" @click="currentPage++">›</button></div></footer>
       </section>
 
-      <section v-if="selectedNotice" class="notification-detail-card">
-        <header><h2>{{ selectedNotice.title }}</h2><span :class="priorityClass(selectedNotice.priority)">{{ selectedNotice.badge || `${priorityLabel(selectedNotice.priority)}優先級` }}</span></header>
+      <div v-if="selectedNotice && detailDialogOpen" class="property-detail-overlay notification-detail-overlay" @pointerdown.self="closeDetailDialog">
+        <section class="notification-detail-card notification-detail-dialog" role="dialog" aria-modal="true" aria-label="通知详情">
+        <header><div><h2>{{ selectedNotice.title }}</h2><span :class="priorityClass(selectedNotice.priority)">{{ selectedNotice.badge || `${priorityLabel(selectedNotice.priority)}優先級` }}</span></div><button type="button" class="notification-detail-close" @click="closeDetailDialog" aria-label="关闭详情">×</button></header>
         <div class="notification-detail-meta"><span v-html="icons.calendar"></span>{{ formatTime(selectedNotice.createdAt) }}<i></i>{{ $t('legacy.t_99f8602b6a1b') }}{{ selectedNotice.number }}<b :class="{ read: selectedNotice.read }">{{ selectedNotice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</b></div>
         <div class="notification-message"><p>{{ selectedNotice.detail || selectedNotice.title }}</p><p>{{ selectedNotice.message || selectedNotice.body }}</p><p>{{ $t('legacy.t_7f7133c2f0e8') }}</p></div>
         <section class="notification-property-section"><h3>{{ $t('legacy.t_e76558347e29') }}</h3><div class="notification-property-card"><div class="notification-property-photo"></div><div><strong>{{ selectedNotice.project || $t('legacy.t_c14b00eeef92') }}</strong><span>{{ selectedNotice.unit || '—' }}</span><small>{{ selectedNotice.city || '—' }}</small></div><dl><div><dt>{{ $t('legacy.t_ae3d135a8759') }}</dt><dd>{{ selectedNotice.amount ? `RM ${selectedNotice.amount}` : '—' }}</dd></div><div><dt>{{ $t('legacy.t_54b41f1f8169') }}</dt><dd>{{ selectedNotice.dueDate || '—' }}</dd></div></dl></div></section>
         <section class="notification-quick-actions"><h3>{{ $t('legacy.t_f4a1217c3974') }}</h3><div><button v-for="action in quickActions" :key="action.key" type="button" @click="handleQuickAction(action)"><span v-html="icons[action.icon]"></span>{{ action.label }}</button></div></section>
         <section class="notification-related-records"><h3>{{ $t('legacy.t_a02a518aa646') }}</h3><dl><div><dt>{{ $t('legacy.t_3784424059e3') }}</dt><dd>{{ selectedNotice.number }}</dd></div><div><dt>{{ $t('legacy.t_357e7a325e3e') }}</dt><dd>{{ categoryLabel(selectedNotice.category) }}</dd></div><div><dt>{{ $t('legacy.t_b04e5a22effc') }}</dt><dd>{{ selectedNotice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</dd></div></dl><button @click="markSelectedRead">{{ $t('legacy.t_0da6c307e848') }} <span>→</span></button></section>
-      </section>
+        </section>
+      </div>
 
       <aside class="notification-side-column">
         <section class="notification-side-card notification-tasks"><header><h2>{{ $t('legacy.t_6f277e1de0bd') }}</h2><button @click="readFilter = $t('legacy.t_f61b989e4838')">{{ $t('legacy.t_0f5a2b9b8979') }}{{ tasks.length }})</button></header><article v-for="task in tasks" :key="task.type + task.title"><i :class="priorityClass(task.priority)" v-html="icons[taskIcon(task.type)]"></i><div><strong>{{ task.title }}</strong><small>{{ task.detail }}</small><span>{{ priorityLabel(task.priority) }}{{ $t('legacy.t_e3c782502b8b') }}</span></div><b>{{ task.count }}</b></article><p v-if="!tasks.length" class="notification-side-empty">{{ $t('legacy.t_a494b83fa4d5') }}</p></section>
@@ -51,7 +53,7 @@
       </aside>
     </div>
 
-    <div v-if="emailDialogOpen" class="property-detail-overlay" @click.self="closeEmailDialog">
+    <div v-if="emailDialogOpen" class="property-detail-overlay" @pointerdown.self="closeEmailDialog">
       <section class="property-detail-dialog email-subscription-dialog" role="dialog" aria-modal="true" :aria-label="$t('legacy.t_aac3387e7958')">
         <header><div><span>{{ $t('legacy.t_fb086c2d23e5') }}</span><h2>{{ $t('legacy.t_895247833405') }}</h2></div><button :disabled="emailBusy" @click="closeEmailDialog">×</button></header>
         <div class="email-subscription-body">
@@ -86,7 +88,7 @@ export default {
   mixins: [pageBridge],
   data() {
     return {
-      loading: true, errorMessage: '', notifications: [], selectedId: null, category: 'all', keyword: '', readFilter: '全部狀態', priorityFilter: '全部優先級', startDate: '', endDate: '', currentPage: 1, pageSize: 10,
+      loading: true, errorMessage: '', notifications: [], selectedId: null, detailDialogOpen: false, category: 'all', keyword: '', readFilter: '全部狀態', priorityFilter: '全部優先級', startDate: '', endDate: '', currentPage: 1, pageSize: 10,
       summary: { unreadCount: 0, pendingCount: 0, monthSystemCount: 0, importantCount: 0, totalCount: 0 }, categories: [], tasks: [], channels: [],
       emailDialogOpen: false, emailStep: 'bind', emailAddress: '', emailCode: '', emailEnabled: false, emailBusy: false, emailError: '',
       icons: {
@@ -139,10 +141,13 @@ export default {
   watch: { keyword() { this.currentPage = 1; }, readFilter() { this.currentPage = 1; }, priorityFilter() { this.currentPage = 1; }, startDate() { this.currentPage = 1; }, endDate() { this.currentPage = 1; } },
   mounted() { this.loadNotifications(); },
   methods: {
-    async loadNotifications() { this.loading = true; this.errorMessage = ''; try { const data = await fetchOwnerNotifications(); this.summary = data.summary || this.summary; this.categories = data.categories || []; this.tasks = data.tasks || []; this.channels = data.channels || []; this.notifications = (data.notifications || []).map(this.normalizeNotice); if (this.notifications.length && !this.selectedId) this.selectedId = this.notifications[0].id; } catch (error) { this.errorMessage = error.message || '通知數據讀取失敗'; } finally { this.loading = false; } },
+    async loadNotifications() { this.loading = true; this.errorMessage = ''; try { const data = await fetchOwnerNotifications(); this.summary = data.summary || this.summary; this.categories = data.categories || []; this.tasks = data.tasks || []; this.channels = data.channels || []; this.notifications = (data.notifications || []).map(this.normalizeNotice); this.syncUnreadCount(); if (this.notifications.length && !this.selectedId) this.selectedId = this.notifications[0].id; } catch (error) { this.errorMessage = error.message || '通知數據讀取失敗'; } finally { this.loading = false; } },
     normalizeNotice(notice) { const priority = notice.priority || 'normal'; const map = { payment: 'payment', rent: 'home', reserve: 'shield', maintenance: 'wrench', document: 'file', system: 'announcement' }; return { ...notice, project: notice.projectName, unit: notice.unitNo, read: notice.status === 'read', icon: map[notice.category] || 'announcement', tone: priority === 'high' ? 'red' : (notice.category === 'reserve' ? 'green' : 'blue'), badge: priority === 'high' ? '重要' : '' }; },
+    syncUnreadCount() { const unreadCount = this.notifications.filter(notice => !notice.read).length; this.summary = { ...this.summary, unreadCount, totalCount: this.notifications.length }; this.page.ownerNotificationUnreadCount = unreadCount; },
     changeCategory(value) { this.category = value; this.currentPage = 1; },
-    async selectNotice(notice) { this.selectedId = notice.id; if (!notice.read) { notice.read = true; notice.status = 'read'; this.summary.unreadCount = Math.max(0, this.summary.unreadCount - 1); try { await markOwnerNotificationRead(notice.id); } catch { notice.read = false; notice.status = 'unread'; } } },
+    openNoticeDetail(notice) { this.detailDialogOpen = true; this.selectNotice(notice); },
+    closeDetailDialog() { this.detailDialogOpen = false; },
+    async selectNotice(notice) { this.selectedId = notice.id; this.detailDialogOpen = true; if (!notice.read) { notice.read = true; notice.status = 'read'; this.syncUnreadCount(); try { await markOwnerNotificationRead(notice.id); } catch { notice.read = false; notice.status = 'unread'; this.syncUnreadCount(); } } },
     priorityClass(value) { return { high: 'high', normal: 'medium', low: 'low', 高: 'high', 中: 'medium', 低: 'low' }[value] || 'low'; },
     priorityLabel(value) { return { high: '高', normal: '中', low: '低', 高: '高', 中: '中', 低: '低' }[value] || '低'; },
     categoryLabel(value) { return (this.categories.find(item => item.key === value) || {}).label || value; },
@@ -166,7 +171,7 @@ export default {
       }
       this.currentPage = 1;
     },
-    async markAllRead() { try { await markAllOwnerNotificationsRead(); this.notifications.forEach(n => { n.read = true; n.status = 'read'; }); this.summary.unreadCount = 0; this.tasks = []; this.showToast('全部通知已標記為已讀'); } catch (error) { this.showToast(error.message || '操作失敗'); } },
+    async markAllRead() { try { await markAllOwnerNotificationsRead(); this.notifications.forEach(n => { n.read = true; n.status = 'read'; }); this.syncUnreadCount(); this.tasks = []; this.showToast('全部通知已標記為已讀'); } catch (error) { this.showToast(error.message || '操作失敗'); } },
     async markSelectedRead() { if (this.selectedNotice && !this.selectedNotice.read) await this.selectNotice(this.selectedNotice); },
     handleChannel(channel) { if (channel.key === 'email') this.openEmailSubscription(); else this.showToast('站內通知已啟用'); },
     openEmailSubscription() { const channel = this.channels.find(item => item.key === 'email'); this.emailAddress = channel?.destination || ''; this.emailEnabled = channel?.status === 'enabled'; this.emailStep = channel?.verified ? 'manage' : channel?.status === 'pending' ? 'verify' : 'bind'; this.emailCode = ''; this.emailError = ''; this.emailDialogOpen = true; },

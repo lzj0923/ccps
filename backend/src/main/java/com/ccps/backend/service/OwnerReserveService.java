@@ -49,7 +49,7 @@ public class OwnerReserveService {
         SummaryRow row = mapper.findSummary(userId);
         if (row == null) row = new SummaryRow();
         Summary summary = new Summary(
-                zero(row.getTotalBalance()), zero(row.getMinimumBalance()), zero(row.getTotalTopups()),
+                zero(row.getTotalBalance()), zero(row.getAccountingBalance()), zero(row.getMinimumBalance()), zero(row.getTotalTopups()),
                 integer(row.getTopupCount()), zero(row.getTotalDebits()), integer(row.getDebitCount()),
                 integer(row.getLowBalanceCount()), integer(row.getAccountCount()));
 

@@ -1,5 +1,5 @@
 import { toNumber } from '../utils/dashboardFormatters';
-import { downloadCsv } from '../utils/csvExporter';
+import { downloadCsv, downloadPaymentReport } from '../utils/csvExporter';
 
 import { navigate, resolveRoute, routeForModule } from '../router';
 
@@ -58,7 +58,7 @@ export default {
         return;
       }
       if (this.currentId === 'adminReserve') {
-        this.adminReserveSettingsNonce += 1;
+        this.adminReserveDirectTopupNonce += 1;
         return;
       }
       if (this.currentId === 'adminAlerts') {
@@ -319,6 +319,11 @@ export default {
       this.showToast("CSV 已匯出");
     },
     exportCsv() {
+      if (this.currentId === 'adminMaintenance' && this.adminMaintenanceExportHeaders?.length) {
+        downloadPaymentReport(this.adminMaintenanceExportFileName || '收支与维修-export.csv', this.adminMaintenanceExportHeaders, this.adminMaintenanceExportRows || []);
+        this.showToast('XLSX 已匯出');
+        return;
+      }
       if (this.currentId === 'adminReserve' && this.adminReserveExportHeaders?.length) {
         downloadCsv('adminReserve-export.csv', this.adminReserveExportHeaders, this.adminReserveExportRows || []);
         this.showToast('CSV 已匯出');

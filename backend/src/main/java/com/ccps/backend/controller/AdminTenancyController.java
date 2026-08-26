@@ -1,13 +1,11 @@
 package com.ccps.backend.controller;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminLeaseCreateRequest;
@@ -33,10 +33,12 @@ import com.ccps.backend.dto.AdminLeaseRentInvoiceResponse;
 import com.ccps.backend.dto.AdminLeasePeriodResponse;
 import com.ccps.backend.dto.AdminLeaseRenewalRequest;
 import com.ccps.backend.dto.AdminLeaseUpdateRequest;
+import com.ccps.backend.web.DownloadContentDisposition;
 import com.ccps.backend.dto.AdminLeaseTransferRequest;
 import com.ccps.backend.dto.AdminRentFinanceResponse;
 import com.ccps.backend.dto.AdminRentCollectionResponse;
 import com.ccps.backend.dto.AdminRentCollectionRequest;
+import com.ccps.backend.dto.AdminRentCollectionBatchRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.AdminTenancyOptionsResponse;
 import com.ccps.backend.dto.AdminTenancyResponse;
@@ -109,7 +111,16 @@ public class AdminTenancyController {
     public AdminRecordCreateResponse confirmRentCollection(@PathVariable Long invoiceId,
             @Valid @RequestPart("payload") AdminRentCollectionRequest payload,
             @RequestPart(value = "proof", required = false) MultipartFile proof, HttpServletRequest request) {
-        return service.confirmRentCollection(AuthInterceptor.userId(request), invoiceId, payload, proof);
+        throw new ResponseStatusException(HttpStatus.GONE,
+                "租金收款只能在财务确认模块处理");
+    }
+
+    @PostMapping("/rent-invoices/batch-confirm")
+    public List<AdminRecordCreateResponse> confirmRentCollections(
+            @Valid @RequestBody AdminRentCollectionBatchRequest payload,
+            HttpServletRequest request) {
+        throw new ResponseStatusException(HttpStatus.GONE,
+                "租金收款只能在财务确认模块处理");
     }
 
     @PostMapping("/tenants")
@@ -199,10 +210,9 @@ public class AdminTenancyController {
         MediaType mediaType;
         try { mediaType = MediaType.parseMediaType(file.mimeType()); }
         catch (IllegalArgumentException ignored) { mediaType = MediaType.APPLICATION_OCTET_STREAM; }
-        ContentDisposition disposition = ContentDisposition.builder(download ? "attachment" : "inline")
-                .filename(file.originalName(), StandardCharsets.UTF_8).build();
         return ResponseEntity.ok().contentType(mediaType).contentLength(file.size())
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.value(
+                        download ? "attachment" : "inline", file.originalName()))
                 .body(new FileSystemResource(file.path()));
     }
 
@@ -234,10 +244,9 @@ public class AdminTenancyController {
         MediaType mediaType;
         try { mediaType = MediaType.parseMediaType(file.mimeType()); }
         catch (IllegalArgumentException ignored) { mediaType = MediaType.APPLICATION_OCTET_STREAM; }
-        ContentDisposition disposition = ContentDisposition.builder(download ? "attachment" : "inline")
-                .filename(file.originalName(), StandardCharsets.UTF_8).build();
         return ResponseEntity.ok().contentType(mediaType).contentLength(file.size())
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.value(
+                        download ? "attachment" : "inline", file.originalName()))
                 .body(new FileSystemResource(file.path()));
     }
 
@@ -255,10 +264,9 @@ public class AdminTenancyController {
         MediaType mediaType;
         try { mediaType = MediaType.parseMediaType(file.mimeType()); }
         catch (IllegalArgumentException ignored) { mediaType = MediaType.APPLICATION_OCTET_STREAM; }
-        ContentDisposition disposition = ContentDisposition.builder(download ? "attachment" : "inline")
-                .filename(file.originalName(), StandardCharsets.UTF_8).build();
         return ResponseEntity.ok().contentType(mediaType).contentLength(file.size())
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.value(
+                        download ? "attachment" : "inline", file.originalName()))
                 .body(new FileSystemResource(file.path()));
     }
 
@@ -266,8 +274,7 @@ public class AdminTenancyController {
     public ResponseEntity<FileSystemResource> rentReceipt(@PathVariable Long financeRecordId) {
         Download file = service.downloadRentReceipt(financeRecordId);
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(file.size())
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename(file.originalName(), StandardCharsets.UTF_8).build().toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.attachment(file.originalName()))
                 .body(new FileSystemResource(file.path()));
     }
 

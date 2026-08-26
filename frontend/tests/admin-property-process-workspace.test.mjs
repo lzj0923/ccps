@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../src/components/AdminPropertyProcessWorkspace.vue', import.meta.url), 'utf8');
+const adminThemeSource = readFileSync(new URL('../src/admin-theme.css', import.meta.url), 'utf8');
+const workbenchSource = readFileSync(new URL('../src/utils/rentalCycleWorkbench.js', import.meta.url), 'utf8');
+const i18nSource = readFileSync(new URL('../src/i18n/index.js', import.meta.url), 'utf8');
+
+test('move-in handover is not shown as property handover data', () => {
+  assert.match(workbenchSource, /action\('complete_move_in_handover'/);
+  assert.match(source, /complete_move_in_handover/);
+  assert.match(i18nSource, /complete_move_in_handover:\s*\['完成入住交接'/);
+});
 
 test('process center uses the current rental workbench model', () => {
   assert.match(source, /buildRentalWorkbench/);
@@ -73,6 +82,14 @@ test('keeps rent collection outside the system rental workflow', () => {
   assert.match(source, /openOperationsAction/);
   assert.match(source, /create_first_invoice/);
   assert.doesNotMatch(source, /confirm_first_receipt/);
+});
+
+test('prefills the owner management fee from property settings when creating a rental mandate', () => {
+  assert.match(source, /const profile = this\.workspace\?\.profile \|\| \{\};/);
+  assert.match(source, /managementFee: Number\(mandate\.managementFee \?\? profile\.managementFeeAmount \?\? 0\)/);
+  assert.match(source, /commissionPercent: Number\(mandate\.commissionPercent \?\? profile\.managementFeePercent \?\? 0\)/);
+  assert.match(source, /processCenter\.actionFields\.ownerManagementFeeHint/);
+  assert.match(i18nSource, /ownerManagementFeeHint:\s*\['代管服务费由业主承担/);
 });
 
 test('provides a lease closure action followed by a move-out handover report', () => {
@@ -189,9 +206,18 @@ test('uses the left context rail for selecting one of multiple properties', () =
   assert.match(source, /v-if="properties\.length > 1" v-model\.trim="search"/);
   assert.match(source, /v-for="property in filteredProperties"/);
   assert.match(source, /@click="selectProperty\(property\)"/);
-  assert.match(source, /\.process-shell\{[^}]*grid-template-columns:250px minmax\(0,1fr\)/);
+  assert.match(source, /\.process-shell\{[^}]*grid-template-columns:1fr/);
   assert.match(source, /class="process-start-button process-rail-start"/);
   assert.doesNotMatch(source, /<div class="process-center-count">/);
+});
+
+test('process property picker can filter by project from a dropdown', () => {
+  assert.match(source, /process-project-filter/);
+  assert.match(source, /\.process-project-filter\{[^}]*margin:0/);
+  assert.match(source, /\.process-project-filter select\{[^}]*width:100%/);
+  assert.match(source, /v-model="selectedProjectName"/);
+  assert.match(source, /v-for="project in projectOptions"/);
+  assert.match(source, /selectedProjectName/);
 });
 
 test('uses the page scrollbar instead of a nested workbench scrollbar', () => {
@@ -215,8 +241,18 @@ test('keeps the current task and workflow cards compact', () => {
   assert.match(source, /\.rental-stage-card\{[^}]*padding:11px 14px/);
 });
 
+test('keeps the admin content width inside the flex layout on narrow viewports', () => {
+  assert.match(adminThemeSource, /\.admin-shell \.main\{[^}]*width:auto;max-width:none;[^}]*flex:1/);
+  assert.match(source, /\.property-process-center\{[^}]*width:100%;max-width:100%;min-width:0/);
+  assert.match(source, /@media\(min-width:1450px\)\{\.process-shell\{grid-template-columns:minmax\(280px,290px\) minmax\(0,1fr\)\}/);
+  assert.match(source, /container-type:inline-size/);
+  assert.match(source, /@container \(max-width:1000px\)\{\.process-shell\{grid-template-columns:1fr\}/);
+  assert.match(source, /\.process-workspace\{[^}]*min-width:0;max-width:100%;overflow-x:hidden/);
+});
+
 test('uses unit id for the selected property workspace and detail route', () => {
-  assert.match(source, /fetchAdminPropertyWorkspaceById\(property\.unitId \|\| property\.id \|\| property\.ownerUnitId\)/);
+  assert.match(source, /const unitId = property\.unitId \|\| property\.id \|\| property\.ownerUnitId/);
+  assert.match(source, /fetchAdminPropertyWorkspaceById\(unitId\)/);
   assert.match(source, /this\.selectedProperty = \{ \.\.\.this\.selectedProperty, \.\.\.this\.workspace\.property \}/);
   assert.match(source, /const propertyId = this\.selectedProperty\?\.unitId \|\| this\.selectedProperty\?\.id \|\| ownerUnitId/);
   assert.match(source, /`\/admin\/properties\/\$\{encodeURIComponent\(propertyId\)\}/);
@@ -289,6 +325,14 @@ test('starts a complete rental journey from project, owner, and property setup',
   assert.match(source, /建立并进入流程/);
 });
 
+test('rejects a duplicate project code in the first setup step instead of the final submission', () => {
+  assert.match(source, /checkAdminProjectCodeAvailability/);
+  assert.match(source, /@input="scheduleSetupProjectCodeCheck"/);
+  assert.match(source, /async checkSetupProjectCode/);
+  assert.match(source, /const available = await this\.checkSetupProjectCode\(\)/);
+  assert.match(source, /setupProjectCodeStatus === 'duplicate'/);
+});
+
 test('new rental flow only accepts handed-over properties', () => {
   assert.doesNotMatch(source, /<option value="PRE_HANDOVER">未交房<\/option>/);
   assert.doesNotMatch(source, /setupPropertyForm\.assetStage === 'PRE_HANDOVER'/);
@@ -319,6 +363,20 @@ test('journey navigation splits later work into tenant lease billing and mainten
   assert.match(source, /openOperationsCenter\('billing'\)/);
   assert.match(source, /openOperationsCenter\('maintenance'\)/);
   assert.match(source, /grid-template-columns:repeat\(8,minmax\(112px,1fr\)\)/);
+});
+
+test('scopes a shared rental workflow to one room while allowing multiple room leases', () => {
+  assert.match(source, /fetchAdminRentalSpaces/);
+  assert.match(source, /class="process-rental-space-switcher"/);
+  assert.match(source, /v-for="space in selectableRentalSpaces"/);
+  assert.match(source, /selectRentalSpace\(space\)/);
+  assert.match(source, /leases\.filter\(lease => String\(lease\.rentalSpaceId\) === String\(this\.selectedRentalSpaceId\)\)/);
+  assert.match(source, /scopedLeases\.filter\(lease => String\(lease\.status \|\| ''\)\.toLowerCase\(\) === 'active'\)/);
+  assert.match(source, /v-model\.number="actionForm\.rentalSpaceId"/);
+  assert.match(source, /:disabled="Boolean\(space\.currentLeaseId\)"/);
+  assert.match(source, /rentalSpaceId: Number\(this\.actionForm\.rentalSpaceId\)/);
+  assert.match(source, /Promise\.all\(leaseIds\.map\(leaseId =>\s+safe\(fetchAdminLeaseRentInvoices/);
+  assert.match(source, /operationsSelectedLeaseId = this\.rentalWorkbench\.currentLease/);
 });
 
 test('keeps deposit management outside the rental journey', () => {
@@ -400,4 +458,11 @@ test('daily operations center covers rent, expenses, expense review, maintenance
   assert.match(source, /rejectAdminFinanceReview/);
   assert.match(source, /sendAdminRentReminder/);
   assert.match(source, /completeAdminMaintenance/);
+});
+
+test('daily operations scopes expenses by the physical unit id instead of the owner-unit id', () => {
+  assert.match(source, /operationsPhysicalUnitId\(\) \{ return Number\(this\.selectedProperty\?\.unitId/);
+  assert.match(source, /filter\(item => Number\(item\.unitId\) === unitId\)/);
+  assert.match(source, /const payload = \{ unitId, \.\.\.this\.operationsForm/);
+  assert.doesNotMatch(source, /const ownerUnitId = Number\(this\.selectedProperty\?\.ownerUnitId\); this\.operationsExpenses/);
 });

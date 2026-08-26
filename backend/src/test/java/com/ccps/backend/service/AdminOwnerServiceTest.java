@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 
 import java.math.BigDecimal;
@@ -15,12 +16,15 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.AdminOwnerResponse;
 import com.ccps.backend.dto.AdminOwnerCreateRequest;
+import com.ccps.backend.dto.AdminOwnerUpdateRequest;
 import com.ccps.backend.dto.AdminPropertyCreateRequest;
 import com.ccps.backend.dto.AdminPropertyUpdateRequest;
 import com.ccps.backend.mapper.AdminOwnerMapper;
@@ -33,6 +37,7 @@ import com.ccps.backend.mapper.AdminOwnerMapper.NewUnit;
 @ExtendWith(MockitoExtension.class)
 class AdminOwnerServiceTest {
     @Mock private AdminOwnerMapper mapper;
+    @Mock private AdminAccountService accountService;
     private AdminOwnerService service;
 
     @BeforeEach
@@ -140,6 +145,50 @@ class AdminOwnerServiceTest {
     }
 
     @Test
+    void allowsUpdatingOwnerWhenEmailIsSharedByAnotherOwner() {
+        AdminOwnerUpdateRequest request = new AdminOwnerUpdateRequest(
+                null, "吕志杰", "10086", "18981712596", "18981712596",
+                null, null, "1", "1270673745@qq.com", "吉隆坡通讯地址", "active");
+        when(mapper.countOtherOwnersByIdentityNo(9L, "10086")).thenReturn(0);
+        when(mapper.updateOwner(9L, "吕志杰", "10086", "18981712596", "18981712596",
+                null, null, "1", "1270673745@qq.com", "吉隆坡通讯地址", "active")).thenReturn(1);
+        OwnerPropertyRow updated = propertyRow(9L, null, null, null);
+        updated.setFullName("吕志杰");
+        updated.setIdentityNo("10086");
+        updated.setPhone("18981712596");
+        updated.setMobilePhone("18981712596");
+        updated.setPassportNo("1");
+        updated.setEmail("1270673745@qq.com");
+        updated.setMailingAddress("吉隆坡通讯地址");
+        when(mapper.findOwnerById(9L)).thenReturn(List.of(updated));
+
+        AdminOwnerResponse result = service.updateOwner(9L, request);
+
+        assertThat(result.fullName()).isEqualTo("吕志杰");
+        assertThat(result.email()).isEqualTo("1270673745@qq.com");
+        assertThat(result.mailingAddress()).isEqualTo("吉隆坡通讯地址");
+        verify(mapper, never()).countOtherOwnersByEmail(9L, "1270673745@qq.com");
+    }
+
+    @Test
+    void synchronizesTheOwnerLoginWhenTheMobilePhoneChanges() {
+        AdminOwnerUpdateRequest request = new AdminOwnerUpdateRequest(
+                null, "Test Owner", null, "+60123456789", "+60123456789",
+                null, null, null, null, null, "active");
+        when(mapper.updateOwner(9L, "Test Owner", null, "+60123456789", "+60123456789",
+                null, null, null, null, null, "active")).thenReturn(1);
+        OwnerPropertyRow updated = propertyRow(9L, null, null, null);
+        updated.setFullName("Test Owner");
+        updated.setPhone("+60123456789");
+        updated.setMobilePhone("+60123456789");
+        when(mapper.findOwnerById(9L)).thenReturn(List.of(updated));
+
+        new AdminOwnerService(mapper, accountService).updateOwner(9L, request);
+
+        verify(accountService).synchronizeOwnerAccount(9L, "+60123456789", "Test Owner", "active");
+    }
+
+    @Test
     void createsPropertyAndBindsItToTheSelectedOwner() {
         LocalDate startDate = LocalDate.of(2026, 7, 17);
         AdminPropertyCreateRequest request = new AdminPropertyCreateRequest(
@@ -153,6 +202,7 @@ class AdminOwnerServiceTest {
             unit.setId(101L);
             return 1;
         });
+        when(mapper.insertDefaultRentalSpace(101L)).thenReturn(1);
         when(mapper.insertOwnerUnit(any(NewOwnerUnit.class))).thenAnswer(invocation -> {
             NewOwnerUnit ownerUnit = invocation.getArgument(0);
             ownerUnit.setId(11L);
@@ -168,6 +218,7 @@ class AdminOwnerServiceTest {
         assertThat(result.ownerUnitId()).isEqualTo(11L);
         assertThat(result.unitNo()).isEqualTo("A-12-08");
         verify(mapper).insertUnit(any(NewUnit.class));
+        verify(mapper).insertDefaultRentalSpace(101L);
         verify(mapper).insertOwnerUnit(any(NewOwnerUnit.class));
         verify(mapper).insertPurchaseContract(any(NewPurchaseContract.class));
     }
@@ -183,6 +234,40 @@ class AdminOwnerServiceTest {
         assertThatThrownBy(() -> service.createProperty(99L, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Active owner not found");
+    }
+
+    @Test
+    void deletesPropertyThatOnlyHasItsGeneratedPurchaseContract() {
+        OwnerPropertyRow row = propertyRow(1L, 11L, 101L, "A-12-08");
+        when(mapper.findPrimaryOwnerPropertyByUnitId(101L)).thenReturn(row);
+        when(mapper.countPropertyDeleteBlockers(101L)).thenReturn(0);
+        when(mapper.deletePropertyUnit(101L)).thenReturn(1);
+
+        service.deleteProperty(101L);
+
+        InOrder deletion = org.mockito.Mockito.inOrder(mapper);
+        deletion.verify(mapper).findPrimaryOwnerPropertyByUnitId(101L);
+        deletion.verify(mapper).countPropertyDeleteBlockers(101L);
+        deletion.verify(mapper).deleteDefaultPropertyRentalSpace(101L);
+        deletion.verify(mapper).deletePropertyPurchaseContracts(101L);
+        deletion.verify(mapper).deletePropertyOwnerships(101L);
+        deletion.verify(mapper).deletePropertyUnit(101L);
+    }
+
+    @Test
+    void rejectsDeletingPropertyWithBusinessOrHistoricalRecords() {
+        OwnerPropertyRow row = propertyRow(1L, 11L, 101L, "A-12-08");
+        when(mapper.findPrimaryOwnerPropertyByUnitId(101L)).thenReturn(row);
+        when(mapper.countPropertyDeleteBlockers(101L)).thenReturn(1);
+
+        assertThatThrownBy(() -> service.deleteProperty(101L))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT))
+                .hasMessageContaining("related business records");
+        verify(mapper, never()).deletePropertyPurchaseContracts(101L);
+        verify(mapper, never()).deleteDefaultPropertyRentalSpace(101L);
+        verify(mapper, never()).deletePropertyOwnerships(101L);
+        verify(mapper, never()).deletePropertyUnit(101L);
     }
 
     @Test

@@ -40,7 +40,8 @@ class AdminLeasePaymentServiceTest {
         var request=new AdminLeasePaymentUpdateRequest(new BigDecimal("150.00"),LocalDate.of(2026,7,21),"bank_transfer","租客","BANK-01","補收租金");
         when(mapper.lock(37L,7L)).thenReturn(payment);
         when(mapper.adjustInvoice(27L,new BigDecimal("50.00"))).thenReturn(1);
-        when(mapper.updateFinance(17L,new BigDecimal("150.00"),LocalDate.of(2026,7,21),"bank_transfer",1L)).thenReturn(1);
+        when(mapper.updateAllocatedAmount(7L,new BigDecimal("150.00"))).thenReturn(1);
+        when(mapper.updateFinance(17L,new BigDecimal("150.00"),LocalDate.of(2026,7,21),LocalDate.of(2026,7,21),"bank_transfer",1L)).thenReturn(1);
         when(mapper.list(37L)).thenReturn(List.of(payment));
 
         service.update(1L,37L,7L,request);
@@ -49,6 +50,18 @@ class AdminLeasePaymentServiceTest {
         verify(mapper).updateReceipt(17L,"租客","BANK-01","補收租金");
         verify(mapper).updateCashflow(17L,LocalDate.of(2026,7,21),"租金收款 · LS-2026-001");
         verify(mapper).audit(1L,"update_rent_payment",17L,"{\"amount\":100.00}","{\"amount\":150.00}");
+    }
+
+    @Test
+    void allowsBankTransferWithoutOptionalPaymentReference(){
+        var request=new AdminLeasePaymentUpdateRequest(new BigDecimal("100.00"),LocalDate.of(2026,7,21),"bank_transfer","租客",null,"已核对到账");
+        when(mapper.lock(37L,7L)).thenReturn(payment);
+        when(mapper.updateFinance(17L,new BigDecimal("100.00"),LocalDate.of(2026,7,21),LocalDate.of(2026,7,21),"bank_transfer",1L)).thenReturn(1);
+        when(mapper.list(37L)).thenReturn(List.of(payment));
+
+        service.update(1L,37L,7L,request);
+
+        verify(mapper).updateReceipt(17L,"租客",null,"已核对到账");
     }
 
     @Test

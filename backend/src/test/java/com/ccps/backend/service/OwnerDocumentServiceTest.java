@@ -64,6 +64,30 @@ class OwnerDocumentServiceTest {
                 .hasMessageContaining("Document not found");
     }
 
+    @Test
+    void signedDocumentsRemainPreviewableFromElectronicSignatureStorage(@TempDir Path tempDir) throws Exception {
+        OwnerDocumentService service = new OwnerDocumentService(mapper, tempDir);
+        Path file = tempDir.resolve("electronic-signatures/43/signed-contract.pdf");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "signed");
+
+        DocumentRow row = row(93L, "signed_contract", "approved", null);
+        row.setOriginalName("rental-remittance-已签署.pdf");
+        row.setStorageKey("43/signed-contract.pdf");
+        when(mapper.findDocuments(42L)).thenReturn(List.of(row));
+
+        DocumentFile document = new DocumentFile();
+        document.setOriginalName(row.getOriginalName());
+        document.setStorageKey(row.getStorageKey());
+        document.setMimeType("application/pdf");
+        document.setFileSize(6L);
+        when(mapper.findDocumentFile(42L, 93L)).thenReturn(document);
+
+        OwnerDocumentResponse result = service.getDocuments(42L);
+        assertThat(result.documents().get(0).downloadable()).isTrue();
+        assertThat(service.download(42L, 93L).path()).isEqualTo(file);
+    }
+
     private DocumentRow row(Long id, String type, String status, LocalDate expiresAt) {
         DocumentRow row = new DocumentRow();
         row.setId(id);

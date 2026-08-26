@@ -1,6 +1,6 @@
 <template>
 <section v-if="currentModule.shell === 'owner-shell'" class="metrics owner-metrics"><article v-for="card in ownerSummaryCards" :key="card.label" class="metric"><div class="m-ico property-metric-icon" v-html="ownerMetricIcon(card.icon)"></div><div class="property-metric-copy"><span>{{ card.label }}</span><strong>{{ card.value }}</strong><small>{{ card.text }}</small></div><div class="property-metric-mark" v-html="ownerMetricIcon(card.icon)"></div></article></section>
-<section v-if="currentModule.shell === 'admin-shell'" class="metrics"><article v-for="(metric, index) in currentMetrics" :key="metric.label" class="metric"><div class="m-ico admin-metric-icon"><component :is="adminMetricIcon(index)" :size="19" :stroke-width="1.9" /></div><div><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong><small :class="metric.trend">{{ metric.delta }}</small></div></article></section>
+<section v-if="currentModule.shell === 'admin-shell'" class="metrics"><article v-for="(metric, index) in currentMetrics" :key="metric.label" class="metric"><div class="m-ico admin-metric-icon"><component :is="adminMetricIcon(index)" :size="19" :stroke-width="1.9" /></div><div><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong><small :class="metric.trend">{{ metric.delta }}</small><button v-if="metric.action" type="button" class="metric-detail-btn" @click="runMetricAction(metric.action)"><span>{{ metric.actionLabel || '查看详情' }}</span><span aria-hidden="true">→</span></button></div></article></section>
 </template>
 
 <script>
@@ -23,7 +23,18 @@ export default {
   methods: {
     adminMetricIcon(index) {
       return (metricIconSets[this.currentId] || [BarChart3])[index] || BarChart3;
+    },
+    runMetricAction(action) {
+      window.dispatchEvent(new CustomEvent(action));
     }
   }
 };
 </script>
+
+<style scoped>
+/* Hallmark · component: metric action button · genre: modern-minimal · theme: existing CCPS
+ * states: default · hover · focus · active · disabled
+ * contrast: pass
+ */
+.metric-detail-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:25px;margin-top:7px;border:1px solid rgba(8,123,131,.28);border-radius:5px;background:rgba(8,123,131,.07);padding:4px 9px;color:#087b83;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;cursor:pointer;transition:background-color .14s ease-out,border-color .14s ease-out,opacity .14s ease-out}.metric-detail-btn:hover{border-color:rgba(8,123,131,.48);background:rgba(8,123,131,.12)}.metric-detail-btn:focus-visible{outline:2px solid rgba(8,123,131,.32);outline-offset:2px}.metric-detail-btn:active{background:rgba(8,123,131,.17)}.metric-detail-btn:disabled{opacity:.45;cursor:not-allowed}@media (prefers-reduced-motion:reduce){.metric-detail-btn{transition:none}}
+</style>

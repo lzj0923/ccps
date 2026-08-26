@@ -1,0 +1,32 @@
+{
+  "appId": "com.ccps.owner",
+  "appName": "CCPS 屋主端",
+  "webDir": "dist",
+  "backgroundColor": "#f6f8fb",
+  "loggingBehavior": "debug",
+  "android": {
+    "backgroundColor": "#f6f8fb"
+  },
+  "server": {
+    "hostname": "localhost",
+    "androidScheme": "https",
+    "iosScheme": "capacitor",
+    "cleartext": true
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#073f67",
+      "showSpinner": false
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "LIGHT",
+      "hidden": false,
+      "animation": "NONE"
+    }
+  }
+}

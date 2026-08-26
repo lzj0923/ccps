@@ -1,12 +1,9 @@
 package com.ccps.backend.controller;
 
-import java.nio.charset.StandardCharsets;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +18,7 @@ import com.ccps.backend.dto.ElectronicSignaturePublicResponse;
 import com.ccps.backend.dto.ElectronicSignatureSignRequest;
 import com.ccps.backend.service.ElectronicSignatureService;
 import com.ccps.backend.service.ElectronicSignatureService.Download;
+import com.ccps.backend.web.DownloadContentDisposition;
 
 @RestController
 @RequestMapping("/api/public/signatures")
@@ -41,8 +39,9 @@ public class PublicElectronicSignatureController {
 
     private ResponseEntity<FileSystemResource> file(Download file, boolean attachment) {
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(file.path().toFile().length())
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.builder(attachment ? "attachment" : "inline")
-                        .filename(file.originalName(), StandardCharsets.UTF_8).build().toString()).body(new FileSystemResource(file.path()));
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.value(
+                        attachment ? "attachment" : "inline", file.originalName()))
+                .body(new FileSystemResource(file.path()));
     }
     private String remoteIp(HttpServletRequest request) { String forwarded = request.getHeader("X-Forwarded-For"); return forwarded == null || forwarded.isBlank() ? request.getRemoteAddr() : forwarded.split(",")[0].trim(); }
 }

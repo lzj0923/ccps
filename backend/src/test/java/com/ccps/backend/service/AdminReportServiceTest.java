@@ -43,9 +43,12 @@ class AdminReportServiceTest {
         ReportDataRow row = new ReportDataRow(); row.setRecordDate(LocalDate.of(2026, 7, 20)); row.setReferenceNo("RENT-01");
         row.setCategory("rent_payment"); row.setProjectName("Demo"); row.setUnitNo("A-01"); row.setPartyName("Owner");
         row.setDescription("bank_transfer / MYR"); row.setAmount(new BigDecimal("2100.00")); row.setStatus("paid"); row.setExtraStatus("not_synced");
-        when(mapper.findFinanceReportRows(eq("rent_collection"), any(), any(), eq(null), eq(null), eq(null))).thenReturn(List.of(row));
+        ReportDataRow newerRow = new ReportDataRow(); newerRow.setRecordDate(LocalDate.of(2026, 7, 31)); newerRow.setReferenceNo("RENT-02");
+        newerRow.setCategory("rent_payment"); newerRow.setProjectName("Demo"); newerRow.setUnitNo("A-02"); newerRow.setPartyName("Owner");
+        newerRow.setDescription("bank_transfer / MYR"); newerRow.setAmount(new BigDecimal("2200.00")); newerRow.setStatus("paid"); newerRow.setExtraStatus("not_synced");
+        when(mapper.findRentCollectionRows(any(), any(), eq(null), eq(null), eq(null))).thenReturn(List.of(row, newerRow));
         AtomicReference<String> storage = new AtomicReference<>();
-        when(mapper.completeRun(eq(55L), eq(1), any())).thenAnswer(invocation -> { storage.set(invocation.getArgument(2)); return 1; });
+        when(mapper.completeRun(eq(55L), eq(2), any())).thenAnswer(invocation -> { storage.set(invocation.getArgument(2)); return 1; });
         when(mapper.findRun(55L)).thenAnswer(invocation -> completed(storage.get()));
 
         var result = service.generate(5L, new AdminReportGenerateRequest("rent_collection",
@@ -54,7 +57,40 @@ class AdminReportServiceTest {
         assertThat(result.status()).isEqualTo("completed");
         assertThat(storage.get()).endsWith("55-RENT_COLLECTION.xlsx");
         assertThat(Files.size(tempDir.resolve(storage.get()))).isGreaterThan(0);
+        try (var input = Files.newInputStream(tempDir.resolve(storage.get())); var workbook = new XSSFWorkbook(input)) {
+            var sheet = workbook.getSheetAt(0);
+            assertThat(sheet.getRow(4).getCell(0).getStringCellValue()).isEqualTo("2026-07-31");
+            assertThat(sheet.getRow(5).getCell(0).getStringCellValue()).isEqualTo("2026-07-20");
+        }
         verify(mapper).insertAudit(5L, 55L, "租金收款進度");
+        verify(mapper).findRentCollectionRows(any(), any(), eq(null), eq(null), eq(null));
+    }
+
+    @Test void propertyPaymentReportUsesInstallmentScheduleIncludingUnpaidItems() throws Exception {
+        AdminReportService service = new AdminReportService(mapper, new ObjectMapper(), tempDir.toString());
+        DefinitionRow definition = new DefinitionRow(); definition.setId(2L); definition.setReportCode("PROPERTY_PAYMENT");
+        definition.setName("購房款收款與未收款"); definition.setReportType("property_payment"); definition.setEnabled(true);
+        when(mapper.findDefinitionByType("property_payment")).thenReturn(definition);
+        when(mapper.insertRun(any())).thenAnswer(invocation -> { NewRun run = invocation.getArgument(0); run.setId(54L); return 1; });
+        ReportDataRow row = new ReportDataRow(); row.setRecordDate(LocalDate.of(2026, 9, 4));
+        row.setReferenceNo("CONTRACT-01-01"); row.setCategory("房款分期"); row.setProjectName("Demo");
+        row.setUnitNo("A-01"); row.setPartyName("Owner"); row.setDescription("第 1 期");
+        row.setAmount(new BigDecimal("3333.34")); row.setStatus("unpaid"); row.setExtraStatus("已收 RM 0.00 · 未收 RM 3,333.34");
+        when(mapper.findPropertyPaymentRows(any(), any(), eq(null), eq(null), eq(null))).thenReturn(List.of(row));
+        AtomicReference<String> storage = new AtomicReference<>();
+        when(mapper.completeRun(eq(54L), eq(1), any())).thenAnswer(invocation -> { storage.set(invocation.getArgument(2)); return 1; });
+        when(mapper.findRun(54L)).thenAnswer(invocation -> { RunRow run = completed(storage.get()); run.setId(54L);
+            run.setDefinitionId(2L); run.setReportName("購房款收款與未收款"); return run; });
+
+        var result = service.generate(5L, new AdminReportGenerateRequest("property_payment",
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), null, null, null, null, "XLSX"));
+
+        assertThat(result.status()).isEqualTo("completed");
+        assertThat(Files.size(tempDir.resolve(storage.get()))).isGreaterThan(0);
+        try (var input = Files.newInputStream(tempDir.resolve(storage.get())); var workbook = new XSSFWorkbook(input)) {
+            assertThat(workbook.getSheetAt(0).getRow(4).getCell(8).getStringCellValue()).isEqualTo("unpaid");
+        }
+        verify(mapper).findPropertyPaymentRows(any(), any(), eq(null), eq(null), eq(null));
     }
 
     @Test void generatesPdfWithChineseReportTitle() throws Exception {
@@ -119,7 +155,7 @@ class AdminReportServiceTest {
             assertThat(sheet.getRow(1).getCell(7).getStringCellValue()).isEqualTo("2026/7/6");
             assertThat(sheet.getRow(1).getCell(8).getNumericCellValue()).isZero();
             assertThat(sheet.getRow(1).getCell(9).getNumericCellValue()).isEqualTo(2100.0);
-            assertThat(sheet.getRow(1).getCell(10).getNumericCellValue()).isZero();
+            assertThat(sheet.getRow(1).getCell(10).getNumericCellValue()).isEqualTo(-2100.0);
             assertThat(sheet.getRow(1).getCell(15).getStringCellValue()).contains("銀行名稱: TEST BANK");
         }
     }

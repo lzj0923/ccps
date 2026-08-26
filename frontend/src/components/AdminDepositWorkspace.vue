@@ -29,7 +29,7 @@
           <tbody>
             <tr v-for="row in rows" :key="row.leaseId">
               <td><strong>{{ row.tenantName }}</strong><small>{{ row.leaseNo }} · {{ row.tenantPhone || '未留电话' }}</small></td>
-              <td><strong>{{ row.projectName }}</strong><small>{{ row.unitNo }} · {{ row.startDate }} 至 {{ row.endDate }}</small></td>
+              <td><strong>{{ row.projectName }}</strong><small>{{ row.unitNo }} · {{ displayDate(row.startDate) }} 至 {{ displayDate(row.endDate) }}</small></td>
               <td><span class="lease-pill" :class="row.leaseStatus">{{ leaseStatusLabel(row.leaseStatus) }}</span></td>
               <td class="amount">RM {{ money(row.expectedDeposit) }}</td>
               <td class="amount strong">RM {{ money(row.postedBalance) }}<small v-if="Number(row.postedBalance) !== Number(row.availableBalance)">可用 RM {{ money(row.availableBalance) }}</small></td>
@@ -43,10 +43,10 @@
       </template>
     </div>
 
-    <div v-if="detailOpen" class="modal-backdrop" @click.self="closeAccount">
+    <div v-if="detailOpen" class="modal-backdrop" @pointerdown.self="closeAccount">
       <section class="account-modal">
         <header class="modal-heading">
-          <div><span class="eyebrow">押金账户 · {{ detail?.account?.leaseNo }}</span><h3>{{ detail?.account?.tenantName }}</h3><p>{{ detail?.account?.projectName }} · {{ detail?.account?.unitNo }} · {{ detail?.account?.startDate }} 至 {{ detail?.account?.endDate }}</p></div>
+          <div><span class="eyebrow">押金账户 · {{ detail?.account?.leaseNo }}</span><h3>{{ detail?.account?.tenantName }}</h3><p>{{ detail?.account?.projectName }} · {{ detail?.account?.unitNo }} · {{ displayDate(detail?.account?.startDate) }} 至 {{ displayDate(detail?.account?.endDate) }}</p></div>
           <div class="heading-actions"><span v-if="detail" class="account-pill" :class="detail.account.accountStatus">{{ accountStatusLabel(detail.account.accountStatus) }}</span><button type="button" class="close-button" @click="closeAccount">×</button></div>
         </header>
         <div v-if="detailLoading" class="empty-state detail-loading">正在加载账户资料…</div>
@@ -60,14 +60,14 @@
 
           <section class="business-section bill-section">
             <div class="section-heading"><div><span>01</span><h4>押金账单</h4><p>租约建立时生成应收押金账单，确认收款后计入押金余额。</p></div><span class="bill-status" :class="detail.bill.confirmationStatus">{{ billStatusLabel(detail.bill.confirmationStatus) }}</span></div>
-            <div class="bill-grid"><div><span>账单编号</span><strong>{{ detail.bill.transactionNo || '尚未生成' }}</strong></div><div><span>账单金额</span><strong>RM {{ money(detail.bill.amount) }}</strong></div><div><span>账单日期</span><strong>{{ detail.bill.billDate || '—' }}</strong></div><div><span>收款状态</span><strong>{{ billStatusLabel(detail.bill.confirmationStatus) }}</strong></div></div>
-            <div v-if="can('confirm_collection')" class="section-footer"><p>确认前请核对押金确已到账，确认后会生成首笔押金明细。</p><button type="button" class="primary-button" :disabled="actionBusy" @click="confirmCollection">确认押金已收</button></div>
+            <div class="bill-grid"><div><span>账单编号</span><strong>{{ detail.bill.transactionNo || '尚未生成' }}</strong></div><div><span>账单金额</span><strong>RM {{ money(detail.bill.amount) }}</strong></div><div><span>账单日期</span><strong>{{ displayDate(detail.bill.billDate) }}</strong></div><div><span>收款状态</span><strong>{{ billStatusLabel(detail.bill.confirmationStatus) }}</strong></div></div>
+            <div v-if="can('confirm_collection')" class="section-footer"><p>押金金额与实际收款日期统一由财务确认。</p><button type="button" class="primary-button" @click="confirmCollection">前往财务确认</button></div>
             <p v-else-if="detail.bill.confirmationStatus === 'rejected'" class="inline-warning">该押金账单已驳回，请先修正租约押金资料。</p>
           </section>
 
           <section class="business-section ledger-section">
             <div class="section-heading"><div><span>02</span><h4>押金账户明细</h4><p>代付租客费用和租客还款只记录在这里，不进入业主账户报表。</p></div><div class="action-row"><button v-if="can('increase_deposit')" type="button" @click="openAction('adjustment_credit')">＋ 增加押金</button><button v-if="can('tenant_advance')" type="button" @click="openAction('tenant_advance')">代付租客费用</button><button v-if="can('tenant_repayment')" type="button" @click="openAction('tenant_repayment')">登记租客还款</button></div></div>
-            <div v-if="detail.transactions.length" class="ledger-list"><article v-for="item in detail.transactions" :key="item.id"><div class="ledger-main"><span class="ledger-icon" :class="item.direction">{{ item.direction === 'credit' ? '+' : '−' }}</span><div><strong>{{ typeLabel(item.transactionType) }}</strong><p>{{ item.description || '无备注' }}</p><small>{{ item.occurredOn }} · {{ item.leaseNo }}</small></div></div><div class="ledger-value" :class="item.direction"><strong>{{ item.direction === 'credit' ? '+' : '−' }} RM {{ money(item.amount) }}</strong><span>余额 RM {{ money(item.balanceAfter) }}</span><small>{{ transactionStatusLabel(item.status) }}</small></div></article></div>
+            <div v-if="detail.transactions.length" class="ledger-list"><article v-for="item in detail.transactions" :key="item.id"><div class="ledger-main"><span class="ledger-icon" :class="item.direction">{{ item.direction === 'credit' ? '+' : '−' }}</span><div><strong>{{ typeLabel(item.transactionType) }}</strong><p>{{ item.description || '无备注' }}</p><small>{{ displayDate(item.occurredOn) }} · {{ item.leaseNo }}</small></div></div><div class="ledger-value" :class="item.direction"><strong>{{ item.direction === 'credit' ? '+' : '−' }} RM {{ money(item.amount) }}</strong><span>余额 RM {{ money(item.balanceAfter) }}</span><small>{{ transactionStatusLabel(item.status) }}</small></div></article></div>
             <div v-else class="empty-state compact">暂无押金明细</div>
           </section>
 
@@ -79,7 +79,7 @@
       </section>
     </div>
 
-    <div v-if="actionOpen" class="modal-backdrop action-layer" @click.self="closeAction">
+    <div v-if="actionOpen" class="modal-backdrop action-layer" @pointerdown.self="closeAction">
       <form class="action-modal" @submit.prevent="saveAction">
         <header class="modal-heading"><div><span class="eyebrow">押金业务</span><h3>{{ actionTitle }}</h3><p>{{ detail?.account?.tenantName }} · {{ detail?.account?.leaseNo }}</p></div><button type="button" class="close-button" @click="closeAction">×</button></header>
         <div class="action-notice" :class="form.transactionType"><strong>{{ actionNotice.title }}</strong><p>{{ actionNotice.text }}</p></div>
@@ -92,7 +92,8 @@
 </template>
 
 <script>
-import { confirmAdminFinanceReview, createAdminTenantDepositTransaction, fetchAdminDepositAccount, fetchAdminDepositAccounts } from '../services/propertyApi';
+import { createAdminTenantDepositTransaction, fetchAdminDepositAccount, fetchAdminDepositAccounts } from '../services/propertyApi';
+import { formatDate } from '../utils/dateFormat';
 
 const localToday = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const emptyForm = type => ({ transactionType: type, amount: '', occurredOn: localToday(), description: '' });
@@ -156,13 +157,12 @@ export default {
       } catch (error) { this.actionError = error?.message || '押金业务保存失败'; }
       finally { this.actionBusy = false; }
     },
-    async confirmCollection() {
-      if (!this.detail?.bill?.financeRecordId || !window.confirm(`确认已收到押金 RM ${this.money(this.detail.bill.amount)}？`)) return;
-      this.actionBusy = true;
-      try { await confirmAdminFinanceReview(this.detail.bill.financeRecordId, '押金管理确认收款'); this.page?.showToast?.('押金收款已确认'); await Promise.all([this.reloadDetail(), this.load(this.pager.page)]); }
-      catch (error) { this.page?.showToast?.(error?.message || '押金收款确认失败', 'error'); }
-      finally { this.actionBusy = false; }
+    confirmCollection() {
+      this.page.adminFinanceMode = 'tenant_deposit';
+      this.page.adminFinanceViewMode = 'pending';
+      this.page.selectModule('adminFinance');
     },
+    displayDate(value) { return formatDate(value); },
     money(value) { return Number(value || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
     leaseStatusLabel(value) { return ({ active: '进行中', expired: '已到期', terminated: '已终止', transferred: '已转租' })[value] || value || '—'; },
     accountStatusLabel(value) { return ({ pending_collection: '待收押金', collection_rejected: '账单已驳回', active: '在管中', awaiting_settlement: '待退租结算', settling: '结算确认中', settled: '已结清' })[value] || value || '—'; },

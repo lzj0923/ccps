@@ -14,7 +14,7 @@ public record AdminReminderRuleRequest(
         @NotBlank @Size(max = 160) String name,
         @NotBlank @Pattern(regexp = "payment_due|rent_due|lease_expiry|reserve_low|document_expiry") String eventType,
         @Min(0) @Max(365) int daysBefore,
-        @NotEmpty List<@Pattern(regexp = "in_app|email|line") String> channels,
-        @NotBlank @Pattern(regexp = "owner") String recipientRole,
+        @NotEmpty List<@Pattern(regexp = "in_app|email|line|whatsapp") String> channels,
+        @NotBlank @Pattern(regexp = "owner|tenant|business") String recipientRole,
         boolean enabled) {
 }

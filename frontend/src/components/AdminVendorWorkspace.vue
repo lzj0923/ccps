@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <div v-if="dialogOpen" class="vendor-dialog-backdrop" @click.self="closeDialog">
+    <div v-if="dialogOpen" class="vendor-dialog-backdrop" @pointerdown.self="closeDialog">
       <form class="vendor-dialog" @submit.prevent="saveVendor">
         <header><div><h3>{{ editingId ? $t('legacy.t_3055abc1b013') : $t('legacy.t_225a47881756') }}</h3><p>{{ $t('legacy.t_e986bbbf8bd8') }}</p></div><button type="button" class="vendor-close" @click="closeDialog">×</button></header>
         <div class="vendor-form-grid">

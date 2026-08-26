@@ -14,7 +14,11 @@ public interface AdminAccountMapper {
 
     @Select("""
             SELECT u.id, u.username, u.email, u.display_name AS displayName, u.phone,
-                   u.account_type AS accountType, u.status, o.id AS ownerId
+                   u.account_type AS accountType, u.status, o.id AS ownerId,
+                   (SELECT UPPER(r.code) FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = u.id AND UPPER(r.code) IN
+                    ('SUPER_ADMIN','FINANCE','BUSINESS','CUSTOMER_SERVICE','ADMINISTRATION')
+                    ORDER BY r.id LIMIT 1) AS staffRole
             FROM users u
             LEFT JOIN owners o ON o.user_id = u.id
             ORDER BY u.account_type, u.display_name, u.id
@@ -23,7 +27,11 @@ public interface AdminAccountMapper {
 
     @Select("""
             SELECT u.id, u.username, u.email, u.display_name AS displayName, u.phone,
-                   u.account_type AS accountType, u.status, o.id AS ownerId
+                   u.account_type AS accountType, u.status, o.id AS ownerId,
+                   (SELECT UPPER(r.code) FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = u.id AND UPPER(r.code) IN
+                    ('SUPER_ADMIN','FINANCE','BUSINESS','CUSTOMER_SERVICE','ADMINISTRATION')
+                    ORDER BY r.id LIMIT 1) AS staffRole
             FROM users u
             LEFT JOIN owners o ON o.user_id = u.id
             WHERE u.id = #{id}
@@ -38,6 +46,14 @@ public interface AdminAccountMapper {
 
     @Select("SELECT password_hash FROM users WHERE id = #{id}")
     String findPasswordHash(@Param("id") Long id);
+
+    @Select("SELECT user_id FROM owners WHERE id = #{ownerId}")
+    Long findOwnerAccountId(@Param("ownerId") Long ownerId);
+
+    @Update("UPDATE users SET username=#{username}, display_name=#{displayName}, phone=#{phone}, status=#{status} WHERE id=#{id}")
+    int updateOwnerLogin(@Param("id") Long id, @Param("username") String username,
+            @Param("displayName") String displayName, @Param("phone") String phone,
+            @Param("status") String status);
 
     @Insert("""
             INSERT INTO users (username, email, password_hash, display_name, phone, account_type, status)
@@ -57,6 +73,19 @@ public interface AdminAccountMapper {
     @Update("UPDATE users SET status = 'inactive' WHERE id = #{id}")
     int deactivate(@Param("id") Long id);
 
+    @org.apache.ibatis.annotations.Delete("""
+            DELETE ur FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+            WHERE ur.user_id = #{userId} AND UPPER(r.code) IN
+            ('ADMIN','OWNER','SUPER_ADMIN','FINANCE','BUSINESS','CUSTOMER_SERVICE','ADMINISTRATION')
+            """)
+    int deleteManagedRoles(@Param("userId") Long userId);
+
+    @org.apache.ibatis.annotations.Insert("""
+            INSERT INTO user_roles (user_id, role_id)
+            SELECT #{userId}, r.id FROM roles r WHERE UPPER(r.code) = UPPER(#{roleCode})
+            """)
+    int insertRole(@Param("userId") Long userId, @Param("roleCode") String roleCode);
+
     class AccountRow {
         private Long id;
         private String username;
@@ -64,6 +93,7 @@ public interface AdminAccountMapper {
         private String displayName;
         private String phone;
         private String accountType;
+        private String staffRole;
         private String status;
         private Long ownerId;
 
@@ -79,6 +109,8 @@ public interface AdminAccountMapper {
         public void setPhone(String phone) { this.phone = phone; }
         public String getAccountType() { return accountType; }
         public void setAccountType(String accountType) { this.accountType = accountType; }
+        public String getStaffRole() { return staffRole; }
+        public void setStaffRole(String staffRole) { this.staffRole = staffRole; }
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
         public Long getOwnerId() { return ownerId; }

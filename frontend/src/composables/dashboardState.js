@@ -37,7 +37,7 @@ export default {
     const currentYear = new Date().getFullYear();
     const route = resolveRoute();
     const systemMode = route.mode === 'admin' ? 'admin' : 'owner';
-    const defaultPage = route.moduleId || (systemMode === 'admin' ? 'adminDashboard' : 'myProperties');
+    const defaultPage = route.moduleId || (systemMode === 'admin' ? 'adminSmartDashboard' : 'myProperties');
     const startPage = route.moduleId;
     const requestedModule = modules.find(module => module.id === startPage);
     const validStartPage = requestedModule && requestedModule.shell === `${systemMode}-shell` ? startPage : defaultPage;
@@ -75,6 +75,10 @@ export default {
       adminFinanceMetrics: null,
       adminMaintenanceMetrics: null,
       adminMaintenanceProjects: [],
+      adminMaintenanceDistrictFilter: '',
+      adminMaintenanceExportHeaders: [],
+      adminMaintenanceExportRows: [],
+      adminMaintenanceExportFileName: '支出记录-export.csv',
       adminReserveMetrics: null,
       adminReserveProjects: [],
       adminReserveExportHeaders: [],
@@ -123,6 +127,7 @@ export default {
       adminRentalMandateCreateNonce: 0,
       adminRentalMandateRefreshNonce: 0,
       adminLeaseCreateNonce: 0,
+      ownerNotificationUnreadCount: 0,
       ownerDashboard: emptyOwnerDashboard(),
       form: { name: "Tan Wei Ming", phone: "+60 12-345 6789", project: "Pavilion Square", status: "正常", channel: "Email", dueDate: "2025-06-15", note: "依照目前頁面建立對應資料。" },
       alertItems: [

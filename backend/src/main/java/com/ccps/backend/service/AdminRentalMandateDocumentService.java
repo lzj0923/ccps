@@ -15,20 +15,17 @@ import java.io.*; import java.nio.file.*; import java.security.*; import java.ut
 public class AdminRentalMandateDocumentService {
   private static final long MAX=20L*1024*1024; private static final Set<String> TYPES=Set.of(
       "mandate_document","authorization","authorization_draft","rental_appointment_draft","management_authorization_draft",
-      "property_management_agreement_draft","otr","handover_photo","inventory");
-  private static final Set<String> SIGNED_TYPES=Set.of("authorization","authorization_draft","rental_appointment_draft",
-      "management_authorization_draft","property_management_agreement_draft");
+      "property_management_agreement_draft","termination_letter_draft","rental_remittance_draft","otr","handover_photo","inventory");
   private final AdminRentalMandateDocumentMapper mapper; private final Path root; private final Path signatureRoot;
   public AdminRentalMandateDocumentService(AdminRentalMandateDocumentMapper mapper,@Value("${ccps.storage.rental-mandates:uploads/rental-mandates}") String root,@Value("${ccps.storage.electronic-signatures:uploads/electronic-signatures}") String signatureRoot){this.mapper=mapper;this.root=Path.of(root).toAbsolutePath().normalize();this.signatureRoot=Path.of(signatureRoot).toAbsolutePath().normalize();}
   public List<AdminRentalMandateDocumentResponse> list(Long id){return mapper.findDocuments(id);}
   @Transactional public List<AdminRentalMandateDocumentResponse> upload(Long actor,Long mandateId,String relation,MultipartFile file){
     if(mapper.findMandate(mandateId)==null) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Rental mandate not found");
     if(!TYPES.contains(relation)||file==null||file.isEmpty()||file.getSize()>MAX||!Set.of("image/jpeg","image/png","application/pdf").contains(file.getContentType())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Only JPG, PNG or PDF files up to 10MB are supported");
-    if(SIGNED_TYPES.contains(relation)&&mapper.countStartedSignaturesForRelation(mandateId,relation)>0) throw new ResponseStatusException(HttpStatus.CONFLICT,"The document cannot be regenerated after signing has started");
     String original=safe(file.getOriginalFilename()); String token=UUID.randomUUID().toString().replace("-",""); String ext=file.getContentType().equals("image/jpeg")?".jpg":file.getContentType().equals("image/png")?".png":".pdf"; Path dir=root.resolve(String.valueOf(mandateId)).normalize(), target=dir.resolve(token+ext).normalize();
     try { Files.createDirectories(dir); Files.copy(file.getInputStream(),target,StandardCopyOption.REPLACE_EXISTING); NewDocument doc=new NewDocument(); doc.setDocumentNo("RM-DOC-"+token.substring(0,10).toUpperCase()); doc.setOriginalName(original); doc.setStorageKey(root.relativize(target).toString().replace('\\','/')); doc.setMimeType(file.getContentType()); doc.setFileSize(file.getSize()); doc.setChecksumSha256(sha256(target)); doc.setDocumentType(relation); doc.setUploadedBy(actor);
       // Keep one current blank/source file for each mandate document category.
-      mapper.supersedeSignedPackage(mandateId, relation);
+      mapper.cancelPendingSignaturesForRelation(mandateId, relation);
       mapper.supersedeCurrent(mandateId, relation);
       mapper.insertDocument(doc); mapper.insertLink(doc.getId(),mandateId,relation); return mapper.findDocuments(mandateId); } catch(IOException e){try{Files.deleteIfExists(target);}catch(IOException ignored){} throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to store rental mandate document",e);}
   }

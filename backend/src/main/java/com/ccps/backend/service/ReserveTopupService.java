@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -153,17 +154,25 @@ public class ReserveTopupService {
 
     @Transactional
     public ReserveTopupReviewResponse review(Long reviewerId, Long financeRecordId, boolean approved, String note) {
-        return reviewOne(reviewerId, financeRecordId, approved, note);
+        return reviewOne(reviewerId, financeRecordId, approved, null, note);
+    }
+
+    /** Called only by the central finance-confirmation seam. */
+    @Transactional
+    public ReserveTopupReviewResponse reviewFromFinance(Long reviewerId, Long financeRecordId, boolean approved,
+            LocalDate transactionDate, String note) {
+        return reviewOne(reviewerId, financeRecordId, approved, transactionDate, note);
     }
 
     @Transactional
     public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, String note) {
         List<Long> ids = new LinkedHashSet<>(financeRecordIds).stream().toList();
         if (ids.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one reserve top-up");
-        for (Long id : ids) reviewOne(reviewerId, id, true, note);
+        for (Long id : ids) reviewOne(reviewerId, id, true, null, note);
     }
 
-    private ReserveTopupReviewResponse reviewOne(Long reviewerId, Long financeRecordId, boolean approved, String note) {
+    private ReserveTopupReviewResponse reviewOne(Long reviewerId, Long financeRecordId, boolean approved,
+            LocalDate transactionDate, String note) {
         if (mapper.isAdmin(reviewerId) == 0) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrator role required");
         }
@@ -188,7 +197,10 @@ public class ReserveTopupService {
             topup.setReserveAccountId(row.getReserveAccountId());
             topup.setFinanceRecordId(row.getFinanceRecordId());
             topup.setAmount(row.getAmount());
-            topup.setOccurredAt(LocalDateTime.now(clock));
+            LocalDateTime occurredAt = transactionDate == null
+                    ? LocalDateTime.now(clock)
+                    : LocalDateTime.of(transactionDate, LocalTime.now(clock));
+            topup.setOccurredAt(occurredAt);
             topup.setBalanceAfter(balanceAfter);
             topup.setNote(reviewNote == null ? "預備金充值審核通過" : reviewNote);
             topup.setCreatedBy(reviewerId);

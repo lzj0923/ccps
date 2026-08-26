@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS security_deposit_entries (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_security_deposit_lease (lease_id),
+  KEY idx_security_deposit_lease (lease_id),
   UNIQUE KEY uk_security_deposit_finance (finance_record_id),
   KEY idx_security_deposit_status (status, created_at),
   CONSTRAINT fk_security_deposit_lease FOREIGN KEY (lease_id) REFERENCES leases (id),

@@ -1,6 +1,7 @@
 package com.ccps.backend.controller;
 
 import java.net.URI;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,6 +35,11 @@ public class AdminProjectController {
                                                    @RequestParam(required = false) String keyword,
                                                    @RequestParam(required = false) String status) {
         return service.findAll(page, pageSize, keyword, status);
+    }
+
+    @GetMapping("/code-availability")
+    public Map<String, Boolean> projectCodeAvailability(@RequestParam String code) {
+        return Map.of("available", service.isProjectCodeAvailable(code));
     }
 
     @PostMapping

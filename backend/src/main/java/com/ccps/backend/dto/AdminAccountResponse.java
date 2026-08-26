@@ -7,6 +7,7 @@ public record AdminAccountResponse(
         String displayName,
         String phone,
         String accountType,
+        String staffRole,
         String status,
         Long ownerId) {
 }

@@ -65,7 +65,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 "Authentication required");
     }
 
-    private void writeError(HttpServletResponse response, int status, String message) throws IOException {
+    protected void writeError(HttpServletResponse response, int status, String message) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");

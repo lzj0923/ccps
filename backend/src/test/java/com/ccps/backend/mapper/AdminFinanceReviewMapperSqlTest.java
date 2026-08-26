@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 
 import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.Select;
 import org.junit.jupiter.api.Test;
 
 class AdminFinanceReviewMapperSqlTest {
@@ -56,5 +57,29 @@ class AdminFinanceReviewMapperSqlTest {
 
         assertThat(refundSql).doesNotContain("current_balance>=");
         assertThat(expenseSql).doesNotContain("current_balance >=");
+    }
+
+    @Test
+    void financeScopesSeparateTenantChargesFromCashflowMaintenanceAndKeepSettlementsSeparate() throws Exception {
+        Method expense = AdminFinanceReviewMapper.class.getMethod("findExpensePage", String.class, String.class,
+                String.class, String.class, String.class, java.time.LocalDate.class, java.time.LocalDate.class, int.class, int.class);
+        String expenseSql = String.join(" ", expense.getAnnotation(Select.class).value()).replaceAll("\\s+", " ");
+        Method settlement = AdminFinanceReviewMapper.class.getMethod("findSettlementPage", String.class,
+                String.class, String.class, String.class, String.class, java.time.LocalDate.class,
+                java.time.LocalDate.class, int.class, int.class);
+        String settlementSql = String.join(" ", settlement.getAnnotation(Select.class).value())
+                .replaceAll("\\s+", " ");
+
+        assertThat(expenseSql).contains("fr.record_type IN ('property_expense','tenant_charge','cashflow')")
+                .contains("COALESCE(rii.charge_type,ce.category)")
+                .contains("reviewType == 'cashflow_maintenance'")
+                .contains("fr.record_type IN ('property_expense','cashflow')")
+                .contains("reviewType == 'expense'")
+                .contains("fr.record_type = 'tenant_charge'")
+                .doesNotContain("security_deposit_forfeiture");
+        assertThat(settlementSql).contains("reviewType == 'reserve_refund'")
+                .contains("fr.tenant_id IS NULL")
+                .contains("fr.tenant_id IS NOT NULL")
+                .contains("security_deposit_forfeiture");
     }
 }

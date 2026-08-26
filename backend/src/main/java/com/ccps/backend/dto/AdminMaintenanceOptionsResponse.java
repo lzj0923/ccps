@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public record AdminMaintenanceOptionsResponse(List<UnitOption> units, List<VendorOption> vendors) {
-    public record UnitOption(Long unitId, Long ownerId, String ownerName, String projectName,
+    public record UnitOption(Long unitId, Long ownerUnitId, Long ownerId, String ownerName, String tenantName, String projectName,
             String unitNo, Long reserveAccountId, BigDecimal reserveBalance,
             boolean directPaymentAllowed) { }
     public record VendorOption(Long id, String name, String contactName, String phone) { }

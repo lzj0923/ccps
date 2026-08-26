@@ -29,7 +29,8 @@
         <section class="reserve-account-strip">
           <article v-for="account in accounts" :key="account.id" :class="{ low: account.balanceStatus === 'low' }">
             <div><strong>{{ account.projectName }}</strong><small>{{ account.unitNo }}</small></div>
-            <div><span>{{ $t('legacy.t_0c764992bf09') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.currentBalance) }}</b></div>
+            <div><span>业主账单余额</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.currentBalance) }}</b><small>按入账日期</small></div>
+            <div><span>会计余额</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.accountingBalance) }}</b><small>按收款日期</small></div>
             <div><span>{{ $t('legacy.t_c7e82f3b6404') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.minimumBalance) }}</b></div>
             <em>{{ account.balanceStatus === 'low' ? $t('legacy.t_8533f5f6638b') : $t('legacy.t_bb8cb07eec1c') }}</em>
           </article>
@@ -97,7 +98,7 @@
       </aside>
     </div>
 
-    <div v-if="topupVisible" class="reserve-topup-overlay" @click.self="closeTopup">
+    <div v-if="topupVisible" class="reserve-topup-overlay" @pointerdown.self="closeTopup">
       <section class="reserve-topup-modal" role="dialog" aria-modal="true" :aria-label="$t('legacy.t_945911f21066')">
         <header><div><h2>{{ $t('legacy.t_74d47aed3d9f') }}</h2><p>{{ $t('legacy.t_6692b754f72c') }}</p></div><button type="button" :aria-label="$t('legacy.t_ddc05404b0d6')" @click="closeTopup">×</button></header>
         <form @submit.prevent="submitTopup">
@@ -124,6 +125,7 @@
 import pageBridge from '../pageBridge';
 import { fetchOwnerReserve, fetchReserveDocument, submitReserveTopup } from '../services/propertyApi';
 import { downloadCsv } from '../utils/csvExporter';
+import { formatDateTime as displayDateTime } from '../utils/dateFormat';
 
 const localDate = value => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 const defaultFilters = () => {
@@ -163,7 +165,8 @@ export default {
     properties() { return this.response.properties || []; }, transactions() { return this.response.transactions || []; },
     notifications() { return this.response.notifications || []; }, documents() { return this.response.documents || []; },
     summaryCards() { return [
-      { icon: 'shield', label: '當前預備金餘額', value: `RM ${this.money(this.summary.totalBalance)}`, badge: this.summary.lowBalanceCount ? `${this.summary.lowBalanceCount} 個賬戶不足` : '全部充足', info: true },
+      { icon: 'shield', label: '业主账单余额', value: `RM ${this.money(this.summary.totalBalance)}`, badge: this.summary.lowBalanceCount ? `${this.summary.lowBalanceCount} 个账户不足` : '按入账日期', info: true },
+      { icon: 'clipboard', label: '会计余额', value: `RM ${this.money(this.summary.accountingBalance)}`, note: '按实际收款日期', info: true },
       { icon: 'clipboard', label: '最低預備金標準', value: `RM ${this.money(this.summary.minimumBalance)}`, note: `${this.summary.accountCount || 0} 個預備金賬戶`, info: true },
       { icon: 'chart', label: '累計充值', value: `RM ${this.money(this.summary.totalTopups)}`, note: `共 ${this.summary.topupCount || 0} 筆已確認充值`, tone: 'positive', info: true },
       { icon: 'trendDown', label: '累計扣款', value: `RM ${this.money(this.summary.totalDebits)}`, note: `共 ${this.summary.debitCount || 0} 筆扣款`, tone: 'negative', info: true }
@@ -187,7 +190,7 @@ export default {
     typeLabel(type) { return { topup: '充值', debit: '扣款', adjustment: '人工調整' }[type] || type; },
     statusLabel(status) { return { confirmed: '已確認', pending: '待審核', rejected: '已拒絕', active: '可用' }[status] || status || '-'; },
     documentStatusLabel(status) { return { pending_review: '待審核', active: '已確認', rejected: '已拒絕' }[status] || status; },
-    formatDateTime(value) { return value ? value.replace('T', ' ').slice(0, 16) : '-'; },
+    formatDateTime(value) { return displayDateTime(value, '-'); },
     formatSize(value) { const bytes = Number(value || 0); return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`; },
     noticeIcon(notice) { const text = `${notice.title} ${notice.body}`; return text.includes('預備金') ? 'warning' : text.includes('維修') ? 'building' : 'bell'; },
     noticeTone(notice) { return notice.priority === 'high' ? 'orange' : notice.status === 'unread' ? 'gold' : 'blue'; },

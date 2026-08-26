@@ -1,0 +1,71 @@
+package com.ccps.backend.service;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.ccps.backend.dto.AdminTenantWhatsAppSubscriptionRequest;
+import com.ccps.backend.dto.AdminTenantWhatsAppSubscriptionResponse;
+import com.ccps.backend.mapper.TenantWhatsAppSubscriptionMapper;
+import com.ccps.backend.mapper.TenantWhatsAppSubscriptionMapper.SubscriptionRow;
+import com.ccps.backend.mapper.TenantWhatsAppSubscriptionMapper.TenantRow;
+
+@Service
+public class TenantWhatsAppSubscriptionService {
+    private final TenantWhatsAppSubscriptionMapper mapper;
+    private final String defaultCountryCode;
+
+    public TenantWhatsAppSubscriptionService(
+            TenantWhatsAppSubscriptionMapper mapper,
+            @Value("${ccps.whatsapp.default-country-code:60}") String defaultCountryCode) {
+        this.mapper = mapper;
+        this.defaultCountryCode = defaultCountryCode;
+    }
+
+    @Transactional
+    public AdminTenantWhatsAppSubscriptionResponse update(
+            Long actorId, Long tenantId, AdminTenantWhatsAppSubscriptionRequest request) {
+        TenantRow tenant = mapper.findTenant(tenantId);
+        if (tenant == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found");
+
+        String source = text(request.optInSource(), "tenant_provided_consent");
+        String destination = null;
+        if (request.enabled()) {
+            if (!request.consentConfirmed()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Explicit tenant consent is required before enabling WhatsApp notifications");
+            }
+            if (!"active".equals(tenant.getStatus())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "WhatsApp notifications can only be enabled for an active tenant");
+            }
+            try {
+                destination = WhatsAppPhoneNumbers.normalize(
+                        text(request.destination(), tenant.getPhone()), defaultCountryCode);
+            } catch (IllegalArgumentException exception) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage());
+            }
+            mapper.enable(tenantId, destination, source);
+        } else {
+            SubscriptionRow current = mapper.findSubscription(tenantId);
+            destination = current == null ? null : current.getDestination();
+            mapper.disable(tenantId);
+        }
+        mapper.insertAudit(actorId, tenantId,
+                request.enabled() ? "enable_tenant_whatsapp_notifications" : "disable_tenant_whatsapp_notifications",
+                request.enabled(), destination, source);
+        return response(mapper.findSubscription(tenantId), tenantId);
+    }
+
+    private AdminTenantWhatsAppSubscriptionResponse response(SubscriptionRow row, Long tenantId) {
+        if (row == null) return new AdminTenantWhatsAppSubscriptionResponse(tenantId, null, false, null, null, null);
+        return new AdminTenantWhatsAppSubscriptionResponse(row.getTenantId(), row.getDestination(),
+                Boolean.TRUE.equals(row.getEnabled()), row.getOptedInAt(), row.getOptedOutAt(), row.getOptInSource());
+    }
+
+    private String text(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+}

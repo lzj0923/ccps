@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -100,7 +101,7 @@ public class AdminOwnerService {
         List<AdminPropertyPageResponse.Item> rows = mapper.findPropertyPage(normalizedKeyword, normalizedProject,
                 normalizedRentalStatus, pageSize, (page - 1) * pageSize).stream()
                 .map(row -> new AdminPropertyPageResponse.Item(row.getOwnerId(), row.getFullName(), row.getPhone(),
-                        row.getEmail(), rentalStatus(row), toProperty(row)))
+                        row.getEmail(), rentalStatus(row), row.getRentalListingStatus(), toProperty(row)))
                 .toList();
         return new AdminPropertyPageResponse(rows,
                 new AdminPropertyPageResponse.Page(totalRows, page, pageSize, totalPages));
@@ -127,9 +128,6 @@ public class AdminOwnerService {
         if (identityNo != null && mapper.countOwnersByIdentityNo(identityNo) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner identity number already exists");
         }
-        if (email != null && mapper.countOwnersByEmail(email) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner email already exists");
-        }
 
         NewOwner owner = new NewOwner();
         owner.setOwnerNo(null);
@@ -143,7 +141,8 @@ public class AdminOwnerService {
         owner.setEmail(email);
         owner.setStatus(request.status());
         if (accountService != null) {
-            owner.setUserId(accountService.createOwnerAccount(owner.getPhone(), owner.getFullName(), owner.getEmail()));
+            owner.setUserId(accountService.createOwnerAccount(
+                    owner.getPhone(), owner.getFullName(), owner.getEmail()));
         }
         if (mapper.insertOwner(owner) != 1 || owner.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create owner");
@@ -158,7 +157,7 @@ public class AdminOwnerService {
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Created owner could not be loaded");
         OwnerPropertyRow row = rows.get(0);
         return new AdminOwnerResponse(row.getOwnerId(), row.getOwnerNo(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
-                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getOwnerStatus(), List.of());
+                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getMailingAddress(), row.getOwnerStatus(), List.of());
     }
 
     @Transactional
@@ -167,17 +166,19 @@ public class AdminOwnerService {
         String email = trimToNull(request.email());
         if (identityNo != null && mapper.countOtherOwnersByIdentityNo(ownerId, identityNo) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner identity number already exists");
-        if (email != null && mapper.countOtherOwnersByEmail(ownerId, email) > 0)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner email already exists");
         String mobile = trimToNull(request.mobilePhone() != null ? request.mobilePhone() : request.phone());
         if (mapper.updateOwner(ownerId, request.fullName().trim(), identityNo,
-                mobile, mobile, trimToNull(request.homePhone()), trimToNull(request.officePhone()), trimToNull(request.passportNo()), email, request.status()) != 1)
+                mobile, mobile, trimToNull(request.homePhone()), trimToNull(request.officePhone()), trimToNull(request.passportNo()), email,
+                trimToNull(request.mailingAddress()), request.status()) != 1)
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
+        if (accountService != null) {
+            accountService.synchronizeOwnerAccount(ownerId, mobile, request.fullName().trim(), request.status());
+        }
         List<OwnerPropertyRow> rows = mapper.findOwnerById(ownerId);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
         OwnerPropertyRow row = rows.get(0);
         return new AdminOwnerResponse(row.getOwnerId(), row.getOwnerNo(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
-                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getOwnerStatus(), List.of());
+                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getMailingAddress(), row.getOwnerStatus(), List.of());
     }
 
     @Transactional(readOnly = true)
@@ -210,6 +211,9 @@ public class AdminOwnerService {
         unit.setListingStatus(request.listingStatus());
         if (mapper.insertUnit(unit) != 1 || unit.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create property unit");
+        }
+        if (mapper.insertDefaultRentalSpace(unit.getId()) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create whole-property rental space");
         }
 
         NewOwnerUnit ownerUnit = new NewOwnerUnit();
@@ -289,6 +293,29 @@ public class AdminOwnerService {
         OwnerPropertyRow row = mapper.findPrimaryOwnerPropertyByUnitId(unitId);
         if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property unit not found");
         return new PropertyReference(row.getOwnerId(), row.getOwnerUnitId());
+    }
+
+    @Transactional
+    public void deleteProperty(Long unitId) {
+        if (unitId == null || mapper.findPrimaryOwnerPropertyByUnitId(unitId) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property unit not found");
+        }
+        if (mapper.countPropertyDeleteBlockers(unitId) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Property with related business records cannot be deleted");
+        }
+        try {
+            mapper.deleteDefaultPropertyRentalSpace(unitId);
+            mapper.deletePropertyPurchaseContracts(unitId);
+            mapper.deletePropertyOwnerships(unitId);
+            if (mapper.deletePropertyUnit(unitId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Property was changed by another request");
+            }
+        } catch (DataIntegrityViolationException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Property with related business records cannot be deleted", error);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -415,10 +442,12 @@ public class AdminOwnerService {
                 row.getOwnerUnitId(), row.getUnitId(), row.getProjectId(), row.getProjectName(), row.getAddress(),
                 row.getCity(), row.getBuilding(), row.getFloorNo(), row.getUnitNo(), row.getUnitType(), row.getAreaSqm(),
                 row.getBedroomCount(), row.getListingStatus(), row.getAssetStage(), row.getExpectedHandoverDate(),
-                row.getActualHandoverDate(), serviceList(row.getServices()), row.getOwnershipPercent(),
-                Boolean.TRUE.equals(row.getPrimaryOwnership()), row.getStartDate(), row.getEndDate(),
-                zeroIfNull(row.getPurchasePrice()), zeroIfNull(row.getPaidAmount()), zeroIfNull(row.getRemainingAmount()),
-                row.getPaymentStatus());
+                 row.getActualHandoverDate(), serviceList(row.getServices()), row.getOwnershipPercent(),
+                 Boolean.TRUE.equals(row.getPrimaryOwnership()), row.getStartDate(), row.getEndDate(),
+                 zeroIfNull(row.getPurchasePrice()), zeroIfNull(row.getPaidAmount()), zeroIfNull(row.getRemainingAmount()),
+                 row.getPaymentStatus(), row.getElectricityAccountNo(), row.getWaterAccountNo(),
+                 row.getSewerageAccountNo(), row.getGasAccountNo(), row.getWithholdingTaxAccountNo(),
+                 row.getLandTaxAccountNo(), row.getAssessmentTaxAccountNo());
     }
 
     private Set<String> validateLifecycle(String assetStage, LocalDate expectedHandoverDate,
@@ -504,7 +533,7 @@ public class AdminOwnerService {
 
         private AdminOwnerResponse response() {
             return new AdminOwnerResponse(owner.getOwnerId(), owner.getOwnerNo(), owner.getFullName(), owner.getIdentityNo(), owner.getPhone(),
-                    owner.getMobilePhone(), owner.getHomePhone(), owner.getOfficePhone(), owner.getPassportNo(), owner.getEmail(), owner.getOwnerStatus(), List.copyOf(properties));
+                    owner.getMobilePhone(), owner.getHomePhone(), owner.getOfficePhone(), owner.getPassportNo(), owner.getEmail(), owner.getMailingAddress(), owner.getOwnerStatus(), List.copyOf(properties));
         }
     }
 }

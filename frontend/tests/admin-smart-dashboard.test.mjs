@@ -8,6 +8,8 @@ const metricPanel = readFileSync(new URL('../src/components/SmartDashboardMetric
 const malaysiaMap = readFileSync(new URL('../src/components/MalaysiaLeafletMap.vue', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../src/components/SidebarNav.vue', import.meta.url), 'utf8')
 const adminPage = readFileSync(new URL('../src/pages/AdminPage.vue', import.meta.url), 'utf8')
+const router = readFileSync(new URL('../src/router.js', import.meta.url), 'utf8')
+const dashboardState = readFileSync(new URL('../src/composables/dashboardState.js', import.meta.url), 'utf8')
 const mapData = JSON.parse(readFileSync(new URL('../src/data/malaysiaStates.geojson', import.meta.url), 'utf8'))
 
 test('智慧大屏以马来西亚地图为核心并展示四项地区指标', () => {
@@ -62,4 +64,10 @@ test('智慧大屏是独立一级功能且不会替换管理总览', () => {
   assert.match(managementOverview, /管理总览加载失败/)
   assert.match(managementOverview, /区域经营概览/)
   assert.doesNotMatch(managementOverview, /智慧经营大屏/)
+})
+
+test('管理员登录及访问后台根地址时默认进入智慧大屏', () => {
+  assert.match(router, /path: '\/admin', name: 'admin-home', mode: 'admin', moduleId: 'adminSmartDashboard'/)
+  assert.match(router, /path: '\/admin\/dashboard', name: 'admin-dashboard', mode: 'admin', moduleId: 'adminDashboard'/)
+  assert.match(dashboardState, /systemMode === 'admin' \? 'adminSmartDashboard' : 'myProperties'/)
 })

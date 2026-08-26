@@ -109,12 +109,10 @@ public class AdminRentalMandateService {
         mapper.activateRentalService(mandate.getId());
         audit(actorId, "create", mandate.getId(), null, "{\"status\":\"active\"}");
         LocalDate today = LocalDate.now();
-        if (expensePostingService != null && request.managementFee() != null
-                && request.managementFee().signum() > 0
+        if (expensePostingService != null
                 && !request.startDate().isAfter(today)
                 && (request.endDate() == null || !request.endDate().isBefore(today))) {
-            expensePostingService.syncMandateFee(request.ownerUnitId(), mandate.getId(),
-                    request.managementFee(), actorId, today);
+            expensePostingService.syncMandateFee(mandate.getId(), actorId, today.withDayOfMonth(1));
         }
         return item(mapper.findById(mandate.getId()));
     }

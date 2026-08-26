@@ -35,6 +35,10 @@ public class OwnerDashboardService {
                 .map(Property::getRemainingAmount)
                 .filter(value -> value != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal tenantDepositAmount = properties.stream()
+                .map(Property::getTenantDepositAmount)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         int pendingMaintenanceCount = properties.stream()
                 .filter(property -> "OPERATING".equals(property.getAssetStage()))
                 .map(Property::getPendingMaintenanceCount)
@@ -46,6 +50,7 @@ public class OwnerDashboardService {
                 properties.size(),
                 zeroIfNull(mapper.findMonthlyRentIncome(userId)),
                 unpaidAmount,
+                tenantDepositAmount,
                 zeroIfNull(mapper.findReserveBalance(userId)),
                 pendingMaintenanceCount);
 

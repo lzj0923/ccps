@@ -14,6 +14,7 @@ public record OwnerDashboardResponse(
             int propertyCount,
             BigDecimal monthlyRentIncome,
             BigDecimal unpaidPropertyAmount,
+            BigDecimal tenantDepositAmount,
             BigDecimal reserveBalance,
             int pendingMaintenanceCount) {
     }
@@ -43,6 +44,7 @@ public record OwnerDashboardResponse(
         private String paymentStatus;
         private String tenantName;
         private BigDecimal monthlyRent;
+        private BigDecimal tenantDepositAmount;
         private LocalDate leaseEndDate;
         private BigDecimal currentMonthRentDue;
         private BigDecimal currentMonthRentPaid;
@@ -97,6 +99,8 @@ public record OwnerDashboardResponse(
         public void setTenantName(String tenantName) { this.tenantName = tenantName; }
         public BigDecimal getMonthlyRent() { return monthlyRent; }
         public void setMonthlyRent(BigDecimal monthlyRent) { this.monthlyRent = monthlyRent; }
+        public BigDecimal getTenantDepositAmount() { return tenantDepositAmount; }
+        public void setTenantDepositAmount(BigDecimal tenantDepositAmount) { this.tenantDepositAmount = tenantDepositAmount; }
         public LocalDate getLeaseEndDate() { return leaseEndDate; }
         public void setLeaseEndDate(LocalDate leaseEndDate) { this.leaseEndDate = leaseEndDate; }
         public BigDecimal getCurrentMonthRentDue() { return currentMonthRentDue; }

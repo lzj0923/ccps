@@ -17,10 +17,25 @@ class AdminReportMapperSqlTest {
     @Test
     void scopedReportScriptsAreValidMyBatisXml() throws Exception {
         assertScriptParses("findFinanceReportRows");
+        assertScriptParses("findPropertyPaymentRows");
+        assertScriptParses("findRentCollectionRows");
         assertScriptParses("findIncomeExpenseRows");
         assertScriptParses("findTenantStatementRows");
         assertScriptParses("findMaintenanceRows");
         assertScriptParses("findReserveRows");
+        assertScriptParses("findSyncRows");
+    }
+
+    @Test
+    void everyReportQuerySupportsOpenDateBounds() throws Exception {
+        for (String method : java.util.List.of("findFinanceReportRows", "findPropertyPaymentRows",
+                "findRentCollectionRows", "findTenantStatementRows", "findIncomeExpenseRows",
+                "findMaintenanceRows", "findReserveRows", "findSyncRows")) {
+            assertThat(script(method))
+                    .as(method)
+                    .contains("start != null")
+                    .contains("end != null");
+        }
     }
 
     @Test
@@ -34,6 +49,28 @@ class AdminReportMapperSqlTest {
                 .contains("THEN '支出' ELSE '收入' END")
                 .contains("NULLIF(ce.description,'')")
                 .contains("CONCAT_WS(CHAR(10)");
+    }
+
+    @Test
+    void receivableReportsStartFromBillsSoUnpaidItemsAreNotDropped() throws Exception {
+        assertThat(script("findPropertyPaymentRows"))
+                .contains("FROM payment_installments pi")
+                .contains("pi.amount_paid")
+                .contains("'unpaid'");
+        assertThat(script("findRentCollectionRows"))
+                .contains("FROM rent_invoices ri")
+                .contains("ri.amount_paid")
+                .contains("'unpaid'");
+    }
+
+    @Test
+    void propertyPaymentReportIncludesContractsThatHaveNoInstallments() throws Exception {
+        assertThat(script("findPropertyPaymentRows"))
+                .contains("UNION ALL")
+                .contains("FROM purchase_contracts fallback_pc")
+                .contains("fallback_pc.purchase_price AS amount")
+                .contains("NOT EXISTS")
+                .contains("missing_pp.purchase_contract_id = fallback_pc.id");
     }
 
     @Test

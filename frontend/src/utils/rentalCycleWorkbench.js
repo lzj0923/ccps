@@ -186,7 +186,7 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
       !leaseReady
         ? action('create_lease', { type: 'tenancy', action: 'lease-create' })
         : !moveInReady
-          ? action('complete_handover', { type: 'property', tab: 'summary' })
+          ? action('complete_move_in_handover', { type: 'property', tab: 'summary' })
           : null,
     ),
     stage(

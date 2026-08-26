@@ -1,51 +1,71 @@
 <template>
   <section class="expense-review-layout">
     <div class="panel expense-review-list">
-      <div class="panel-head"><div><h2>{{ history ? $t('legacy.t_4c17ca4c2f92') : $t('legacy.t_d673e6a61eaa') }}</h2><span>{{ totalRows }} {{ $t('legacy.t_f8c3a124a8a0') }}</span></div><span v-if="loading">{{ $t('legacy.t_6ce3778a43cd') }}</span></div>
+      <div class="panel-head"><div><h2>{{ listTitle }}</h2><span>{{ totalRows }} 笔记录</span></div><div class="expense-batch-actions"><span v-if="selectedIds.length">已选择 {{ selectedIds.length }} 笔</span><span v-if="loading">{{ $t('legacy.t_6ce3778a43cd') }}</span><template v-if="history"><button type="button" :disabled="!selectedIds.length || batchBusy" @click="batchDownload('invoice')">批量下载发票</button><button type="button" :disabled="!selectedIds.length || batchBusy" @click="batchDownload('receipt')">批量下载收据</button><button type="button" class="danger" :disabled="!selectedReopenIds.length || saving" @click="openBatchReopen">批量退回</button></template></div></div>
       <div v-if="errorMessage" class="admin-owner-state error"><strong>{{ $t('legacy.t_2c932aa16c9e') }}</strong><span>{{ errorMessage }}</span><button @click="loadData">{{ $t('legacy.t_0c9157b5bfac') }}</button></div>
-      <div v-else class="table-wrap"><table><thead><tr><th>{{ $t('legacy.t_32e88cf956f6') }}</th><th>{{ $t('legacy.t_114246450ff0') }}</th><th>{{ $t('legacy.t_c5f5ac884039') }}</th><th>{{ $t('legacy.t_23a48c5c22c1') }}</th><th>{{ $t('legacy.t_380086757011') }}</th><th>{{ $t('legacy.t_b6fed9af8313') }}</th><th>{{ $t('legacy.t_45293595eae3') }}</th><th>{{ $t('legacy.t_f3ea6d345e2a') }}</th></tr></thead><tbody>
-        <tr v-for="row in rows" :key="row.id" :class="{ selected: row.id===selectedId }"><td><strong>{{ row.transactionNo }}</strong></td><td>{{ row.projectName }}<small>{{ row.unitNo }}</small></td><td>{{ categoryLabel(row.receiptNo) }}</td><td>{{ row.milestone || '—' }}</td><td><b>{{ row.currency || 'MYR' }} {{ money(row.amount) }}</b></td><td>{{ row.transactionDate }}</td><td><span class="tag" :class="statusClass(row.confirmationStatus)">{{ statusLabel(row.confirmationStatus) }}</span></td><td><div class="expense-row-actions"><template v-if="history"><button class="detail" type="button" @click="openDetails(row)">{{ $t('ui.details') }}</button><a :href="documentUrl(row, 'invoice')" download>Invoice / 发票</a><a :href="documentUrl(row, 'receipt')" download>Official Receipt / 收据</a><button v-if="row.confirmationStatus==='confirmed' && row.syncStatus!=='synced'" class="reject" type="button" @click="openRowReopen(row)">{{ $t('finance.reopen') }}</button></template><template v-else><button class="confirm" type="button" @click="openRowDecision(row, true)">{{ $t('legacy.t_86a07295c547') }}</button><button class="reject" type="button" @click="openRowDecision(row, false)">{{ $t('legacy.t_607cd976d2ca') }}</button><button class="detail" type="button" @click="openDetails(row)">{{ $t('ui.details') }}</button></template></div></td></tr>
-        <tr v-if="!loading&&!rows.length"><td colspan="8" class="admin-owner-empty">{{ $t('legacy.t_2047f2c147d6') }}</td></tr>
+      <div v-else class="table-wrap"><table><thead><tr><th class="finance-check-cell"><input type="checkbox" :checked="allSelectableSelected" :disabled="!selectableRows.length" :aria-label="'选择本页全部记录'" @change="toggleSelectablePage"></th><th>{{ $t('legacy.t_32e88cf956f6') }}</th><th>{{ $t('legacy.t_114246450ff0') }}</th><th>{{ $t('legacy.t_c5f5ac884039') }}</th><th>{{ $t('legacy.t_23a48c5c22c1') }}</th><th>{{ $t('legacy.t_380086757011') }}</th><th>{{ $t('legacy.t_b6fed9af8313') }}</th><th>{{ $t('legacy.t_45293595eae3') }}</th><th>{{ $t('legacy.t_f3ea6d345e2a') }}</th></tr></thead><tbody>
+        <tr v-for="row in rows" :key="row.id" :class="{ selected: row.id===selectedId }"><td class="finance-check-cell"><input v-if="history || row.confirmationStatus==='pending'" v-model="selectedIds" type="checkbox" :value="row.id" @click.stop></td><td><strong>{{ row.transactionNo }}</strong></td><td>{{ row.projectName }}<small>{{ row.unitNo }}</small></td><td>{{ categoryLabel(row.receiptNo) }}</td><td>{{ row.milestone || '—' }}</td><td><b>{{ row.currency || 'MYR' }} {{ money(row.amount) }}</b></td><td>{{ displayDate(row.transactionDate) }}</td><td><span class="tag" :class="statusClass(row.confirmationStatus)">{{ statusLabel(row.confirmationStatus) }}</span></td><td><button class="finance-detail-button" type="button" @click="openDetails(row)">查看详情</button></td></tr>
+        <tr v-if="!loading&&!rows.length"><td colspan="9" class="admin-owner-empty">当前没有符合条件的{{ sectionName }}</td></tr>
       </tbody></table></div>
       <div class="pager"><span>{{ $t('legacy.t_3b6ef811b85a') }} {{ totalRows }} {{ $t('legacy.t_86761b63a7bd') }}</span><div class="admin-building-pager"><button :disabled="pageNumber<=1" @click="goPage(pageNumber-1)">&lt;</button><button class="active">{{ pageNumber }}</button><button :disabled="pageNumber>=totalPages" @click="goPage(pageNumber+1)">&gt;</button><select v-model.number="pageSize"><option :value="5">5 条/页</option><option :value="10">10 条/页</option><option :value="20">20 条/页</option></select></div></div>
     </div>
-    <dialog ref="details" class="modal expense-detail-dialog"><template v-if="selectedRow"><div class="modal-head"><div><h3>{{ $t('ui.details') }}</h3><small>{{ selectedRow.transactionNo }}</small></div><button type="button" class="icon-close" @click="closeDetails">×</button></div><div class="expense-detail-body"><div class="expense-title"><span>{{ $t('legacy.t_841534d30dbd') }}</span><div><h3>{{ categoryLabel(selectedRow.receiptNo) }}</h3><p>{{ selectedRow.projectName }} · {{ selectedRow.unitNo }}</p></div><em class="tag" :class="statusClass(selectedRow.confirmationStatus)">{{ statusLabel(selectedRow.confirmationStatus) }}</em></div><div class="expense-amount">{{ selectedRow.currency || 'MYR' }} {{ money(selectedRow.amount) }}</div><dl><dt>{{ $t('legacy.t_5684c8ab84a8') }}</dt><dd>{{ selectedRow.milestone || '—' }}</dd><dt>{{ $t('legacy.t_34ccfa907c1b') }}</dt><dd>{{ selectedRow.transactionDate }}</dd><dt>{{ $t('legacy.t_32e88cf956f6') }}</dt><dd>{{ selectedRow.transactionNo }}</dd><dt>{{ $t('legacy.t_1c1e89a30c41') }}</dt><dd>{{ selectedRow.confirmedByName || '—' }}</dd></dl><div v-if="history" class="finance-document-detail-actions"><a :href="documentUrl(selectedRow, 'invoice')" download>Invoice / 发票</a><a :href="documentUrl(selectedRow, 'receipt')" download>Official Receipt / 收据</a></div></div><menu><button type="button" @click="closeDetails">{{ $t('legacy.t_ddc05404b0d6') }}</button></menu></template></dialog>
-    <dialog ref="decision" class="modal admin-finance-decision-dialog"><form method="dialog" @submit.prevent="submitDecision"><div class="modal-head"><div><h3>{{ approving?$t('legacy.t_1aa94bf77754'):$t('legacy.t_2a9ef86ee366') }}</h3><small>{{ selectedRow?.milestone }}</small></div><button type="button" class="icon-close" @click="$refs.decision.close()">×</button></div><div class="finance-decision-body"><label>{{ $t('legacy.t_098de965a383') }}<textarea v-model.trim="note" maxlength="500" required></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div><menu><button type="button" @click="$refs.decision.close()">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :class="{reject:!approving}" :disabled="saving">{{ saving?$t('legacy.t_1e038f9b55ec'):approving?$t('legacy.t_86a07295c547'):$t('legacy.t_607cd976d2ca') }}</button></menu></form></dialog>
+    <dialog ref="details" class="modal expense-detail-dialog"><template v-if="selectedRow"><div class="modal-head"><div><h3>{{ detailTitle }}</h3><small>{{ selectedRow.transactionNo }}</small></div><button type="button" class="icon-close" @click="closeDetails">×</button></div><div class="expense-detail-body"><div class="expense-title"><span>{{ sectionIcon }}</span><div><h3>{{ categoryLabel(selectedRow.receiptNo) }}</h3><p>{{ selectedRow.projectName }} · {{ selectedRow.unitNo }}</p></div><em class="tag" :class="statusClass(selectedRow.confirmationStatus)">{{ statusLabel(selectedRow.confirmationStatus) }}</em></div><div class="expense-amount">{{ selectedRow.currency || 'MYR' }} {{ money(selectedRow.amount) }}</div><dl><dt>{{ $t('legacy.t_5684c8ab84a8') }}</dt><dd>{{ selectedRow.milestone || '—' }}</dd><dt>{{ $t('legacy.t_34ccfa907c1b') }}</dt><dd>{{ displayDate(selectedRow.transactionDate) }}</dd><dt>{{ $t('legacy.t_32e88cf956f6') }}</dt><dd>{{ selectedRow.transactionNo }}</dd><dt>{{ $t('legacy.t_1c1e89a30c41') }}</dt><dd>{{ selectedRow.confirmedByName || '—' }}</dd></dl><FinanceAllocationNoteEditor :record="selectedRow" @saved="loadData" /><div class="finance-document-detail-actions"><template v-if="history"><a :href="documentUrl(selectedRow, 'invoice')" download>下载发票</a><a :href="documentUrl(selectedRow, 'receipt')" download>下载收据</a><button v-if="selectedRow.confirmationStatus==='confirmed'" class="danger" type="button" @click="reopenFromDetails">退回待确认</button></template><template v-else><button class="confirm" type="button" @click="decisionFromDetails(true)">{{ confirmLabel }}</button><button class="danger" type="button" @click="decisionFromDetails(false)">退回记录</button></template></div></div></template></dialog>
+    <dialog ref="decision" class="modal admin-finance-decision-dialog"><form method="dialog" @submit.prevent="submitDecision"><div class="modal-head"><div><h3>{{ approving?$t('legacy.t_1aa94bf77754'):$t('legacy.t_2a9ef86ee366') }}</h3><small>{{ selectedRow?.milestone }}</small></div><button type="button" class="icon-close" @click="$refs.decision.close()">×</button></div><div class="finance-decision-body"><label v-if="approving">财务入账日期<input v-model="decisionDate" type="date" :max="today" required><small>最终收款或支出日期以财务确认为准。</small></label><label>{{ $t('legacy.t_098de965a383') }}<textarea v-model.trim="note" maxlength="500" required></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div><menu><button type="button" @click="$refs.decision.close()">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :class="{reject:!approving}" :disabled="saving">{{ saving?$t('legacy.t_1e038f9b55ec'):approving?$t('legacy.t_86a07295c547'):$t('legacy.t_607cd976d2ca') }}</button></menu></form></dialog>
     <dialog ref="reopen" class="modal admin-finance-decision-dialog"><form method="dialog" @submit.prevent="submitReopen"><div class="modal-head"><div><h3>{{ $t('finance.reopenTitle') }}</h3><small>{{ selectedRow?.transactionNo }}</small></div><button type="button" class="icon-close" @click="$refs.reopen.close()">×</button></div><div class="finance-decision-body"><div class="finance-decision-warning"><strong>{{ $t('finance.reopen') }}</strong><span>{{ $t('finance.reopenHint') }}</span></div><label>{{ $t('finance.reopenNote') }}<textarea v-model.trim="reopenNote" maxlength="500" required :placeholder="$t('finance.reopenNotePlaceholder')"></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div><menu><button type="button" @click="$refs.reopen.close()">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn reject" :disabled="saving">{{ saving?$t('legacy.t_1e038f9b55ec'):$t('finance.reopen') }}</button></menu></form></dialog>
+    <dialog ref="batchReopen" class="modal admin-finance-decision-dialog"><form method="dialog" @submit.prevent="submitBatchReopen"><div class="modal-head"><div><h3>批量退回待确认</h3><small>本次将退回 {{ selectedReopenIds.length }} 笔已确认费用</small></div><button type="button" class="icon-close" @click="closeBatchReopen">×</button></div><div class="finance-decision-body"><div class="finance-decision-warning"><strong>批量退回后重新核对</strong><span>任一记录无法退回时，本次操作将整体取消。</span></div><label>退回原因<textarea v-model.trim="batchReopenNote" maxlength="500" required placeholder="请填写本次批量退回原因"></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div><menu><button type="button" @click="closeBatchReopen">取消</button><button class="primary-btn reject" :disabled="saving">{{ saving ? '处理中…' : `退回 ${selectedReopenIds.length} 笔` }}</button></menu></form></dialog>
+    <dialog ref="batch" class="modal admin-finance-decision-dialog"><form method="dialog" @submit.prevent="submitBatch"><div class="modal-head"><div><h3>一键确认{{ sectionName }}</h3><small>已自动带入 {{ selectedIds.length }} 笔待确认记录</small></div><button type="button" class="icon-close" @click="$refs.batch.close()">×</button></div><div class="finance-decision-body"><div class="finance-batch-overview"><span>确认记录<b>{{ batchRows.length }} 笔</b></span><span>合计金额<b>MYR {{ money(batchTotal) }}</b></span></div><div class="finance-decision-warning success"><strong>当前列表已自动带入</strong><span>核对汇总信息后可一次确认，无需逐笔操作。</span></div><label>财务入账日期<input v-model="batchDate" type="date" :max="today" required></label><label>确认备注<textarea v-model.trim="batchNote" maxlength="500" required></textarea></label><label>付款参考（选填）<input v-model.trim="batchReference" maxlength="120" placeholder="可填写银行流水号或批次编号"></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div><menu><button type="button" @click="$refs.batch.close()">取消</button><button class="primary-btn" :disabled="saving">{{ saving ? '处理中…' : `一键确认 ${selectedIds.length} 笔` }}</button></menu></form></dialog>
   </section>
 </template>
 
 <script>
-import { confirmAdminFinanceReview, downloadAdminFinanceDocuments, fetchAdminFinanceProjects, fetchAdminFinanceReviews, getAdminFinanceDocumentUrl, rejectAdminFinanceReview, reopenAdminFinanceReview } from '../services/propertyApi';
+import { batchConfirmAdminFinanceReviews, batchReopenAdminFinanceReviews, confirmAdminFinanceReview, downloadAdminFinanceDocuments, fetchAdminFinanceProjects, fetchAdminFinanceReviews, getAdminFinanceDocumentUrl, rejectAdminFinanceReview, reopenAdminFinanceReview } from '../services/propertyApi';
+import FinanceAllocationNoteEditor from './FinanceAllocationNoteEditor.vue';
+import { formatDate, todayIsoDate } from '../utils/dateFormat';
 export default {
+  components: { FinanceAllocationNoteEditor },
   inject: ['page'],
-  data() { return { rows: [], selectedId: null, pageNumber: 1, pageSize: 5, totalRows: 0, totalPages: 1, loading: false, errorMessage: '', serial: 0, approving: true, note: '', reopenNote: '', saving: false, actionError: '' }; },
+  props: { reviewType: { type: String, default: 'expense' } },
+  data() { return { rows: [], selectedId: null, selectedIds: [], pageNumber: 1, pageSize: 5, totalRows: 0, totalPages: 1, loading: false, errorMessage: '', serial: 0, approving: true, decisionDate: todayIsoDate(), batchDate: todayIsoDate(), today: todayIsoDate(), note: '', batchNote: '财务资料与付款凭证核对正确', batchReference: '', reopenNote: '', batchReopenNote: '', saving: false, batchBusy: false, actionError: '' }; },
   computed: {
     history() { return this.page.adminFinanceViewMode === 'history'; },
-    selectedRow() { return this.rows.find(x => x.id === this.selectedId) || this.rows[0] || null; }
+    selectedRow() { return this.rows.find(x => x.id === this.selectedId) || this.rows[0] || null; },
+    pendingRows() { return this.rows.filter(row => row.confirmationStatus === 'pending'); },
+    selectableRows() { return this.history ? this.rows : this.pendingRows; },
+    batchRows() { return this.rows.filter(row => this.selectedIds.includes(row.id)); },
+    batchTotal() { return this.batchRows.reduce((sum, row) => sum + Number(row.amount || 0), 0); },
+    allSelectableSelected() { return this.selectableRows.length > 0 && this.selectableRows.every(row => this.selectedIds.includes(row.id)); },
+    selectedReopenIds() { return this.rows.filter(row => this.selectedIds.includes(row.id) && row.confirmationStatus === 'confirmed').map(row => row.id); },
+    batchNonce() { return this.page.adminFinanceBatchNonce; },
+    sectionName() { return this.reviewType === 'reserve_refund' ? '预备金返还' : this.reviewType === 'tenant_deposit' ? '租客押金' : this.reviewType === 'cashflow_maintenance' ? '收支与维修' : '租客费用'; },
+    sectionIcon() { return this.reviewType === 'reserve_refund' ? '返' : this.reviewType === 'tenant_deposit' ? '押' : this.reviewType === 'cashflow_maintenance' ? '维' : '费'; },
+    listTitle() { return this.history ? `${this.sectionName}历史` : `待确认${this.sectionName}`; },
+    detailTitle() { return `${this.sectionName}详情`; },
+    confirmLabel() { return `确认${this.sectionName}`; }
   },
   watch: {
-    'page.moduleSearch'() { this.reset(); }, 'page.globalSearch'() { this.reset(); }, 'page.projectFilter'() { this.reset(); }, 'page.statusFilter'() { this.reset(); }, 'page.adminFinanceViewMode'() { this.reset(); }, 'page.dateStart'() { this.reset(); }, 'page.dateEnd'() { this.reset(); }, pageSize() { this.reset(); }
+    'page.moduleSearch'() { this.reset(); }, 'page.globalSearch'() { this.reset(); }, 'page.projectFilter'() { this.reset(); }, 'page.statusFilter'() { this.reset(); }, 'page.adminFinanceViewMode'() { this.reset(); }, 'page.dateStart'() { this.reset(); }, 'page.dateEnd'() { this.reset(); }, pageSize() { this.reset(); }, batchNonce(v, p) { if (v > p) this.$nextTick(this.openBatch); }
   },
   mounted() { this.loadData(); },
   methods: {
     async loadData() {
       const serial = ++this.serial; this.loading = true; this.errorMessage = '';
       try {
-        const params = { type: 'expense', page: this.pageNumber, pageSize: this.pageSize, keyword: this.page.globalSearch || this.page.moduleSearch || '', projectName: String(this.page.projectFilter || '').includes('全部') ? '' : this.page.projectFilter, status: this.history ? 'history' : 'pending', startDate: this.page.dateStart, endDate: this.page.dateEnd };
-        const [response, projects] = await Promise.all([fetchAdminFinanceReviews(params), fetchAdminFinanceProjects('expense')]);
+        const params = { type: this.reviewType, page: this.pageNumber, pageSize: this.pageSize, keyword: this.page.globalSearch || this.page.moduleSearch || '', projectName: String(this.page.projectFilter || '').includes('全部') ? '' : this.page.projectFilter, status: this.history ? 'history' : 'pending', startDate: this.page.dateStart, endDate: this.page.dateEnd };
+        const [response, projects] = await Promise.all([fetchAdminFinanceReviews(params), fetchAdminFinanceProjects(this.reviewType)]);
         if (serial !== this.serial) return;
         this.rows = response.rows || []; this.totalRows = response.page?.totalRows || 0; this.totalPages = response.page?.totalPages || 1; this.pageNumber = response.page?.page || 1; this.page.adminFinanceProjects = projects || []; this.page.adminFinanceMetrics = this.metrics(response.summary || {});
         if (!this.rows.some(x => x.id === this.selectedId)) this.selectedId = this.rows[0]?.id || null;
+        this.selectedIds = this.selectedIds.filter(id => this.rows.some(row => row.id === id));
       } catch (e) { this.rows = []; this.errorMessage = e.message || 'API request failed'; }
       finally { if (serial === this.serial) this.loading = false; }
     },
-    reset() { this.pageNumber = 1; this.loadData(); },
+    reset() { this.pageNumber = 1; this.selectedIds = []; this.loadData(); },
     goPage(n) { if (n >= 1 && n <= this.totalPages) { this.pageNumber = n; this.loadData(); } },
     documentUrl(row, type) { return row?.id ? getAdminFinanceDocumentUrl(row.id, type) : '#'; },
     async batchDownload(type) {
-      const ids = this.rows.map(row => row.id).filter(Boolean);
-      if (!ids.length) { this.page.showToast('当前没有可下载的历史记录'); return; }
+      const ids = [...this.selectedIds];
+      if (!ids.length) { this.page.showToast('请先勾选需要下载的历史记录'); return; }
+      this.batchBusy = true;
       try {
         const result = await downloadAdminFinanceDocuments(ids, type);
         const url = URL.createObjectURL(result.blob);
@@ -53,23 +73,33 @@ export default {
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
         this.page.showToast(`已生成 ${ids.length} 份${type === 'invoice' ? '发票' : '收据'}`);
       } catch (error) { this.page.showToast(error.message || '批量下载失败'); }
+      finally { this.batchBusy = false; }
     },
+    toggleSelectablePage(event) { const ids = this.selectableRows.map(row => row.id); this.selectedIds = event.target.checked ? [...new Set([...this.selectedIds, ...ids])] : this.selectedIds.filter(id => !ids.includes(id)); },
+    openBatch() { if (!this.selectedIds.length) this.selectedIds = this.pendingRows.map(row => row.id); if (!this.selectedIds.length) { this.page.showToast('当前列表没有可确认记录'); return; } this.batchDate = todayIsoDate(); this.batchNote = '财务资料与付款凭证核对正确'; this.batchReference = ''; this.actionError = ''; this.$refs.batch?.showModal(); },
+    async submitBatch() { if (!this.batchNote || !this.batchDate) return; this.saving = true; this.actionError = ''; const count = this.selectedIds.length; try { await batchConfirmAdminFinanceReviews(this.selectedIds, this.batchDate, this.batchNote, this.batchReference); this.$refs.batch.close(); this.selectedIds = []; await this.loadData(); this.page.showToast(`已批量确认 ${count} 笔财务记录`); } catch (e) { this.actionError = e.message || '批量确认失败'; } finally { this.saving = false; } },
     openRowDecision(row, ok) { this.selectedId = row.id; this.$nextTick(() => this.openDecision(ok)); },
-    openDecision(ok) { this.approving = ok; this.note = ok ? '費用資料核對正確' : ''; this.actionError = ''; this.$refs.decision?.showModal(); },
+    openDecision(ok) { this.approving = ok; this.decisionDate = todayIsoDate(); this.note = ok ? '費用資料核對正確' : ''; this.actionError = ''; this.$refs.decision?.showModal(); },
     openDetails(row) { this.selectedId = row.id; this.$nextTick(() => this.$refs.details?.showModal()); },
     closeDetails() { this.$refs.details?.close(); },
+    decisionFromDetails(ok) { this.closeDetails(); this.$nextTick(() => this.openDecision(ok)); },
+    reopenFromDetails() { this.closeDetails(); this.$nextTick(this.openReopen); },
     async submitDecision() {
       if (!this.note) return; this.saving = true;
-      try { if (this.approving) await confirmAdminFinanceReview(this.selectedRow.id, this.note); else await rejectAdminFinanceReview(this.selectedRow.id, this.note); this.$refs.decision.close(); await this.loadData(); this.page.showToast(this.approving ? '房產費用已確認' : '房產費用已退回'); }
+      try { if (this.approving) await confirmAdminFinanceReview(this.selectedRow.id, this.decisionDate, this.note); else await rejectAdminFinanceReview(this.selectedRow.id, this.note); this.$refs.decision.close(); await this.loadData(); this.page.showToast(this.approving ? `${this.sectionName}已确认` : `${this.sectionName}已退回`); }
       catch (e) { this.actionError = e.message || '處理失敗'; } finally { this.saving = false; }
     },
     openRowReopen(row) { this.selectedId = row.id; this.$nextTick(this.openReopen); },
     openReopen() { this.reopenNote = ''; this.actionError = ''; this.$refs.reopen?.showModal(); },
     async submitReopen() { if (!this.reopenNote) return; this.saving = true; this.actionError = ''; try { await reopenAdminFinanceReview(this.selectedRow.id, this.reopenNote); this.$refs.reopen.close(); await this.loadData(); this.page.showToast(this.$t('finance.reopenSuccess')); } catch (e) { this.actionError = e.message || this.$t('finance.reopenFailed'); } finally { this.saving = false; } },
-    metrics(s) { return [{ label: '待確認費用', value: `${Number(s.pendingCount || 0)} 筆`, delta: `RM ${this.money(s.pendingAmount)}`, trend: Number(s.pendingCount) ? 'down' : 'up' }, { label: '已確認費用', value: `${Number(s.confirmedCount || 0)} 筆`, delta: '保留歷史金額', trend: 'up' }, { label: '已退回費用', value: `${Number(s.rejectedCount || 0)} 筆`, delta: '等待調整', trend: '' }, { label: '待同步 SQL', value: `${Number(s.pendingSyncCount || 0)} 筆`, delta: '會計同步', trend: '' }, { label: '本月確認費用', value: `RM ${this.money(s.confirmedMonthAmount)}`, delta: '本月完成', trend: 'up' }]; },
-    categoryLabel(v) { return ({ management: '管理費', service_fee: '服務費', insurance: '保險', tax: '稅費', deposit: '租客押金', deposit_refund: '租客押金退款', deposit_forfeiture: '租客押金没收' })[v] || v || '其他費用'; },
+    openBatchReopen() { if (!this.selectedReopenIds.length) { this.page.showToast('请先勾选已确认费用'); return; } this.batchReopenNote = ''; this.actionError = ''; this.$refs.batchReopen?.showModal(); },
+    closeBatchReopen() { this.$refs.batchReopen?.close(); },
+    async submitBatchReopen() { if (!this.batchReopenNote) { this.actionError = '请填写退回原因'; return; } const ids = [...this.selectedReopenIds]; this.saving = true; this.actionError = ''; try { await batchReopenAdminFinanceReviews(ids, this.batchReopenNote); this.closeBatchReopen(); this.selectedIds = []; await this.loadData(); this.page.showToast(`已批量退回 ${ids.length} 笔费用`); } catch (e) { this.actionError = e.message || '批量退回失败'; } finally { this.saving = false; } },
+    metrics(s) { return [{ label: `待确认${this.sectionName}`, value: `${Number(s.pendingCount || 0)} 笔`, delta: `RM ${this.money(s.pendingAmount)}`, trend: Number(s.pendingCount) ? 'down' : 'up' }, { label: `已确认${this.sectionName}`, value: `${Number(s.confirmedCount || 0)} 笔`, delta: '保留历史金额', trend: 'up' }, { label: `已退回${this.sectionName}`, value: `${Number(s.rejectedCount || 0)} 笔`, delta: '等待调整', trend: '' }, { label: '待同步 SQL', value: `${Number(s.pendingSyncCount || 0)} 笔`, delta: '会计同步', trend: '' }, { label: `本月确认${this.sectionName}`, value: `RM ${this.money(s.confirmedMonthAmount)}`, delta: '本月完成', trend: 'up' }]; },
+    categoryLabel(v) { return ({ management: '管理费', utilities: '水电费', maintenance: '维修转收费', other: '其他杂费', service_fee: '服务费', insurance: '保险', tax: '税费', deposit: '租客押金', deposit_refund: '租客押金退款', deposit_forfeiture: '租客押金没收' })[v] || v || '其他费用'; },
     statusLabel(v) { return ({ pending: '待確認', confirmed: '已確認', rejected: '已退回' })[v] || v; },
     statusClass(v) { return v === 'confirmed' ? 'green' : v === 'rejected' ? 'red' : 'orange'; },
+    displayDate(value) { return formatDate(value); },
     money(v) { return Number(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   }
 };
@@ -79,7 +109,8 @@ export default {
 .expense-review-layout{display:block;margin:0 28px;min-height:560px}
 .expense-review-list{width:100%;min-width:0}
 .expense-review-list small{display:block;margin-top:3px;color:#718096}
-.expense-review-list th:last-child,.expense-review-list td:last-child{width:190px;text-align:right}
+.expense-review-list th{font-size:13px}.expense-review-list td{font-size:14px}.expense-review-list th:last-child,.expense-review-list td:last-child{width:112px;text-align:right}
+.expense-batch-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.expense-batch-actions>span{color:#66788b;font-size:12px}.expense-batch-actions button{min-height:34px;padding:0 12px;border:1px solid #9bc9d0;border-radius:8px;background:#fff;color:#087078;font-size:12px;font-weight:700;cursor:pointer}.expense-batch-actions button.danger{border-color:#efb6bb;background:#fff7f7;color:#bf2f3b}.expense-batch-actions button:disabled{opacity:.45;cursor:not-allowed}
 .expense-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:166px;white-space:nowrap}
 .expense-row-actions button,.expense-row-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:31px;padding:0 10px;border:1px solid #cfdee5;border-radius:8px;background:#fff;color:#31566d;font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
 .expense-row-actions .confirm{border-color:#078b8d;background:#078b8d;color:#fff}
@@ -97,10 +128,11 @@ export default {
 .expense-detail-body dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:14px;margin:0;border-top:1px solid #e4ebf3;padding-top:18px}
 .expense-detail-body dt{color:#708096}
 .expense-detail-body dd{min-width:0;margin:0;overflow-wrap:anywhere;font-weight:600}
-.finance-document-detail-actions{display:flex;gap:8px;margin-top:20px}
-.finance-document-detail-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 10px;border:1px solid #b7cfee;border-radius:7px;background:#f7fbff;color:#185a97;font-size:11px;text-decoration:none}
+.finance-document-detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:20px}
+.finance-document-detail-actions a,.finance-document-detail-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border:1px solid #b7cfee;border-radius:9px;background:#f7fbff;color:#185a97;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer}.finance-document-detail-actions .confirm{border-color:#078b8d;background:#078b8d;color:#fff}.finance-document-detail-actions .danger{border-color:#efb6bb;background:#fff5f5;color:#bf2f3b}
 @media(max-width:900px){.expense-review-layout{margin:0 14px}.expense-row-actions{min-width:0}.expense-review-list th:last-child,.expense-review-list td:last-child{width:auto}}
 </style>
 <style scoped>
 .finance-document-button{display:inline-flex;align-items:center;justify-content:center;min-height:26px;padding:0 7px;border:1px solid #b7cfee;border-radius:6px;background:#f7fbff;color:#185a97;font-size:10px;text-decoration:none;white-space:nowrap}.finance-document-button:hover{background:#eaf3ff;border-color:#6f9fda}
+.finance-batch-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.finance-batch-overview span{display:grid;gap:5px;padding:13px;border:1px solid #cfe4e5;border-radius:9px;background:#f1faf9;color:#66788b;font-size:12px}.finance-batch-overview b{color:#073b67;font-size:18px}
 </style>

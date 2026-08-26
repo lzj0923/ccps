@@ -20,15 +20,36 @@ public interface PropertyExpensePostingMapper {
     List<ProfileRow> findProfiles();
 
     @Select("""
-            SELECT id AS mandateId, owner_unit_id AS ownerUnitId, management_fee AS managementFee
-            FROM rental_mandates
-            WHERE status = 'active'
-              AND management_fee > 0
-              AND start_date <= #{today}
-              AND (end_date IS NULL OR end_date >= #{today})
-            ORDER BY id
+            SELECT rm.id AS mandateId, rm.owner_unit_id AS ownerUnitId,
+                   rm.management_fee AS managementFee, rm.commission_percent AS commissionPercent,
+                   COALESCE(SUM(ri.amount_due), 0) AS rentBase
+            FROM rental_mandates rm
+            LEFT JOIN leases l ON l.rental_mandate_id = rm.id
+            LEFT JOIN rent_invoices ri ON ri.lease_id = l.id AND ri.billing_month = #{billingMonth}
+            WHERE rm.status = 'active'
+              AND (COALESCE(rm.commission_percent, 0) > 0 OR COALESCE(rm.management_fee, 0) > 0)
+              AND rm.start_date <= #{today}
+              AND (rm.end_date IS NULL OR rm.end_date >= #{today})
+            GROUP BY rm.id, rm.owner_unit_id, rm.management_fee, rm.commission_percent
+            ORDER BY rm.id
             """)
-    List<MandateFeeRow> findActiveMandateFees(@Param("today") LocalDate today);
+    List<MandateFeeRow> findActiveMandateFees(@Param("today") LocalDate today,
+            @Param("billingMonth") LocalDate billingMonth);
+
+    @Select("""
+            SELECT rm.id AS mandateId, rm.owner_unit_id AS ownerUnitId,
+                   rm.management_fee AS managementFee, rm.commission_percent AS commissionPercent,
+                   COALESCE(SUM(ri.amount_due), 0) AS rentBase
+            FROM rental_mandates rm
+            LEFT JOIN leases l ON l.rental_mandate_id = rm.id
+            LEFT JOIN rent_invoices ri ON ri.lease_id = l.id AND ri.billing_month = #{periodStart}
+            WHERE rm.id = #{mandateId} AND rm.status = 'active'
+              AND rm.start_date <= #{periodEnd}
+              AND (rm.end_date IS NULL OR rm.end_date >= #{periodStart})
+            GROUP BY rm.id, rm.owner_unit_id, rm.management_fee, rm.commission_percent
+            """)
+    MandateFeeRow findMandateFee(@Param("mandateId") Long mandateId,
+            @Param("periodStart") LocalDate periodStart, @Param("periodEnd") LocalDate periodEnd);
 
     @Select("SELECT pep.finance_record_id AS financeRecordId,fr.confirmation_status AS confirmationStatus FROM property_expense_postings pep JOIN finance_records fr ON fr.id=pep.finance_record_id WHERE pep.owner_unit_id=#{ownerUnitId} AND pep.charge_key=#{chargeKey} AND pep.period_key=#{periodKey} FOR UPDATE")
     PostingRow lockPosting(@Param("ownerUnitId") Long ownerUnitId,@Param("chargeKey") String chargeKey,@Param("periodKey") String periodKey);
@@ -51,7 +72,7 @@ public interface PropertyExpensePostingMapper {
 
     class PropertyContext { private Long ownerUnitId,ownerId,unitId; public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public Long getOwnerId(){return ownerId;} public void setOwnerId(Long v){ownerId=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} }
     class ProfileRow { private Long ownerUnitId; private String profileJson; public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public String getProfileJson(){return profileJson;} public void setProfileJson(String v){profileJson=v;} }
-    class MandateFeeRow { private Long mandateId,ownerUnitId; private BigDecimal managementFee; public Long getMandateId(){return mandateId;} public void setMandateId(Long v){mandateId=v;} public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public BigDecimal getManagementFee(){return managementFee;} public void setManagementFee(BigDecimal v){managementFee=v;} }
+    class MandateFeeRow { private Long mandateId,ownerUnitId; private BigDecimal managementFee,commissionPercent,rentBase; public Long getMandateId(){return mandateId;} public void setMandateId(Long v){mandateId=v;} public Long getOwnerUnitId(){return ownerUnitId;} public void setOwnerUnitId(Long v){ownerUnitId=v;} public BigDecimal getManagementFee(){return managementFee;} public void setManagementFee(BigDecimal v){managementFee=v;} public BigDecimal getCommissionPercent(){return commissionPercent;} public void setCommissionPercent(BigDecimal v){commissionPercent=v;} public BigDecimal getRentBase(){return rentBase;} public void setRentBase(BigDecimal v){rentBase=v;} }
     class PostingRow { private Long financeRecordId; private String confirmationStatus; public Long getFinanceRecordId(){return financeRecordId;} public void setFinanceRecordId(Long v){financeRecordId=v;} public String getConfirmationStatus(){return confirmationStatus;} public void setConfirmationStatus(String v){confirmationStatus=v;} }
     class FinanceWrite { private Long id,unitId,ownerId,actorId; private String transactionNo; private BigDecimal amount; private LocalDate occurredOn; public Long getId(){return id;} public void setId(Long v){id=v;} public Long getUnitId(){return unitId;} public void setUnitId(Long v){unitId=v;} public Long getOwnerId(){return ownerId;} public void setOwnerId(Long v){ownerId=v;} public Long getActorId(){return actorId;} public void setActorId(Long v){actorId=v;} public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;} public LocalDate getOccurredOn(){return occurredOn;} public void setOccurredOn(LocalDate v){occurredOn=v;} }
 }

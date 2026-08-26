@@ -5,6 +5,7 @@
       <AppModal />
       <ToastMessage />
     </main>
+    <OwnerBottomNav />
   </div>
 </template>
 
@@ -12,10 +13,11 @@
 import OwnerPage from '../../pages/OwnerPage.vue';
 import AppModal from '../../components/AppModal.vue';
 import ToastMessage from '../../components/ToastMessage.vue';
+import OwnerBottomNav from '../../components/OwnerBottomNav.vue';
 import { i18n } from '../../i18n';
 
 export default {
-  components: { OwnerPage, AppModal, ToastMessage },
+  components: { OwnerPage, AppModal, ToastMessage, OwnerBottomNav },
   computed: {
     localeRefreshKey() { return i18n.global.locale.value; }
   }

@@ -17,5 +17,11 @@ test('预备金不足时仍可选择预备金扣款并显示负数余额', () =>
 
   assert.doesNotMatch(process, /reserveAccountAvailable \|\| operationsWorkOrderReserveShortage > 0/)
   assert.doesNotMatch(process, /settlementMethod === 'reserve' && this\.operationsWorkOrderReserveShortage > 0/)
-  assert.match(process, /扣款后预备金将为负数/)
+  assert.match(process, /legacy\.t_1921382f0110/)
+})
+
+test('选择业主另付时不显示预备金不足提示', () => {
+  assert.match(maintenance, /handlingForm\.settlementMethod === 'reserve' && reserveShortage > 0/)
+  assert.match(propertyDetail, /handlingForm\.settlementMethod === 'reserve' && handlingReserveShortage > 0/)
+  assert.match(process, /operationsWorkOrderHandlingForm\.settlementMethod === 'reserve' && operationsWorkOrderReserveShortage > 0/)
 })

@@ -1,13 +1,13 @@
 <template>
   <section class="admin-dashboard-workspace">
-    <div v-if="errorMessage" class="admin-owner-state error"><strong>管理总览加载失败</strong><span>{{ errorMessage }}</span><button type="button" @click="loadData">重新载入</button></div>
+    <div v-if="errorMessage" class="admin-owner-state error"><strong>{{ $t('legacy.t_4315d9c136f8') }}</strong><span>{{ errorMessage }}</span><button type="button" @click="loadData">{{ $t('legacy.t_0a12f2ebe04f') }}</button></div>
     <template v-else>
       <div class="dashboard-summary-grid">
         <article v-for="card in summaryCards" :key="card.label"><span>{{ card.label }}</span><strong>{{ card.value }}</strong><small>{{ card.hint }}</small></article>
       </div>
       <div class="panel region-overview-panel">
-        <div class="panel-head"><div><h2>区域经营概览</h2><span>{{ filteredRegions.length }} 个区域 · 数据库实时统计</span></div><button type="button" :disabled="loading" @click="loadData">{{ loading ? '载入中…' : '刷新数据' }}</button></div>
-        <div class="table-wrap"><table><thead><tr><th>区域</th><th>在管单位</th><th>出租单位</th><th>入住率</th><th>月租总额</th><th>平均月租</th><th>租客押金</th><th>业主备用金</th></tr></thead><tbody><tr v-for="row in filteredRegions" :key="row.regionName"><td><strong>{{ row.regionName }}</strong></td><td>{{ row.unitCount }} 套</td><td>{{ row.occupiedCount }} 套</td><td><div class="occupancy-cell"><b>{{ Number(row.occupancyRate || 0).toFixed(1) }}%</b><span><i :style="{ width: `${Math.min(100, Number(row.occupancyRate || 0))}%` }"></i></span></div></td><td>RM {{ money(row.totalRent) }}</td><td>RM {{ money(row.averageRent) }}</td><td>RM {{ money(row.tenantDeposit) }}</td><td :class="{ danger: Number(row.reserveBalance) < 0 }">RM {{ money(row.reserveBalance) }}</td></tr><tr v-if="!loading && !filteredRegions.length"><td colspan="8" class="admin-owner-empty">暂无符合条件的区域数据</td></tr></tbody></table></div>
+        <div class="panel-head"><div><h2>{{ $t('legacy.t_6d9da8dd3f55') }}</h2><span>{{ filteredRegions.length }} {{ $t('legacy.t_6ca61fe95d63') }}</span></div><button type="button" :disabled="loading" @click="loadData">{{ loading ? $t('legacy.t_c5a023301ff2') : $t('legacy.t_048f7692c8a0') }}</button></div>
+        <div class="table-wrap"><table><thead><tr><th>{{ $t('legacy.t_17fc93c9cdbb') }}</th><th>{{ $t('legacy.t_0b47c54dd936') }}</th><th>{{ $t('legacy.t_a06483bc49df') }}</th><th>{{ $t('legacy.t_c9752a3620d7') }}</th><th>{{ $t('legacy.t_5f782027fcde') }}</th><th>{{ $t('legacy.t_2256c68d143f') }}</th><th>{{ $t('legacy.t_819c8bd23823') }}</th><th>{{ $t('legacy.t_1b8989e7c086') }}</th></tr></thead><tbody><tr v-for="row in filteredRegions" :key="row.regionName"><td><strong>{{ row.regionName }}</strong></td><td>{{ row.unitCount }} {{ $t('legacy.t_032231d845f8') }}</td><td>{{ row.occupiedCount }} {{ $t('legacy.t_032231d845f8') }}</td><td><div class="occupancy-cell"><b>{{ Number(row.occupancyRate || 0).toFixed(1) }}%</b><span><i :style="{ width: `${Math.min(100, Number(row.occupancyRate || 0))}%` }"></i></span></div></td><td>RM {{ money(row.totalRent) }}</td><td>RM {{ money(row.averageRent) }}</td><td>RM {{ money(row.tenantDeposit) }}</td><td :class="{ danger: Number(row.reserveBalance) < 0 }">RM {{ money(row.reserveBalance) }}</td></tr><tr v-if="!loading && !filteredRegions.length"><td colspan="8" class="admin-owner-empty">{{ $t('legacy.t_fde45c6b5bcf') }}</td></tr></tbody></table></div>
       </div>
     </template>
   </section>
@@ -21,11 +21,11 @@ export default {
   computed: {
     filteredRegions() { const keyword = String(this.page.globalSearch || this.page.moduleSearch || '').trim().toLowerCase(); return (this.dashboard.regions || []).filter(row => !keyword || String(row.regionName).toLowerCase().includes(keyword)); },
     summaryCards() { const s = this.dashboard.summary || {}; return [
-      { label: '在管单位', value: `${Number(s.unitCount || 0)} 套`, hint: `${Number(s.occupiedCount || 0)} 套正在出租` },
-      { label: '整体入住率', value: `${Number(s.occupancyRate || 0).toFixed(1)}%`, hint: '按当前有效租约计算' },
-      { label: '月租总额', value: `RM ${this.money(s.totalRent)}`, hint: `平均 RM ${this.money(s.averageRent)}` },
-      { label: '租客押金', value: `RM ${this.money(s.tenantDeposit)}`, hint: '押金台账当前余额' },
-      { label: '业主备用金', value: `RM ${this.money(s.reserveBalance)}`, hint: '允许出现负余额' }
+      { label: this.$t('ui.managedUnits'), value: `${Number(s.unitCount || 0)} ${this.$t('ui.unitSuffix')}`, hint: this.$t('ui.occupiedUnitsHint', { count: Number(s.occupiedCount || 0) }) },
+      { label: this.$t('ui.overallOccupancy'), value: `${Number(s.occupancyRate || 0).toFixed(1)}%`, hint: this.$t('ui.activeLeaseCalculationHint') },
+      { label: this.$t('ui.monthlyRentTotal'), value: `RM ${this.money(s.totalRent)}`, hint: this.$t('ui.averageRentHint', { amount: this.money(s.averageRent) }) },
+      { label: this.$t('ui.tenantDepositBalance'), value: `RM ${this.money(s.tenantDeposit)}`, hint: this.$t('ui.depositLedgerBalanceHint') },
+      { label: this.$t('ui.ownerReserveBalance'), value: `RM ${this.money(s.reserveBalance)}`, hint: this.$t('ui.negativeBalanceAllowedHint') }
     ]; }
   },
   mounted() { this.loadData(); },

@@ -5,25 +5,28 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.ccps.backend.service.PortalSessionService;
+import com.ccps.backend.service.AdminPermissionService;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
     private final PortalSessionService portalSessionService;
+    private final AdminPermissionService adminPermissionService;
 
-    public WebConfig(PortalSessionService portalSessionService) {
+    public WebConfig(PortalSessionService portalSessionService, AdminPermissionService adminPermissionService) {
         this.portalSessionService = portalSessionService;
+        this.adminPermissionService = adminPermissionService;
     }
 
     @Override
     public void addInterceptors(org.springframework.web.servlet.config.annotation.InterceptorRegistry registry) {
-        registry.addInterceptor(new AdminAuthInterceptor(portalSessionService))
+        registry.addInterceptor(new AdminAuthInterceptor(portalSessionService, adminPermissionService))
                 .addPathPatterns("/api/admin/**", "/api/properties/**");
         registry.addInterceptor(new OwnerAuthInterceptor(portalSessionService))
                 .addPathPatterns("/api/owner/**");
         registry.addInterceptor(new AuthInterceptor(portalSessionService))
                 .addPathPatterns("/api/**")
                 .excludePathPatterns("/api/auth/**", "/api/health", "/api/admin/**", "/api/owner/**",
-                        "/api/properties/**", "/api/public/signatures/**");
+                        "/api/properties/**", "/api/public/signatures/**", "/api/webhooks/whatsapp");
     }
 
     @Override

@@ -78,6 +78,14 @@ class AdminProjectServiceTest {
     }
 
     @Test
+    void projectCodeAvailabilityNormalizesInputBeforeCheckingDuplicates() {
+        when(mapper.countProjectCode("CCPS-01", null)).thenReturn(1);
+
+        assertThat(service.isProjectCodeAvailable(" ccps-01 ")).isFalse();
+        verify(mapper).countProjectCode("CCPS-01", null);
+    }
+
+    @Test
     void deleteRejectsProjectsThatStillHaveUnits() {
         when(mapper.findById(9L)).thenReturn(row(9L, "CCPS-09", "Linked Project", 2L));
         when(mapper.countReferences(9L)).thenReturn(2);

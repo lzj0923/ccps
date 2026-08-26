@@ -11,6 +11,7 @@ public record AdminPropertyCashflowResponse(
         String direction,
         String category,
         String description,
+        String allocationNote,
         BigDecimal amount,
         String currency,
         LocalDate occurredOn,

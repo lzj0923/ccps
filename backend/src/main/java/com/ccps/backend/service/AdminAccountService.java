@@ -14,6 +14,7 @@ import com.ccps.backend.dto.AdminAccountUpdateRequest;
 import com.ccps.backend.mapper.AdminAccountMapper;
 import com.ccps.backend.mapper.AdminAccountMapper.AccountRecord;
 import com.ccps.backend.mapper.AdminAccountMapper.AccountRow;
+import com.ccps.backend.security.AdminPermissionCodes;
 
 @Service
 public class AdminAccountService {
@@ -55,6 +56,7 @@ public class AdminAccountService {
         if (mapper.insert(account) != 1 || account.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create account");
         }
+        synchronizeRoles(account.getId(), accountType, request.staffRole());
         return findById(account.getId());
     }
 
@@ -62,10 +64,16 @@ public class AdminAccountService {
     @Transactional
     public Long createOwnerAccount(String phone, String displayName, String email) {
         String username = required(phone, "Owner phone is required to create an account");
-        validateUnique(username, email, null);
+        if (mapper.countUsername(username, null) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner phone already exists");
+        }
+        String accountEmail = trimToNull(email);
+        if (accountEmail != null && mapper.countEmail(accountEmail, null) > 0) {
+            accountEmail = null;
+        }
         AccountRecord account = new AccountRecord();
         account.setUsername(username);
-        account.setEmail(trimToNull(email));
+        account.setEmail(accountEmail);
         account.setPasswordHash(passwordEncoder.encode(DEFAULT_OWNER_PASSWORD));
         account.setDisplayName(required(displayName, "Owner display name is required"));
         account.setPhone(username);
@@ -74,7 +82,24 @@ public class AdminAccountService {
         if (mapper.insert(account) != 1 || account.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create owner account");
         }
+        synchronizeRoles(account.getId(), AuthService.OWNER_ROLE, null);
         return account.getId();
+    }
+
+    /** Keeps an owner's phone-based portal login aligned with the owner profile. */
+    @Transactional
+    public void synchronizeOwnerAccount(Long ownerId, String phone, String displayName, String status) {
+        Long accountId = mapper.findOwnerAccountId(ownerId);
+        if (accountId == null) return;
+        String username = required(phone, "Owner phone is required to update an account");
+        if (mapper.countUsername(username, accountId) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Owner phone already exists");
+        }
+        if (mapper.updateOwnerLogin(accountId, username,
+                required(displayName, "Owner display name is required"), username,
+                normalizeStatus(status)) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to update owner account");
+        }
     }
 
     @Transactional
@@ -102,6 +127,8 @@ public class AdminAccountService {
         if (mapper.update(account) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Account was changed by another request");
         }
+        String staffRole = request.staffRole() == null ? current.getStaffRole() : request.staffRole();
+        synchronizeRoles(id, accountType, staffRole);
         return findById(id);
     }
 
@@ -137,7 +164,24 @@ public class AdminAccountService {
 
     private AdminAccountResponse toResponse(AccountRow row) {
         return new AdminAccountResponse(row.getId(), row.getUsername(), row.getEmail(), row.getDisplayName(),
-                row.getPhone(), row.getAccountType(), row.getStatus(), row.getOwnerId());
+                row.getPhone(), row.getAccountType(), row.getStaffRole(), row.getStatus(), row.getOwnerId());
+    }
+
+    private void synchronizeRoles(Long userId, String accountType, String requestedStaffRole) {
+        mapper.deleteManagedRoles(userId);
+        if (mapper.insertRole(userId, accountType) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Portal role is not configured");
+        }
+        if (!AuthService.ADMIN_ROLE.equals(accountType)) return;
+        String staffRole = requestedStaffRole == null || requestedStaffRole.isBlank()
+                ? AdminPermissionCodes.ADMINISTRATION
+                : requestedStaffRole.trim().toUpperCase();
+        if (!AdminPermissionCodes.STAFF_ROLES.contains(staffRole)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported administrator role");
+        }
+        if (mapper.insertRole(userId, staffRole) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Administrator role is not configured");
+        }
     }
 
     private String normalizeAccountType(String value) {

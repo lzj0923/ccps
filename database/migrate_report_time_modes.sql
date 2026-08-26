@@ -1,0 +1,3 @@
+ALTER TABLE report_runs
+  MODIFY COLUMN date_start DATE NULL,
+  MODIFY COLUMN date_end DATE NULL;

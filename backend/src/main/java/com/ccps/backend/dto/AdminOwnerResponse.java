@@ -15,6 +15,7 @@ public record AdminOwnerResponse(
         String officePhone,
         String passportNo,
         String email,
+        String mailingAddress,
         String status,
         List<Property> properties) {
 
@@ -43,6 +44,13 @@ public record AdminOwnerResponse(
             BigDecimal purchasePrice,
             BigDecimal paidAmount,
             BigDecimal remainingAmount,
-            String paymentStatus) {
+            String paymentStatus,
+            String electricityAccountNo,
+            String waterAccountNo,
+            String sewerageAccountNo,
+            String gasAccountNo,
+            String withholdingTaxAccountNo,
+            String landTaxAccountNo,
+            String assessmentTaxAccountNo) {
     }
 }

@@ -48,6 +48,11 @@ public class AdminOwnerController {
         return service.findSummary();
     }
 
+    @GetMapping("/{ownerId}")
+    public AdminOwnerResponse findOwner(@PathVariable Long ownerId) {
+        return service.findOwner(ownerId);
+    }
+
     @PostMapping
     public ResponseEntity<AdminOwnerResponse> createOwner(@Valid @RequestBody AdminOwnerCreateRequest request) {
         AdminOwnerResponse response = service.createOwner(request);

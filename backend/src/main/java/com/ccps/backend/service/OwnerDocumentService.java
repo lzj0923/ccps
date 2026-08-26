@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,18 +28,41 @@ import com.ccps.backend.mapper.OwnerDocumentMapper.DocumentRow;
 @Service
 public class OwnerDocumentService {
     private final OwnerDocumentMapper mapper;
-    private final Path storageRoot;
+    private final List<Path> storageRoots;
 
     @Autowired
     public OwnerDocumentService(OwnerDocumentMapper mapper,
-            @Value("${ccps.storage.document-root:uploads}") String storageRoot) {
-        this.mapper = mapper;
-        this.storageRoot = Path.of(storageRoot).toAbsolutePath().normalize();
+            @Value("${ccps.storage.document-root:uploads}") String documentRoot,
+            @Value("${ccps.storage.payment-proofs:uploads/payment-proofs}") String paymentProofRoot,
+            @Value("${ccps.storage.maintenance-attachments:uploads/maintenance-attachments}") String maintenanceRoot,
+            @Value("${ccps.storage.reserve-topups:uploads/reserve-topups}") String reserveTopupRoot,
+            @Value("${ccps.storage.lease-contracts:uploads/lease-contracts}") String leaseContractRoot,
+            @Value("${ccps.storage.rental-mandates:uploads/rental-mandates}") String rentalMandateRoot,
+            @Value("${ccps.storage.electronic-signatures:uploads/electronic-signatures}") String signatureRoot,
+            @Value("${ccps.storage.property-contracts:uploads/property-contracts}") String propertyContractRoot,
+            @Value("${ccps.storage.property-attachments:uploads/property-attachments}") String propertyAttachmentRoot,
+            @Value("${ccps.storage.property-handover-reports:uploads/property-handover-reports}") String handoverReportRoot,
+            @Value("${ccps.storage.property-cashflow:uploads/property-cashflow}") String propertyCashflowRoot,
+            @Value("${ccps.storage.reports:uploads/reports}") String reportRoot) {
+        this(mapper, List.of(documentRoot, paymentProofRoot, maintenanceRoot, reserveTopupRoot,
+                leaseContractRoot, rentalMandateRoot, signatureRoot, propertyContractRoot,
+                propertyAttachmentRoot, handoverReportRoot, propertyCashflowRoot, reportRoot).stream()
+                .map(Path::of).toList());
     }
 
     OwnerDocumentService(OwnerDocumentMapper mapper, Path storageRoot) {
+        this(mapper, List.of(storageRoot, storageRoot.resolve("payment-proofs"),
+                storageRoot.resolve("maintenance-attachments"), storageRoot.resolve("reserve-topups"),
+                storageRoot.resolve("lease-contracts"), storageRoot.resolve("rental-mandates"),
+                storageRoot.resolve("electronic-signatures"), storageRoot.resolve("property-contracts"),
+                storageRoot.resolve("property-attachments"), storageRoot.resolve("property-handover-reports"),
+                storageRoot.resolve("property-cashflow"), storageRoot.resolve("reports"),
+                storageRoot.resolve("documents")));
+    }
+
+    private OwnerDocumentService(OwnerDocumentMapper mapper, List<Path> storageRoots) {
         this.mapper = mapper;
-        this.storageRoot = storageRoot.toAbsolutePath().normalize();
+        this.storageRoots = storageRoots.stream().map(path -> path.toAbsolutePath().normalize()).distinct().toList();
     }
 
     @Transactional(readOnly = true)
@@ -84,30 +106,49 @@ public class OwnerDocumentService {
     }
 
     private DocumentItem toItem(DocumentRow row) {
-        String category = category(row.getDocumentType());
+        String category = category(row.getDocumentType(), row.getLinkEntityType());
         LocalDate today = LocalDate.now();
         String status = status(row.getStatus(), row.getExpiresAt(), today);
         return new DocumentItem(row.getId(), row.getDocumentNo() == null ? "DOC-" + row.getId() : row.getDocumentNo(),
-                row.getOriginalName(), category, typeLabel(row.getDocumentType()), status, row.getMimeType(),
+                row.getOriginalName(), category, typeLabel(row.getDocumentType(), row.getLinkEntityType()), status, row.getMimeType(),
                 row.getFileSize(), row.getCreatedAt(), row.getUpdatedAt(), row.getExpiresAt(), row.getUploaderName(),
                 row.getProjectName(), row.getCity(), row.getUnitNo(), resolveStoragePath(row.getStorageKey()) != null);
     }
 
-    private String category(String type) {
+    private String category(String type, String linkEntityType) {
         String value = type == null ? "" : type.toLowerCase(Locale.ROOT);
         if (value.contains("purchase")) return "sale";
-        if (value.contains("lease")) return "lease";
+        if ("lease".equals(linkEntityType)
+                || value.equals("lease") || value.equals("lease_period")
+                || value.contains("tenancy") || value.contains("rental_contract")) return "lease";
         if (value.contains("payment") || value.contains("proof")) return "proof";
         if (value.contains("invoice") || value.contains("receipt")) return "receipt";
-        if (value.contains("maintenance") || value.contains("work_order")) return "maintenance";
+        if (value.contains("maintenance") || value.contains("work_order") || value.contains("repair")) return "maintenance";
         if (value.contains("finance")) return "finance";
         return "other";
     }
 
-    private String typeLabel(String type) {
-        return Map.of("purchase_contract", "買賣合約", "lease", "租賃合約", "payment_proof", "付款憑證",
-                "invoice", "收據發票", "maintenance_attachment", "維修單據", "finance_confirmation", "財務確認",
-                "reserve_topup_proof", "預備金憑證").getOrDefault(type, "其他資料");
+    private String typeLabel(String type, String linkEntityType) {
+        String value = type == null ? "" : type.toLowerCase(Locale.ROOT);
+        if ("lease".equals(linkEntityType) || value.equals("lease") || value.equals("lease_period")
+                || value.contains("tenancy") || value.contains("rental_contract")) return "租賃合約";
+        return Map.ofEntries(
+                Map.entry("purchase_contract", "買賣合約"),
+                Map.entry("payment_proof", "付款憑證"),
+                Map.entry("reserve_topup_proof", "預備金憑證"),
+                Map.entry("invoice", "收據發票"),
+                Map.entry("receipt", "收據發票"),
+                Map.entry("maintenance_attachment", "維修單據"),
+                Map.entry("handover_repair_attachment", "維修單據"),
+                Map.entry("finance_confirmation", "財務確認"),
+                Map.entry("cashflow_attachment", "收支附件"),
+                Map.entry("property_attachment", "其他附件"),
+                Map.entry("authorization_draft", "授權委託書"),
+                Map.entry("mandate_document", "代管文件"),
+                Map.entry("handover_photo", "交屋文件"),
+                Map.entry("inventory", "交屋文件"),
+                Map.entry("signed_contract", "簽署文件")
+        ).getOrDefault(value, "其他資料");
     }
 
     private String status(String value, LocalDate expiresAt, LocalDate today) {
@@ -118,10 +159,7 @@ public class OwnerDocumentService {
 
     private Path resolveStoragePath(String storageKey) {
         if (storageKey == null || storageKey.isBlank()) return null;
-        List<Path> roots = new ArrayList<>(List.of(storageRoot,
-                storageRoot.resolve("payment-proofs"), storageRoot.resolve("maintenance-attachments"),
-                storageRoot.resolve("reserve-topups"), storageRoot.resolve("documents")));
-        for (Path root : roots) {
+        for (Path root : storageRoots) {
             Path target = root.resolve(storageKey).normalize();
             if (target.startsWith(root) && Files.isRegularFile(target)) return target;
         }

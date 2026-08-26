@@ -2,37 +2,37 @@
   <section ref="board" class="smart-board">
     <header class="board-head">
       <div class="board-title">
-        <span class="eyebrow">CCPS · MALAYSIA PORTFOLIO</span>
-        <h1>智慧经营大屏</h1>
-        <p>马来西亚各地区房产规模、出租表现与租金概览</p>
+        <span class="eyebrow">{{ $t('ui.portfolioEyebrow') }}</span>
+        <h1>{{ $t('legacy.t_8335962740cd') }}</h1>
+        <p>{{ $t('legacy.t_0152a964e7bb') }}</p>
       </div>
-      <div class="national-totals" aria-label="全国经营概览">
-        <div><span>全国单位</span><strong>{{ national.unitCount }}</strong><small>套</small></div>
-        <div><span>整体出租率</span><strong>{{ percent(national.occupancyRate) }}</strong></div>
-        <div><span>出租租金</span><strong>RM {{ compactMoney(national.totalRent) }}</strong></div>
-        <div><span>平均租金</span><strong>RM {{ compactMoney(national.averageRent) }}</strong></div>
+      <div class="national-totals" :aria-label="$t('legacy.t_2a70025b7bf0')">
+        <div><span>{{ $t('legacy.t_6b904c278cdd') }}</span><strong>{{ national.unitCount }}</strong><small>{{ $t('legacy.t_032231d845f8') }}</small></div>
+        <div><span>{{ $t('legacy.t_4c21d564e994') }}</span><strong>{{ percent(national.occupancyRate) }}</strong></div>
+        <div><span>{{ $t('legacy.t_1d736f0658fc') }}</span><strong>RM {{ compactMoney(national.totalRent) }}</strong></div>
+        <div><span>{{ $t('legacy.t_3cc4199ab77a') }}</span><strong>RM {{ compactMoney(national.averageRent) }}</strong></div>
       </div>
       <div class="head-actions">
         <time>{{ formattedNow }}</time>
-        <button type="button" :disabled="loading" title="刷新数据" @click="loadData"><RefreshCw :size="17" :class="{ spinning: loading }" />刷新</button>
-        <button type="button" title="全屏显示" @click="toggleFullscreen"><Maximize2 :size="17" />全屏</button>
+        <button type="button" :disabled="loading" :title="$t('legacy.t_048f7692c8a0')" @click="loadData"><RefreshCw :size="17" :class="{ spinning: loading }" />{{ $t('legacy.t_38108eaa1d32') }}</button>
+        <button type="button" :title="$t('legacy.t_92ef6c7b2465')" @click="toggleFullscreen"><Maximize2 :size="17" />{{ $t('legacy.t_93c44f6b1b28') }}</button>
       </div>
     </header>
 
     <div v-if="errorMessage" class="board-error">
-      <strong>智慧大屏加载失败</strong><span>{{ errorMessage }}</span><button type="button" @click="loadData">重新载入</button>
+      <strong>{{ $t('legacy.t_d7115b03401c') }}</strong><span>{{ errorMessage }}</span><button type="button" @click="loadData">{{ $t('legacy.t_0a12f2ebe04f') }}</button>
     </div>
 
     <div v-else class="board-grid">
       <MetricRanking
         class="panel-units"
         number="1"
-        title="地区总单位"
-        subtitle="各地区当前在管房产数量"
+        :title="$t('legacy.t_37351f04eaca')"
+        :subtitle="$t('ui.regionalManagedUnitsHint')"
         :icon="Building2"
         :rows="rankedUnits"
         value-key="unitCount"
-        unit="套"
+        :unit="$t('ui.unitSuffix')"
         :selected="selectedRegionName"
         @select="selectRegion"
       />
@@ -40,8 +40,8 @@
       <MetricRanking
         class="panel-rate"
         number="2"
-        title="地区出租率"
-        subtitle="已出租单位占地区总单位比例"
+        :title="$t('legacy.t_e5c25b3d0a49')"
+        :subtitle="$t('ui.regionalOccupancyHint')"
         :icon="Gauge"
         :rows="rankedRate"
         value-key="occupancyRate"
@@ -53,20 +53,20 @@
 
       <article class="map-panel data-panel">
         <div class="panel-heading map-heading">
-          <div><span class="panel-number"><MapPinned :size="16" /></span><div><h2>马来西亚地区经营地图</h2><p>点击州属区域查看当地经营数据</p></div></div>
-          <span class="live-chip"><i></i> 数据库实时统计</span>
+          <div><span class="panel-number"><MapPinned :size="16" /></span><div><h2>{{ $t('legacy.t_650bc4dc5661') }}</h2><p>{{ $t('legacy.t_c6839888c4df') }}</p></div></div>
+          <span class="live-chip"><i></i> {{ $t('legacy.t_4a18eece2754') }}</span>
         </div>
         <div class="map-stage">
           <MalaysiaLeafletMap class="malaysia-map" :regions="allRegions" :selected="selectedRegionName" @select="selectRegion" />
 
-          <div class="map-legend"><span><i class="legend-dot active"></i>当前选择</span><span><i class="legend-dot"></i>州属边界</span><span>颜色越深，在管单位越多</span></div>
+          <div class="map-legend"><span><i class="legend-dot active"></i>{{ $t('legacy.t_7f06ec27ae46') }}</span><span><i class="legend-dot"></i>{{ $t('legacy.t_4b14bcba76f1') }}</span><span>{{ $t('legacy.t_e19d141dfb2e') }}</span></div>
 
           <section v-if="selectedRegion" class="selected-region-card">
-            <div class="selected-title"><span>当前地区</span><strong>{{ selectedRegion.regionName }}</strong></div>
-            <div><span>总单位</span><strong>{{ selectedRegion.unitCount }} 套</strong></div>
-            <div><span>出租率</span><strong>{{ percent(selectedRegion.occupancyRate) }}</strong></div>
-            <div><span>总出租租金</span><strong>RM {{ money(selectedRegion.totalRent) }}</strong></div>
-            <div><span>平均出租租金</span><strong>RM {{ money(selectedRegion.averageRent) }}</strong></div>
+            <div class="selected-title"><span>{{ $t('legacy.t_c2044a8b8223') }}</span><strong>{{ selectedRegion.regionName }}</strong></div>
+            <div><span>{{ $t('legacy.t_4254d60c5efe') }}</span><strong>{{ selectedRegion.unitCount }} {{ $t('legacy.t_032231d845f8') }}</strong></div>
+            <div><span>{{ $t('legacy.t_20fde4dfff4c') }}</span><strong>{{ percent(selectedRegion.occupancyRate) }}</strong></div>
+            <div><span>{{ $t('legacy.t_b6b4888185fc') }}</span><strong>RM {{ money(selectedRegion.totalRent) }}</strong></div>
+            <div><span>{{ $t('legacy.t_8f230fb6b6a6') }}</span><strong>RM {{ money(selectedRegion.averageRent) }}</strong></div>
           </section>
         </div>
       </article>
@@ -74,8 +74,8 @@
       <MetricRanking
         class="panel-rent"
         number="3"
-        title="地区总出租租金"
-        subtitle="各地区当前有效租约月租总额"
+        :title="$t('legacy.t_933e29034eea')"
+        :subtitle="$t('ui.regionalRentHint')"
         :icon="WalletCards"
         :rows="rankedRent"
         value-key="totalRent"
@@ -88,8 +88,8 @@
       <MetricRanking
         class="panel-average"
         number="4"
-        title="地区总平均出租租金"
-        subtitle="各地区已出租单位平均月租"
+        :title="$t('legacy.t_45d838d32bec')"
+        :subtitle="$t('ui.regionalAverageRentHint')"
         :icon="ChartColumnIncreasing"
         :rows="rankedAverage"
         value-key="averageRent"
@@ -99,8 +99,8 @@
         @select="selectRegion"
       />
 
-      <article class="future-panel panel-five data-panel"><span class="future-number">5</span><div><h2>指标区 5</h2><p>已预留，等待后续确定展示内容</p></div><span class="future-chip">待配置</span></article>
-      <article class="future-panel panel-six data-panel"><span class="future-number">6</span><div><h2>指标区 6</h2><p>已预留，等待后续确定展示内容</p></div><span class="future-chip">待配置</span></article>
+      <article class="future-panel panel-five data-panel"><span class="future-number">5</span><div><h2>{{ $t('legacy.t_ae94f2617fef') }}</h2><p>{{ $t('legacy.t_09e45afc86ed') }}</p></div><span class="future-chip">{{ $t('legacy.t_516527377e6a') }}</span></article>
+      <article class="future-panel panel-six data-panel"><span class="future-number">6</span><div><h2>{{ $t('legacy.t_001f3cc6a187') }}</h2><p>{{ $t('legacy.t_09e45afc86ed') }}</p></div><span class="future-chip">{{ $t('legacy.t_516527377e6a') }}</span></article>
     </div>
   </section>
 </template>
@@ -137,7 +137,7 @@ export default {
       const grouped = new Map();
       (this.dashboard.regions || []).forEach(raw => {
         const rawName = String(raw.regionName || '').trim();
-        const regionName = malaysiaStateNames.includes(rawName) ? rawName : (findStateByArea(rawName) || rawName || '未设置地区');
+        const regionName = malaysiaStateNames.includes(rawName) ? rawName : (findStateByArea(rawName) || rawName || this.$t('ui.unsetRegion'));
         const row = grouped.get(regionName) || { regionName, unitCount: 0, occupiedCount: 0, totalRent: 0, tenantDeposit: 0, reserveBalance: 0 };
         row.unitCount += Number(raw.unitCount || 0);
         row.occupiedCount += Number(raw.occupiedCount || 0);

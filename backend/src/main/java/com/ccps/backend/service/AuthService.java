@@ -66,11 +66,15 @@ public class AuthService {
         String activeRole = normalizedRequiredRole != null
                 ? normalizedRequiredRole
                 : defaultRole(roleCodes);
+        List<String> permissionCodes = userMapper.findPermissionCodes(user.getId());
 
         user.setLastLoginAt(LocalDateTime.now());
         userMapper.updateById(user);
         return new LoginResponse(user.getId(), user.getUsername(), user.getEmail(), user.getDisplayName(),
-                user.getStatus(), activeRole, List.copyOf(roleCodes));
+                user.getStatus(), activeRole, List.copyOf(roleCodes),
+                permissionCodes == null ? List.of() : permissionCodes.stream()
+                        .filter(code -> code != null && !code.isBlank())
+                        .map(code -> code.toUpperCase(Locale.ROOT)).distinct().toList());
     }
 
     private String normalizeAccountType(String accountType) {

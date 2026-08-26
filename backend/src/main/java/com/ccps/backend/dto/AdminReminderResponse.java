@@ -15,7 +15,7 @@ public record AdminReminderResponse(
 
     public record Rule(Long id, String code, String name, String eventType, int daysBefore,
                        List<String> channels, String recipientRole, boolean enabled,
-                       LocalDateTime createdAt, LocalDateTime updatedAt) {
+                       boolean systemManaged, LocalDateTime createdAt, LocalDateTime updatedAt) {
     }
 
     public record NotificationItem(Long id, Long ruleId, String ruleName, String eventType,

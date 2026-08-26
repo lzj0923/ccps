@@ -26,7 +26,7 @@ sleep 8
 
 # 5. Run migrations
 echo "[5/5] Running DB migrations..."
-for f in /tmp/migrate_rental_mandates.sql /tmp/migrate_property_handovers.sql /tmp/migrate_owner_contact_fields.sql /tmp/backfill_legacy_rental_mandates.sql; do
+for f in /tmp/migrate_rental_mandates.sql /tmp/migrate_property_handovers.sql /tmp/migrate_owner_contact_fields.sql /tmp/backfill_legacy_rental_mandates.sql database/migrate_admin_recycle_bin.sql database/migrate_payment_report_links.sql; do
   echo "  -> $f"
   docker exec -i ccps-mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ccps_property_management" < "$f" && echo "     OK" || echo "     FAIL (may already exist)"
 done

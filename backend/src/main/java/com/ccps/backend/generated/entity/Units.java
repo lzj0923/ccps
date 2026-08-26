@@ -49,6 +49,21 @@ public class Units implements Serializable {
     @TableField("listing_status")
     private String listingStatus;
 
+    @TableField("rental_listing_status")
+    private String rentalListingStatus;
+
+    @TableField("rental_off_market_reason_code")
+    private String rentalOffMarketReasonCode;
+
+    @TableField("rental_off_market_note")
+    private String rentalOffMarketNote;
+
+    @TableField("rental_off_market_at")
+    private LocalDateTime rentalOffMarketAt;
+
+    @TableField("rental_off_market_by")
+    private Long rentalOffMarketBy;
+
     @TableField("created_at")
     private LocalDateTime createdAt;
 
@@ -126,6 +141,17 @@ public class Units implements Serializable {
     public void setListingStatus(String listingStatus) {
         this.listingStatus = listingStatus;
     }
+
+    public String getRentalListingStatus() { return rentalListingStatus; }
+    public void setRentalListingStatus(String rentalListingStatus) { this.rentalListingStatus = rentalListingStatus; }
+    public String getRentalOffMarketReasonCode() { return rentalOffMarketReasonCode; }
+    public void setRentalOffMarketReasonCode(String rentalOffMarketReasonCode) { this.rentalOffMarketReasonCode = rentalOffMarketReasonCode; }
+    public String getRentalOffMarketNote() { return rentalOffMarketNote; }
+    public void setRentalOffMarketNote(String rentalOffMarketNote) { this.rentalOffMarketNote = rentalOffMarketNote; }
+    public LocalDateTime getRentalOffMarketAt() { return rentalOffMarketAt; }
+    public void setRentalOffMarketAt(LocalDateTime rentalOffMarketAt) { this.rentalOffMarketAt = rentalOffMarketAt; }
+    public Long getRentalOffMarketBy() { return rentalOffMarketBy; }
+    public void setRentalOffMarketBy(Long rentalOffMarketBy) { this.rentalOffMarketBy = rentalOffMarketBy; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

@@ -2,6 +2,7 @@ package com.ccps.backend.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -11,6 +12,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +36,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class AdminReminderService {
     private static final Logger log = LoggerFactory.getLogger(AdminReminderService.class);
-    private static final Set<String> CHANNELS = Set.of("in_app", "email", "line");
+    private static final Set<String> CHANNELS = Set.of("in_app", "email", "line", "whatsapp");
+    private static final String LEASE_EXPIRY_BUSINESS_RULE = "LEASE_EXPIRY_BUSINESS_30D";
     private final AdminReminderMapper mapper;
     private final ObjectMapper objectMapper;
 
@@ -59,6 +63,7 @@ public class AdminReminderService {
     @Transactional
     public AdminReminderResponse.Rule createRule(Long actorId, AdminReminderRuleRequest request) {
         RuleWrite row = toWrite(null, actorId, request);
+        requireNonSystemCode(row.getCode());
         requireUniqueCode(row.getCode(), null);
         if (mapper.insertRule(row) != 1 || row.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reminder rule could not be created");
@@ -69,8 +74,9 @@ public class AdminReminderService {
 
     @Transactional
     public AdminReminderResponse.Rule updateRule(Long actorId, Long ruleId, AdminReminderRuleRequest request) {
-        requireRule(ruleId);
+        requireUserManagedRule(ruleId);
         RuleWrite row = toWrite(ruleId, actorId, request);
+        requireNonSystemCode(row.getCode());
         requireUniqueCode(row.getCode(), ruleId);
         if (mapper.updateRule(row) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reminder rule was not updated");
@@ -81,7 +87,7 @@ public class AdminReminderService {
 
     @Transactional
     public void setEnabled(Long actorId, Long ruleId, boolean enabled) {
-        RuleRow rule = requireRule(ruleId);
+        RuleRow rule = requireUserManagedRule(ruleId);
         if (mapper.setRuleEnabled(ruleId, enabled) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reminder rule state was not updated");
         }
@@ -91,7 +97,7 @@ public class AdminReminderService {
 
     @Transactional
     public void deleteRule(Long actorId, Long ruleId) {
-        RuleRow rule = requireRule(ruleId);
+        RuleRow rule = requireUserManagedRule(ruleId);
         if (mapper.deleteUnusedRule(ruleId) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Rules with notification history cannot be deleted; disable the rule instead");
@@ -101,7 +107,7 @@ public class AdminReminderService {
 
     @Transactional
     public int runRule(Long actorId, Long ruleId) {
-        RuleRow rule = requireRule(ruleId);
+        RuleRow rule = requireUserManagedRule(ruleId);
         int created = generateRule(rule);
         mapper.insertRuleAudit(actorId, "run_reminder_rule", ruleId, rule.getCode(), rule.getName());
         return created;
@@ -109,7 +115,7 @@ public class AdminReminderService {
 
     @Transactional
     public int runEnabledRules(Long actorId) {
-        int created = runEnabledRulesInternal();
+        int created = runEnabledRulesInternal(false);
         if (actorId != null) {
             mapper.insertRuleAudit(actorId, "run_all_reminder_rules", 0L, "ALL", "全部啟用規則");
         }
@@ -117,10 +123,11 @@ public class AdminReminderService {
     }
 
     @Scheduled(cron = "${ccps.reminders.cron:0 0 * * * *}")
+    @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void runScheduledRules() {
         try {
-            int created = runEnabledRulesInternal();
+            int created = runEnabledRulesInternal(true);
             if (created > 0) log.info("Automatic reminders created {} notifications", created);
         } catch (RuntimeException exception) {
             log.error("Automatic reminder schedule failed", exception);
@@ -131,22 +138,36 @@ public class AdminReminderService {
     public void retryDelivery(Long deliveryId) {
         String channel = mapper.findDeliveryChannel(deliveryId);
         if (channel == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification delivery not found");
-        if (!"email".equals(channel)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only email deliveries can currently be retried");
+        if ("email".equals(channel)) {
+            if (mapper.isEmailDeliveryReady(deliveryId) == 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "The recipient must enable and verify email notifications before retrying");
+            }
+            if (mapper.retryEmailDelivery(deliveryId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Only failed email deliveries can be retried");
+            }
+            return;
         }
-        if (mapper.isEmailDeliveryReady(deliveryId) == 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "The recipient must enable and verify email notifications before retrying");
+        if ("whatsapp".equals(channel)) {
+            int retried = mapper.retryWhatsAppDelivery(deliveryId);
+            if (retried == 0) retried = mapper.retryLeaseExpiryWhatsAppDelivery(deliveryId);
+            if (retried != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Only failed or unknown WhatsApp deliveries can be retried");
+            }
+            return;
         }
-        if (mapper.retryEmailDelivery(deliveryId) != 1) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only failed email deliveries can be retried");
-        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "This delivery channel cannot be retried");
     }
 
-    private int runEnabledRulesInternal() {
+    private int runEnabledRulesInternal(boolean includeSystemManagedRules) {
         int created = 0;
         for (RuleRow rule : mapper.findRules()) {
-            if (Boolean.TRUE.equals(rule.getEnabled())) created += generateRule(rule);
+            if (isSystemManaged(rule)) {
+                if (includeSystemManagedRules) created += generateRule(rule);
+            } else if (Boolean.TRUE.equals(rule.getEnabled())) {
+                created += generateRule(rule);
+            }
         }
         return created;
     }
@@ -188,6 +209,18 @@ public class AdminReminderService {
                     : mapper.insertEmailDelivery(notificationId, event.getRecipientUserId());
             if (inserted == 0) mapper.insertUnavailableEmailDelivery(notificationId, event.getRecipientEmail());
         }
+        if (channels.contains("whatsapp")) {
+            int inserted = 0;
+            if (Boolean.TRUE.equals(event.getWhatsappEnabled())) {
+                if (event.getTenantId() != null) {
+                    inserted = mapper.insertWhatsAppDelivery(notificationId, event.getTenantId());
+                } else if (event.getWhatsappDestination() != null && !event.getWhatsappDestination().isBlank()) {
+                    inserted = mapper.insertDirectWhatsAppDelivery(notificationId,
+                            event.getWhatsappDestination().trim());
+                }
+            }
+            if (inserted == 0) mapper.insertUnavailableWhatsAppDelivery(notificationId);
+        }
         if (channels.contains("line")) mapper.insertUnavailableLineDelivery(notificationId);
     }
 
@@ -201,8 +234,9 @@ public class AdminReminderService {
                             text(event.getLabel(), "房款期數"), money(event.getAmount()), date(event.getDueDate())),
                     overdue ? "urgent" : "high");
             case "rent_due" -> new Message(overdue ? "租金逾期提醒" : "租金即將到期",
-                    "%s 的 %s 租金尚有 RM %s 未收，到期日 %s。".formatted(property,
-                            text(event.getLabel(), "本期"), money(event.getAmount()), date(event.getDueDate())),
+                    "%s 的 %s 租金尚有 RM %s 未缴，到期日 %s%s。".formatted(property,
+                            text(event.getLabel(), "本期"), money(event.getAmount()), date(event.getDueDate()),
+                            overdue ? "，已逾期 " + ChronoUnit.DAYS.between(event.getDueDate(), today) + " 天" : ""),
                     overdue ? "urgent" : "high");
             case "lease_expiry" -> new Message(overdue ? "租約已到期" : "租約即將到期",
                     "%s 的租約 %s 將於 %s%s。".formatted(property, text(event.getLabel(), "—"),
@@ -226,14 +260,20 @@ public class AdminReminderService {
         RuleWrite row = new RuleWrite();
         row.setId(id); row.setCreatedBy(actorId); row.setCode(request.code().trim().toUpperCase(Locale.ROOT));
         row.setName(request.name().trim()); row.setEventType(request.eventType()); row.setDaysBefore(request.daysBefore());
-        row.setChannelsJson(writeChannels(channels)); row.setRecipientRole(request.recipientRole()); row.setEnabled(request.enabled());
+        row.setChannelsJson(writeChannels(channels));
+        row.setRecipientRole(switch (request.eventType()) {
+            case "rent_due" -> "tenant";
+            case "lease_expiry" -> "business";
+            default -> "owner";
+        });
+        row.setEnabled(request.enabled());
         return row;
     }
 
     private AdminReminderResponse.Rule toRule(RuleRow row) {
         return new AdminReminderResponse.Rule(row.getId(), row.getCode(), row.getName(), row.getEventType(),
                 value(row.getDaysBefore()), parseChannels(row.getChannelsJson()), row.getRecipientRole(),
-                Boolean.TRUE.equals(row.getEnabled()), row.getCreatedAt(), row.getUpdatedAt());
+                Boolean.TRUE.equals(row.getEnabled()), isSystemManaged(row), row.getCreatedAt(), row.getUpdatedAt());
     }
 
     private AdminReminderResponse.NotificationItem toNotification(NotificationRow row) {
@@ -253,6 +293,26 @@ public class AdminReminderService {
         RuleRow rule = mapper.findRule(ruleId);
         if (rule == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Reminder rule not found");
         return rule;
+    }
+
+    private RuleRow requireUserManagedRule(Long ruleId) {
+        RuleRow rule = requireRule(ruleId);
+        if (isSystemManaged(rule)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "System automatic rules cannot be edited, disabled, deleted, or run manually");
+        }
+        return rule;
+    }
+
+    private void requireNonSystemCode(String code) {
+        if (LEASE_EXPIRY_BUSINESS_RULE.equalsIgnoreCase(code)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This rule code is reserved for a system automatic rule");
+        }
+    }
+
+    private boolean isSystemManaged(RuleRow rule) {
+        return rule != null && LEASE_EXPIRY_BUSINESS_RULE.equalsIgnoreCase(rule.getCode());
     }
 
     private void requireUniqueCode(String code, Long excludeId) {

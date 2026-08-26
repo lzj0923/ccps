@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ccps.backend.dto.AdminPropertyOperationsSnapshotResponse;
 import com.ccps.backend.dto.AdminPropertyOperationsChargeRequest;
 import com.ccps.backend.dto.AdminPropertyOperationsWorkOrderRequest;
+import com.ccps.backend.dto.AdminPropertySharedChargeRequest;
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.service.AdminPropertyOperationsService;
 
@@ -29,16 +30,18 @@ public class AdminPropertyOperationsController {
 
     @GetMapping
     public AdminPropertyOperationsSnapshotResponse snapshot(@PathVariable Long ownerId,
-            @PathVariable Long ownerUnitId, @RequestParam LocalDate month) {
-        return service.snapshot(ownerId, ownerUnitId, month);
+            @PathVariable Long ownerUnitId, @RequestParam LocalDate month,
+            @RequestParam(required = false) Long leaseId) {
+        return service.snapshot(ownerId, ownerUnitId, month, leaseId);
     }
 
     @PostMapping("/charges")
     public AdminPropertyOperationsSnapshotResponse addCharge(@PathVariable Long ownerId,
             @PathVariable Long ownerUnitId, @RequestParam LocalDate month,
+            @RequestParam(required = false) Long leaseId,
             @Valid @org.springframework.web.bind.annotation.RequestBody AdminPropertyOperationsChargeRequest body,
             HttpServletRequest request) {
-        return service.addCharge(AuthInterceptor.userId(request), ownerId, ownerUnitId, month, body);
+        return service.addCharge(AuthInterceptor.userId(request), ownerId, ownerUnitId, month, leaseId, body);
     }
 
     @PostMapping("/work-orders")
@@ -47,5 +50,14 @@ public class AdminPropertyOperationsController {
             @Valid @org.springframework.web.bind.annotation.RequestBody AdminPropertyOperationsWorkOrderRequest body,
             HttpServletRequest request) {
         return service.createWorkOrder(AuthInterceptor.userId(request), ownerId, ownerUnitId, body, month);
+    }
+
+    @PostMapping("/shared-charges")
+    public AdminPropertyOperationsSnapshotResponse addSharedCharge(@PathVariable Long ownerId,
+            @PathVariable Long ownerUnitId, @RequestParam LocalDate month,
+            @RequestParam(required = false) Long leaseId,
+            @Valid @org.springframework.web.bind.annotation.RequestBody AdminPropertySharedChargeRequest body,
+            HttpServletRequest request) {
+        return service.addSharedCharge(AuthInterceptor.userId(request), ownerId, ownerUnitId, month, leaseId, body);
     }
 }

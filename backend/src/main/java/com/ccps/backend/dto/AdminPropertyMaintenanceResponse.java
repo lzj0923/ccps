@@ -18,5 +18,6 @@ public record AdminPropertyMaintenanceResponse(
         BigDecimal actualAmount,
         Long cashflowEntryId,
         int attachmentCount,
-        LocalDateTime updatedAt) {
+        LocalDateTime updatedAt,
+        boolean editable) {
 }

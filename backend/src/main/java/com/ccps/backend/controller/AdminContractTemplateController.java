@@ -1,16 +1,15 @@
 package com.ccps.backend.controller;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.List;
 
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +24,7 @@ import com.ccps.backend.service.AdminPropertyHandoverChecklistService;
 import com.ccps.backend.service.ContractTemplatePdfService;
 import com.ccps.backend.service.TenancyAgreementPdfService;
 import com.ccps.backend.service.RentalManagementTemplatePdfService;
+import com.ccps.backend.web.DownloadContentDisposition;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -63,9 +63,9 @@ public class AdminContractTemplateController {
                         org.springframework.http.HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
             }
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(pdf.length)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                            .filename(rentalManagementTemplateService.fileName(rentalManagementType, request.fields()), StandardCharsets.UTF_8)
-                            .build().toString()).body(pdf);
+                    .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.attachment(
+                            rentalManagementTemplateService.fileName(rentalManagementType, request.fields())))
+                    .body(pdf);
         }
         if ("tenancy-agreement".equalsIgnoreCase(templateType.trim())) {
             List<TenancyAgreementPdfService.PropertyPhotoAsset> photos = List.of();
@@ -85,16 +85,21 @@ public class AdminContractTemplateController {
             byte[] pdf = tenancyAgreementPdfService.generate(request.fields(), photos, inventory);
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
                     .contentLength(pdf.length)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                            .filename(tenancyAgreementPdfService.fileName(request.fields()), StandardCharsets.UTF_8)
-                            .build().toString()).body(pdf);
+                    .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.attachment(
+                            tenancyAgreementPdfService.fileName(request.fields())))
+                    .body(pdf);
         }
         ContractTemplatePdfService.TemplateType type = parseType(templateType);
+        try {
+            service.validateRequiredFields(type, request.fields());
+        } catch (IllegalArgumentException exception) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
         byte[] pdf = service.generate(type, service.data(request.fields()));
         String fileName = generatedFileName(type, request.fields());
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(pdf.length)
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename(fileName, StandardCharsets.UTF_8).build().toString()).body(pdf);
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.attachment(fileName)).body(pdf);
     }
 
     @GetMapping("/{templateType}/version")
@@ -110,6 +115,36 @@ public class AdminContractTemplateController {
             HttpServletRequest servletRequest) {
         AuthInterceptor.userId(servletRequest);
         return rentalManagementTemplateService.replace(requireRentalManagementType(templateType), file);
+    }
+
+    @GetMapping(value = "/{templateType}/template", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> currentTemplate(@PathVariable("templateType") String templateType) {
+        RentalManagementTemplatePdfService.TemplateType type = requireRentalManagementType(templateType);
+        byte[] pdf = rentalManagementTemplateService.currentTemplate(type);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(pdf.length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.inline(
+                        rentalManagementTemplateService.currentVersion(type).originalName()))
+                .body(pdf);
+    }
+
+    @GetMapping("/{templateType}/layout")
+    public RentalManagementTemplatePdfService.TemplateLayout currentLayout(
+            @PathVariable("templateType") String templateType) {
+        return rentalManagementTemplateService.currentLayout(requireRentalManagementType(templateType));
+    }
+
+    @PutMapping("/{templateType}/layout")
+    public RentalManagementTemplatePdfService.TemplateLayout saveLayout(
+            @PathVariable("templateType") String templateType,
+            @RequestBody RentalManagementTemplatePdfService.TemplateLayout layout,
+            HttpServletRequest servletRequest) {
+        AuthInterceptor.userId(servletRequest);
+        try {
+            return rentalManagementTemplateService.saveLayout(requireRentalManagementType(templateType), layout);
+        } catch (IllegalArgumentException exception) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
     }
 
     private ContractTemplatePdfService.TemplateType parseType(String value) {
@@ -132,6 +167,10 @@ public class AdminContractTemplateController {
                     RentalManagementTemplatePdfService.TemplateType.PROPERTY_MANAGEMENT_AGREEMENT;
             case "management-authorization", "authorization-to-manage" ->
                     RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION;
+            case "termination-letter", "termination_notice", "termination-letter-with-landlord" ->
+                    RentalManagementTemplatePdfService.TemplateType.TERMINATION_LETTER;
+            case "rental-remittance", "remittance-of-rental", "rental-remittance-letter" ->
+                    RentalManagementTemplatePdfService.TemplateType.RENTAL_REMITTANCE;
             default -> null;
         };
     }

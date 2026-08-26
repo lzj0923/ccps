@@ -78,7 +78,7 @@
       </footer>
     </div>
 
-    <div v-if="dialogOpen" class="dialog-backdrop" @click.self="closeDialog">
+    <div v-if="dialogOpen" class="dialog-backdrop" @pointerdown.self="closeDialog">
       <form class="project-dialog" @submit.prevent="save">
         <header><div><span class="eyebrow">{{ $t('projectManagement.formEyebrow') }}</span><h3>{{ editing ? $t('projectManagement.editTitle') : $t('projectManagement.createTitle') }}</h3><p>{{ $t('projectManagement.formHint') }}</p></div><button type="button" class="close-btn" @click="closeDialog">×</button></header>
         <div class="project-form">

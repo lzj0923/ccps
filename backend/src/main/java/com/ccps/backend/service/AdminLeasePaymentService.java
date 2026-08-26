@@ -33,9 +33,10 @@ public class AdminLeasePaymentService {
         validate(request);PaymentRow row=require(leaseId,paymentId);if("voided".equals(row.getPaymentStatus()))throw conflict("Rent payment is already voided");
         BigDecimal delta=request.amount().subtract(row.getAmount());
         if(delta.signum()!=0&&mapper.adjustInvoice(row.getInvoiceId(),delta)!=1)throw bad("Payment amount exceeds invoice balance");
+        if(delta.signum()!=0&&mapper.updateAllocatedAmount(paymentId,request.amount())!=1)throw conflict("Rent payment allocation changed; reload and try again");
         String payer=blank(request.payerName())==null?row.getPayerName():request.payerName().trim();String reference=blank(request.paymentReference());String note=blank(request.note());
-        if(mapper.updateFinance(row.getFinanceRecordId(),request.amount(),request.paymentDate(),request.paymentMethod(),actorId)!=1)throw conflict("Rent payment state changed; reload and try again");
-        mapper.updateReceipt(row.getFinanceRecordId(),payer,reference,note);mapper.updateCashflow(row.getFinanceRecordId(),request.paymentDate(),"租金收款 · "+row.getLeaseNo());
+        if(mapper.updateFinance(row.getFinanceRecordId(),request.amount(),request.receivedDate(),request.postingDate(),request.paymentMethod(),actorId)!=1)throw conflict("Rent payment state changed; reload and try again");
+        mapper.updateReceipt(row.getFinanceRecordId(),payer,reference,note);mapper.updateCashflow(row.getFinanceRecordId(),request.postingDate(),"租金收款 · "+row.getLeaseNo());
         mapper.audit(actorId,"update_rent_payment",row.getFinanceRecordId(),json(row.getAmount()),json(request.amount()));
         return mapper.list(leaseId).stream().filter(item->item.getPaymentId().equals(paymentId)).findFirst().map(this::response).orElseThrow(()->conflict("Unable to reload rent payment"));
     }
@@ -48,9 +49,9 @@ public class AdminLeasePaymentService {
         mapper.audit(actorId,"void_rent_payment",row.getFinanceRecordId(),json(row.getAmount()),"{\"status\":\"voided\"}");
     }
 
-    private void validate(AdminLeasePaymentUpdateRequest r){if(r==null)throw bad("Rent payment is required");if(!METHODS.contains(r.paymentMethod()))throw bad("Invalid rent payment method");if(r.paymentDate().isAfter(LocalDate.now(clock)))throw bad("Rent payment date cannot be in the future");if(!"cash".equals(r.paymentMethod())&&blank(r.paymentReference())==null)throw bad("Payment reference is required for non-cash rent collection");}
+    private void validate(AdminLeasePaymentUpdateRequest r){if(r==null)throw bad("Rent payment is required");if(!METHODS.contains(r.paymentMethod()))throw bad("Invalid rent payment method");if(r.receivedDate().isAfter(LocalDate.now(clock)))throw bad("Rent payment date cannot be in the future");}
     private PaymentRow require(Long leaseId,Long paymentId){PaymentRow row=mapper.lock(leaseId,paymentId);if(row==null)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Rent payment not found");return row;}
-    private AdminLeasePaymentResponse response(PaymentRow r){return new AdminLeasePaymentResponse(r.getPaymentId(),r.getFinanceRecordId(),r.getInvoiceId(),r.getLeaseId(),r.getLeaseNo(),r.getBillingMonth(),r.getTransactionNo(),r.getAmount(),r.getPaymentDate(),r.getPaymentMethod(),r.getPayerName(),r.getPaymentReference(),r.getNote(),r.getProofDocumentId(),r.getProofName(),r.getSyncStatus(),r.getCreatedAt());}
+    private AdminLeasePaymentResponse response(PaymentRow r){return new AdminLeasePaymentResponse(r.getPaymentId(),r.getFinanceRecordId(),r.getInvoiceId(),r.getLeaseId(),r.getLeaseNo(),r.getBillingMonth(),r.getTransactionNo(),r.getAmount(),r.getPaymentDate(),r.getReceivedDate(),r.getPostingDate(),r.getPaymentMethod(),r.getPayerName(),r.getPaymentReference(),r.getNote(),r.getProofDocumentId(),r.getProofName(),r.getSyncStatus(),r.getCreatedAt());}
     private String blank(String v){return v==null||v.isBlank()?null:v.trim();}private String json(BigDecimal amount){return "{\"amount\":"+amount.toPlainString()+"}";}
     private ResponseStatusException bad(String m){return new ResponseStatusException(HttpStatus.BAD_REQUEST,m);}private ResponseStatusException conflict(String m){return new ResponseStatusException(HttpStatus.CONFLICT,m);}
 }

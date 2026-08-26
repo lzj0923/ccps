@@ -83,7 +83,7 @@ class PortalAuthInterceptorTest {
         MockHttpServletResponse loginResponse = new MockHttpServletResponse();
         String role = "admin".equals(portal) ? "ADMIN" : "OWNER";
         sessions.create(portal, new LoginResponse(7L, portal, portal + "@example.com", portal,
-                "ACTIVE", role, List.of(role)), false, loginRequest, loginResponse);
+                "ACTIVE", role, List.of(role), List.of()), false, loginRequest, loginResponse);
 
         String cookieName = "admin".equals(portal)
                 ? PortalSessionService.ADMIN_COOKIE : PortalSessionService.OWNER_COOKIE;

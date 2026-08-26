@@ -1,29 +1,31 @@
 import { adminKpis } from '../data/dashboardData';
 import { moneyText, toNumber } from '../utils/dashboardFormatters';
+import { canAccessAdminModule, canManageAdminModule } from '../utils/adminPermissions';
 
 const ADMIN_NAV_GROUPS = [
   { id: 'assets', labelKey: 'navigation.assets', moduleIds: ['adminDashboard', 'adminProjects', 'adminOwners', 'adminProperties', 'adminData'] },
-  { id: 'rental', labelKey: 'navigation.rental', moduleIds: ['adminProcess', 'adminRentalSigning', 'adminDeposits', 'adminTenantDirectory', 'adminTenants', 'adminRentalMandates'] },
+  { id: 'rental', labelKey: 'navigation.rental', moduleIds: ['adminProcess', 'adminRentalSigning', 'adminDeposits', 'adminTenantDirectory', 'adminTenants', 'adminRentalMandates', 'adminOffMarketProperties'] },
   { id: 'finance', labelKey: 'navigation.finance', moduleIds: ['adminMaintenance', 'adminFinance', 'adminReserve'] },
   { id: 'operations', labelKey: 'navigation.operations', moduleIds: ['adminAlerts', 'adminReports'] },
-  { id: 'system', labelKey: 'navigation.system', moduleIds: ['adminAudit', 'adminSystemBackup'] }
+  { id: 'system', labelKey: 'navigation.system', moduleIds: ['adminAccounts', 'adminAudit', 'adminSystemBackup'] }
 ];
 
 export default {
   computed: {
     currentModule() { return this.modules.find(module => module.id === this.currentId); },
     ownerModules() { return this.modules.filter(module => module.shell === "owner-shell").sort((a, b) => Number(a.code) - Number(b.code)); },
-    adminPrimaryModules() { return this.modules.filter(module => module.shell === 'admin-shell' && module.id === 'adminSmartDashboard'); },
+    adminPrimaryModules() { return this.modules.filter(module => module.shell === 'admin-shell' && module.id === 'adminSmartDashboard' && canAccessAdminModule(this.currentUser, module.id)); },
     adminNavGroups() {
       const modulesById = new Map(this.modules.map(module => [module.id, module]));
       return ADMIN_NAV_GROUPS.map(group => ({
         ...group,
-        modules: group.moduleIds.map(id => modulesById.get(id)).filter(module => module?.shell === 'admin-shell')
+        modules: group.moduleIds.map(id => modulesById.get(id)).filter(module => module?.shell === 'admin-shell' && canAccessAdminModule(this.currentUser, module.id))
       })).filter(group => group.modules.length);
     },
     adminModules() {
       return [...this.adminPrimaryModules, ...this.adminNavGroups.flatMap(group => group.modules)];
     },
+    canManageCurrentAdminModule() { return this.currentModule?.shell !== 'admin-shell' || canManageAdminModule(this.currentUser, this.currentId); },
     currentHeaders() { return this.headers[this.currentId]; },
     currentRows() { return this.rows[this.currentId]; },
     currentReport() { return this.reportTabConfigs.find(tab => tab.key === this.activeReportKey) || this.reportTabConfigs[0]; },

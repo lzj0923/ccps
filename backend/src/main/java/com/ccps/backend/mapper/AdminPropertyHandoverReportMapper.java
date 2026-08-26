@@ -26,6 +26,10 @@ public interface AdminPropertyHandoverReportMapper {
     @Select("SELECT COUNT(*) FROM owner_units WHERE id=#{ownerUnitId} AND owner_id=#{ownerId} AND status='active'")
     int ownsProperty(@Param("ownerId") Long ownerId, @Param("ownerUnitId") Long ownerUnitId);
 
+    @Select("SELECT COUNT(*) FROM owner_units ou JOIN owners o ON o.id=ou.owner_id "
+            + "WHERE ou.id=#{ownerUnitId} AND o.user_id=#{userId} AND o.status='active' AND ou.status='active'")
+    int ownsPropertyForUser(@Param("userId") Long userId, @Param("ownerUnitId") Long ownerUnitId);
+
     @Select("SELECT p.name AS projectName,u.unit_no AS unitNo,o.full_name AS ownerName FROM owner_units ou "
             + "JOIN units u ON u.id=ou.unit_id JOIN projects p ON p.id=u.project_id JOIN owners o ON o.id=ou.owner_id "
             + "WHERE ou.id=#{ownerUnitId}")

@@ -11,6 +11,8 @@ import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.OwnerNotificationResponse;
 import com.ccps.backend.dto.OwnerNotificationResponse.Category;
@@ -83,6 +85,18 @@ public class OwnerNotificationService {
                 List.of(new Channel("in_app", "站內通知", "enabled", null, true),
                         new Channel("email", "郵件", emailStatus,
                                 emailSubscription == null ? null : emailSubscription.getDestination(), emailVerified)));
+    }
+
+    @Transactional(readOnly = true)
+    public List<NotificationItem> getPropertyNotifications(Long userId, Long ownerUnitId) {
+        UnitReference property = mapper.findOwnerUnit(userId, ownerUnitId);
+        if (property == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
+        }
+        return getNotifications(userId).notifications().stream()
+                .filter(item -> Objects.equals(property.getProjectName(), item.projectName())
+                        && Objects.equals(property.getUnitNo(), item.unitNo()))
+                .toList();
     }
 
     @Transactional

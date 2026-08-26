@@ -160,11 +160,8 @@ public class MaintenanceAttachmentService {
             String contentType = file == null ? null : file.getContentType();
             boolean supported = file != null && !file.isEmpty() && file.getSize() <= MAX_FILE_SIZE
                     && EXTENSIONS.containsKey(contentType);
-            if (!"invoice".equals(relationType) && "application/pdf".equals(contentType)) supported = false;
             if (!supported) {
-                String message = "invoice".equals(relationType)
-                        ? "Only JPG, PNG or PDF files up to 10MB are supported"
-                        : "Only JPG or PNG files up to 10MB are supported for maintenance photos";
+                String message = "Only JPG, PNG or PDF files up to 10MB are supported";
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
             }
         }

@@ -1,6 +1,7 @@
 package com.ccps.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.OwnerNotificationResponse;
 import com.ccps.backend.mapper.OwnerNotificationMapper;
@@ -59,6 +61,34 @@ class OwnerNotificationServiceTest {
         verify(mapper).markAllRead(42L);
     }
 
+    @Test
+    void returnsOnlyNotificationCenterItemsBelongingToSelectedProperty() {
+        NotificationRow selectedNotification = row(
+                11L, "租金已到账", "Central Suites B-0602 租金已完成确认。", "normal", "unread");
+        NotificationRow otherNotification = row(
+                12L, "维修进度更新", "Harbour View A-0101 维修已完成。", "high", "read");
+        OwnerNotificationMapper.UnitReference selectedProperty = unit("Central Suites", "Petaling Jaya", "B-0602");
+        OwnerNotificationMapper.UnitReference otherProperty = unit("Harbour View", "Johor Bahru", "A-0101");
+        when(mapper.findOwnerUnit(42L, 7L)).thenReturn(selectedProperty);
+        when(mapper.findNotifications(42L)).thenReturn(List.of(selectedNotification, otherNotification));
+        when(mapper.findOwnerUnits(42L)).thenReturn(List.of(selectedProperty, otherProperty));
+
+        List<OwnerNotificationResponse.NotificationItem> result = service.getPropertyNotifications(42L, 7L);
+
+        assertThat(result).extracting(OwnerNotificationResponse.NotificationItem::id).containsExactly(11L);
+        assertThat(result.get(0).projectName()).isEqualTo("Central Suites");
+        assertThat(result.get(0).unitNo()).isEqualTo("B-0602");
+    }
+
+    @Test
+    void rejectsPropertyThatDoesNotBelongToCurrentOwner() {
+        when(mapper.findOwnerUnit(42L, 99L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.getPropertyNotifications(42L, 99L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND");
+    }
+
     private NotificationRow row(Long id, String title, String body, String priority, String status) {
         NotificationRow row = new NotificationRow();
         row.setId(id);
@@ -68,5 +98,13 @@ class OwnerNotificationServiceTest {
         row.setStatus(status);
         row.setCreatedAt(LocalDateTime.now());
         return row;
+    }
+
+    private OwnerNotificationMapper.UnitReference unit(String projectName, String city, String unitNo) {
+        OwnerNotificationMapper.UnitReference unit = new OwnerNotificationMapper.UnitReference();
+        unit.setProjectName(projectName);
+        unit.setCity(city);
+        unit.setUnitNo(unitNo);
+        return unit;
     }
 }

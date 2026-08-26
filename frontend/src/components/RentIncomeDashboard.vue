@@ -59,11 +59,11 @@
                     </div>
                   </td>
                   <td>{{ row.tenant }}</td>
-                  <td>{{ row.dueDate }}</td>
+                  <td>{{ displayDate(row.dueDate) }}</td>
                   <td>{{ row.rent }}</td>
                   <td :class="Number(row.paid.replaceAll(',', '')) ? 'amount-paid' : 'amount-empty'">{{ row.paid }}</td>
                   <td>{{ row.unpaid }}</td>
-                  <td>{{ row.receivedDate }}</td>
+                  <td>{{ displayDate(row.receivedDate) }}</td>
                   <td><span class="rent-status" :class="statusClass(row.status)"><i></i>{{ row.status }}</span></td>
                   <td>
                     <span v-if="row.confirmed" class="rent-confirmed"><b>✓</b> {{ $t('legacy.t_224aedbad3be') }}</span>
@@ -124,6 +124,7 @@
 import pageBridge from '../pageBridge';
 import { confirmOwnerRentReceipt, fetchOwnerRentIncome } from '../services/propertyApi';
 import { downloadCsv } from '../utils/csvExporter';
+import { formatDate } from '../utils/dateFormat';
 
 const now = new Date();
 const defaultFilters = () => ({ projectId: '', month: now.getMonth() + 1, year: now.getFullYear(), status: '' });
@@ -281,6 +282,7 @@ export default {
         this.confirmingInvoiceId = null;
       }
     },
+    displayDate(value) { return formatDate(value, '-'); },
     money(value) {
       return Number(value || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },

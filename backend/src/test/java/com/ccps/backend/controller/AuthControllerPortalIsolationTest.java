@@ -57,7 +57,7 @@ class AuthControllerPortalIsolationTest {
 
     private LoginResponse user(Long id, String username, String role) {
         return new LoginResponse(id, username, username + "@example.com", username, "ACTIVE", role,
-                List.of(role));
+                List.of(role), List.of());
     }
 
     private Cookie cookie(MockHttpServletResponse response, String name) {

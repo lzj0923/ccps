@@ -18,6 +18,7 @@ import dashboardActions from './composables/dashboardActions';
 import { fetchSession, logout } from './services/propertyApi';
 import { navigate, resolveRoute } from './router';
 import { interceptRoute, userMode } from './routeInterceptors';
+import { canAccessAdminModule } from './utils/adminPermissions';
 
 export default {
   components: { OwnerSystem, AdminSystem, LoginPage, SignaturePage },
@@ -76,6 +77,10 @@ export default {
       const redirect = interceptRoute(route, this.currentUsers[portal]);
       if (redirect && redirect !== window.location.pathname) {
         navigate(redirect, { replace: true });
+        return;
+      }
+      if (portal === 'admin' && route.moduleId && !canAccessAdminModule(this.currentUsers.admin, route.moduleId)) {
+        navigate('/admin/smart-dashboard', { replace: true });
         return;
       }
       if (route.moduleId && route.moduleId !== this.currentId) this.currentId = route.moduleId;

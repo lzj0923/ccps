@@ -21,3 +21,13 @@ test('下載檔名包含報表範圍與資料期間', () => {
   assert.match(workspace, /run\.scopeName \|\| run\.projectName \|\| this\.\$t\('reports\.allScope'\)/, '檔名必須包含匯出範圍');
   assert.match(workspace, /run\.dateStart.*run\.dateEnd/, '檔名必須包含資料期間');
 });
+
+test('SQL Account 匯出結果不再列入可用報表', () => {
+  const mapper = read('../../backend/src/main/java/com/ccps/backend/mapper/AdminReportMapper.java');
+  const service = read('../../backend/src/main/java/com/ccps/backend/service/AdminReportService.java');
+
+  assert.doesNotMatch(mapper, /\('SYNC', 'SQL Account 匯出結果', 'sync'/, '預設報表不得再建立 SQL Account 報表');
+  assert.match(mapper, /UPDATE report_definitions SET enabled = 0 WHERE report_type = 'sync'/, '既有 SQL Account 報表定義必須停用');
+  assert.match(mapper, /FROM report_definitions WHERE enabled = 1 ORDER BY id/, '可用報表只可回傳啟用項目');
+  assert.match(service, /mapper\.ensureDefinitions\(\);\s*mapper\.disableSyncDefinition\(\);/, '載入報表前必須停用既有 SQL Account 定義');
+});

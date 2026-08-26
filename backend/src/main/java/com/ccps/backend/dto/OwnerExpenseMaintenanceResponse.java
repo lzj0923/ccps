@@ -33,6 +33,8 @@ public record OwnerExpenseMaintenanceResponse(
             Long unitId,
             Long projectId,
             String projectName,
+            String state,
+            String city,
             String unitNo,
             LocalDate occurredOn,
             String category,
@@ -45,7 +47,12 @@ public record OwnerExpenseMaintenanceResponse(
             LocalDate paymentDate,
             Long workOrderId,
             int attachmentCount,
-            boolean editable) {
+            boolean editable,
+            String payerName,
+            String bankName,
+            String paymentAccountNo,
+            String feeAccountKey,
+            String feeAccountNo) {
     }
 
     public record MaintenanceItem(
@@ -54,6 +61,8 @@ public record OwnerExpenseMaintenanceResponse(
             Long unitId,
             Long projectId,
             String projectName,
+            String state,
+            String city,
             String unitNo,
             Long vendorId,
             String category,
@@ -64,7 +73,16 @@ public record OwnerExpenseMaintenanceResponse(
             String status,
             BigDecimal estimatedAmount,
             BigDecimal amount,
+            Long cashflowEntryId,
+            String confirmationStatus,
+            String paymentStatus,
             BigDecimal reserveDeductedAmount,
-            int attachmentCount) {
+            int attachmentCount,
+            boolean editable,
+            String payerName,
+            String bankName,
+            String paymentAccountNo,
+            String feeAccountKey,
+            String feeAccountNo) {
     }
 }

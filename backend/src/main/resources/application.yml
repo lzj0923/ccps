@@ -36,6 +36,12 @@ ccps:
     mysql-command: ${MYSQL_COMMAND:mysql}
   reminders:
     cron: ${REMINDER_CRON:0 0 * * * *}
+  rent-collection:
+    cron: ${RENT_COLLECTION_CRON:0 5 * * * *}
+  financial-notifications:
+    cron: ${FINANCIAL_NOTIFICATION_CRON:0 15 * * * *}
+  reserve-target:
+    cron: ${RESERVE_TARGET_CRON:0 10 * * * *}
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:}}
     sender-name: ${MAIL_SENDER_NAME:CCPS 家慶佳業}
@@ -55,6 +61,25 @@ ccps:
     electronic-signatures: ${ELECTRONIC_SIGNATURE_STORAGE:uploads/electronic-signatures}
   signing:
     frontend-base: ${SIGNING_FRONTEND_BASE:http://localhost:5173}
+  whatsapp:
+    enabled: ${WHATSAPP_ENABLED:false}
+    graph-api-version: ${WHATSAPP_GRAPH_API_VERSION:v26.0}
+    phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+    access-token: ${WHATSAPP_ACCESS_TOKEN:}
+    default-country-code: ${WHATSAPP_DEFAULT_COUNTRY_CODE:60}
+    proxy-url: ${WHATSAPP_PROXY_URL:${HTTPS_PROXY:${HTTP_PROXY:}}}
+    delivery-initial-delay-ms: ${WHATSAPP_DELIVERY_INITIAL_DELAY_MS:15000}
+    delivery-delay-ms: ${WHATSAPP_DELIVERY_DELAY_MS:15000}
+    templates:
+      language: ${WHATSAPP_TEMPLATE_LANGUAGE:zh_CN}
+      first-reminder: ${WHATSAPP_TEMPLATE_FIRST_REMINDER:ccps_rent_collection_notice}
+      second-reminder: ${WHATSAPP_TEMPLATE_SECOND_REMINDER:ccps_rent_collection_notice}
+      final-reminder: ${WHATSAPP_TEMPLATE_FINAL_REMINDER:ccps_rent_collection_notice}
+      termination-notice: ${WHATSAPP_TEMPLATE_TERMINATION_NOTICE:ccps_rent_collection_notice}
+      lease-expiry-business: ${WHATSAPP_TEMPLATE_LEASE_EXPIRY_BUSINESS:ccps_lease_expiry_business_notice}
+    webhook:
+      verify-token: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:}
+      app-secret: ${META_APP_SECRET:}
 
 server:
   port: 8080

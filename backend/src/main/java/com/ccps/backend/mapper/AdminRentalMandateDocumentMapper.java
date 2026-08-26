@@ -21,11 +21,15 @@ public interface AdminRentalMandateDocumentMapper {
             JOIN document_links dl ON dl.document_id=d.id
             LEFT JOIN electronic_signature_requests signature_request
               ON signature_request.id=(
-                SELECT MAX(latest_request.id)
+                SELECT latest_request.id
                 FROM electronic_signature_requests latest_request
                 WHERE COALESCE(latest_request.root_document_id,latest_request.source_document_id)=d.id
                   AND latest_request.entity_type='rental_mandate'
                   AND latest_request.entity_id=#{mandateId}
+                  AND latest_request.status NOT IN ('superseded','cancelled')
+                ORDER BY CASE latest_request.status WHEN 'pending' THEN 0 WHEN 'signed' THEN 1 ELSE 2 END,
+                         latest_request.signing_order DESC,latest_request.id DESC
+                LIMIT 1
               )
             WHERE dl.entity_type='rental_mandate' AND dl.entity_id=#{mandateId}
               AND d.status NOT IN ('superseded','voided')
@@ -56,21 +60,9 @@ public interface AdminRentalMandateDocumentMapper {
             SET sr.status='cancelled', sr.updated_at=CURRENT_TIMESTAMP
             WHERE sr.entity_type='rental_mandate' AND sr.entity_id=#{mandateId}
               AND dl.entity_type='rental_mandate' AND dl.entity_id=#{mandateId}
-              AND dl.relation_type=#{relationType} AND sr.status='pending'
+              AND dl.relation_type=#{relationType} AND sr.status IN ('pending','sent','viewed')
             """)
     int cancelPendingSignaturesForRelation(@Param("mandateId") Long mandateId,
-            @Param("relationType") String relationType);
-    @Select("""
-            SELECT COUNT(*)
-            FROM electronic_signature_requests sr
-            JOIN document_links dl ON dl.document_id=COALESCE(sr.root_document_id,sr.source_document_id)
-            JOIN documents d ON d.id=dl.document_id
-            WHERE sr.entity_type='rental_mandate' AND sr.entity_id=#{mandateId}
-              AND dl.entity_type='rental_mandate' AND dl.entity_id=#{mandateId}
-              AND dl.relation_type=#{relationType} AND d.status NOT IN ('superseded','voided')
-              AND sr.status IN ('pending','sent','viewed','signed')
-            """)
-    int countStartedSignaturesForRelation(@Param("mandateId") Long mandateId,
             @Param("relationType") String relationType);
     @Select("SELECT d.original_name,d.storage_key,d.mime_type,d.file_size,d.document_type FROM documents d JOIN document_links dl ON dl.document_id=d.id WHERE d.id=#{documentId} AND dl.entity_type='rental_mandate' AND dl.entity_id=#{mandateId}") AttachmentFile findFile(@Param("mandateId") Long mandateId,@Param("documentId") Long documentId);
     class NewDocument { private Long id,uploadedBy,fileSize; private String documentNo,originalName,storageKey,mimeType,checksumSha256,documentType; public Long getId(){return id;} public void setId(Long v){id=v;} public Long getUploadedBy(){return uploadedBy;} public void setUploadedBy(Long v){uploadedBy=v;} public Long getFileSize(){return fileSize;} public void setFileSize(Long v){fileSize=v;} public String getDocumentNo(){return documentNo;} public void setDocumentNo(String v){documentNo=v;} public String getOriginalName(){return originalName;} public void setOriginalName(String v){originalName=v;} public String getStorageKey(){return storageKey;} public void setStorageKey(String v){storageKey=v;} public String getMimeType(){return mimeType;} public void setMimeType(String v){mimeType=v;} public String getChecksumSha256(){return checksumSha256;} public void setChecksumSha256(String v){checksumSha256=v;} public String getDocumentType(){return documentType;} public void setDocumentType(String v){documentType=v;} }

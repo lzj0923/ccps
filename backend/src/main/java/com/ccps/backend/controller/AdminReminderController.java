@@ -15,6 +15,9 @@ import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminReminderResponse;
 import com.ccps.backend.dto.AdminReminderRuleRequest;
 import com.ccps.backend.dto.AdminReminderRunResponse;
+import com.ccps.backend.dto.AdminRentCollectionHoldRequest;
+import com.ccps.backend.dto.AdminRentCollectionWorkflowResponse;
+import com.ccps.backend.service.AdminRentCollectionWorkflowService;
 import com.ccps.backend.service.AdminReminderService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,9 +27,12 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/admin/reminders")
 public class AdminReminderController {
     private final AdminReminderService service;
+    private final AdminRentCollectionWorkflowService rentCollectionService;
 
-    public AdminReminderController(AdminReminderService service) {
+    public AdminReminderController(AdminReminderService service,
+                                   AdminRentCollectionWorkflowService rentCollectionService) {
         this.service = service;
+        this.rentCollectionService = rentCollectionService;
     }
 
     @GetMapping
@@ -74,5 +80,29 @@ public class AdminReminderController {
     public ResponseEntity<Void> retryDelivery(@PathVariable Long deliveryId) {
         service.retryDelivery(deliveryId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/rent-collection")
+    public AdminRentCollectionWorkflowResponse rentCollectionOverview() {
+        return rentCollectionService.overview();
+    }
+
+    @PostMapping("/rent-collection/{invoiceId}/stages/{stage}/send")
+    public AdminRentCollectionWorkflowResponse.Item sendRentCollectionStage(
+            @PathVariable Long invoiceId, @PathVariable String stage, HttpServletRequest request) {
+        return rentCollectionService.sendStage(AuthInterceptor.userId(request), invoiceId, stage);
+    }
+
+    @PutMapping("/rent-collection/{invoiceId}/hold")
+    public AdminRentCollectionWorkflowResponse.Item holdRentCollection(
+            @PathVariable Long invoiceId, @Valid @RequestBody AdminRentCollectionHoldRequest body,
+            HttpServletRequest request) {
+        return rentCollectionService.hold(AuthInterceptor.userId(request), invoiceId, body.reason());
+    }
+
+    @DeleteMapping("/rent-collection/{invoiceId}/hold")
+    public AdminRentCollectionWorkflowResponse.Item resumeRentCollection(
+            @PathVariable Long invoiceId, HttpServletRequest request) {
+        return rentCollectionService.resume(AuthInterceptor.userId(request), invoiceId);
     }
 }

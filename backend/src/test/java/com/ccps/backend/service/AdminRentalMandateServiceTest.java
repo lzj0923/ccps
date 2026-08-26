@@ -53,8 +53,7 @@ class AdminRentalMandateServiceTest {
                 LocalDate.of(2026, 8, 1), LocalDate.of(2027, 7, 31),
                 new BigDecimal("188.00"), BigDecimal.ZERO, null));
 
-        verify(propertyExpensePostingService).syncMandateFee(eq(21L), eq(31L),
-                eq(new BigDecimal("188.00")), eq(7L), any(LocalDate.class));
+        verify(propertyExpensePostingService).syncMandateFee(eq(31L), eq(7L), any(LocalDate.class));
     }
 
     @Test

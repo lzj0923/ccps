@@ -28,7 +28,9 @@ public interface OwnerExpenseMaintenanceMapper {
             FROM cashflow_entries ce
             JOIN finance_records fr ON fr.id = ce.finance_record_id
             JOIN units u ON u.id = ce.unit_id
+            JOIN projects p ON p.id = u.project_id
             WHERE fr.payment_status <> 'voided'
+              AND fr.confirmation_status = 'confirmed'
               AND (#{projectId} IS NULL OR u.project_id = #{projectId})
               AND EXISTS (
                 SELECT 1 FROM owner_units ou JOIN owners o ON o.id = ou.owner_id
@@ -47,8 +49,10 @@ public interface OwnerExpenseMaintenanceMapper {
               FROM cashflow_entries ce
               JOIN finance_records fr ON fr.id = ce.finance_record_id
               JOIN units u ON u.id = ce.unit_id
+              JOIN projects p ON p.id = u.project_id
               WHERE ce.direction = 'expense'
                 AND fr.payment_status <> 'voided'
+                AND fr.confirmation_status = 'confirmed'
                 AND ce.occurred_on >= #{startDate}
                 AND ce.occurred_on < #{endDate}
                 AND (#{projectId} IS NULL OR u.project_id = #{projectId})
@@ -69,6 +73,7 @@ public interface OwnerExpenseMaintenanceMapper {
             LEFT JOIN cashflow_entries ce ON ce.finance_record_id = fr.id
             LEFT JOIN maintenance_work_orders mwo ON mwo.id = rt.maintenance_work_order_id
             JOIN units u ON u.id = COALESCE(ce.unit_id, mwo.unit_id)
+            JOIN projects p ON p.id = u.project_id
             WHERE rt.transaction_type = 'debit'
               AND rt.occurred_at >= #{startDate}
               AND rt.occurred_at < #{endDate}
@@ -110,7 +115,9 @@ public interface OwnerExpenseMaintenanceMapper {
     @Select("""
             SELECT DISTINCT ce.category
             FROM cashflow_entries ce
+            JOIN finance_records fr ON fr.id = ce.finance_record_id
             WHERE ce.direction = 'expense'
+              AND fr.confirmation_status = 'confirmed'
               AND EXISTS (
                 SELECT 1 FROM owner_units ou JOIN owners o ON o.id = ou.owner_id
                 WHERE ou.unit_id = ce.unit_id AND ou.status = 'active' AND ou.asset_stage = 'OPERATING'
@@ -137,6 +144,8 @@ public interface OwnerExpenseMaintenanceMapper {
               u.id AS unit_id,
               p.id AS project_id,
               p.name AS project_name,
+              p.state_name AS state,
+              p.city,
               u.unit_no,
               ce.occurred_on,
               ce.category,
@@ -152,12 +161,19 @@ public interface OwnerExpenseMaintenanceMapper {
               mwo.id AS work_order_id,
               COALESCE(attachment_count.total, 0) AS attachment_count,
               CASE WHEN mwo.id IS NULL AND fr.payment_status &lt;&gt; 'voided'
-                     AND fr.sync_status &lt;&gt; 'exported' THEN TRUE ELSE FALSE END AS editable
+                     AND fr.sync_status &lt;&gt; 'exported'
+                     AND fr.confirmation_status &lt;&gt; 'confirmed' THEN TRUE ELSE FALSE END AS editable,
+              COALESCE(pr.payer_name, mwo.payer_name) AS payer_name,
+              COALESCE(CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0 THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', 1) ELSE NULLIF(pr.bank_reference, '') END, mwo.bank_name) AS bank_name,
+              COALESCE(CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0 THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', -1) ELSE NULL END, mwo.payment_account_no) AS payment_account_no,
+              COALESCE(pr.fee_account_type, mwo.fee_account_type) AS fee_account_key,
+              COALESCE(pr.fee_account_no, mwo.fee_account_no) AS fee_account_no
             FROM cashflow_entries ce
             JOIN finance_records fr ON fr.id = ce.finance_record_id
             JOIN units u ON u.id = ce.unit_id
             JOIN projects p ON p.id = u.project_id
             LEFT JOIN maintenance_work_orders mwo ON mwo.cashflow_entry_id = ce.id
+            LEFT JOIN payment_receipts pr ON pr.finance_record_id = fr.id
             LEFT JOIN (
               SELECT dl.entity_id AS work_order_id, COUNT(*) AS total
               FROM document_links dl JOIN documents d ON d.id = dl.document_id
@@ -166,6 +182,7 @@ public interface OwnerExpenseMaintenanceMapper {
             ) attachment_count ON attachment_count.work_order_id = mwo.id
             WHERE ce.direction = 'expense'
               AND fr.payment_status &lt;&gt; 'voided'
+              AND (#{userId} IS NULL OR fr.confirmation_status = 'confirmed')
               AND ce.occurred_on &gt;= #{startDate}
               AND ce.occurred_on &lt; #{endDate}
               AND EXISTS (
@@ -175,48 +192,6 @@ public interface OwnerExpenseMaintenanceMapper {
               )
             <if test="projectId != null">AND p.id = #{projectId}</if>
             <if test="category != null and category != ''">AND ce.category = #{category}</if>
-            UNION ALL
-            SELECT
-              (1000000000000 + mwo.id) AS id,
-              fr.id AS finance_record_id,
-              u.id AS unit_id,
-              p.id AS project_id,
-              p.name AS project_name,
-              u.unit_no,
-              DATE(mwo.requested_at) AS occurred_on,
-              mwo.category,
-              mwo.title AS description,
-              COALESCE(mwo.actual_amount, mwo.estimated_amount, 0) AS amount,
-              COALESCE((SELECT SUM(rt.amount) FROM reserve_transactions rt
-                WHERE rt.transaction_type = 'debit' AND rt.maintenance_work_order_id = mwo.id), 0) AS reserve_deducted_amount,
-              COALESCE(fr.payment_status, 'unpaid') AS payment_status,
-              fr.confirmation_status,
-              fr.payment_method,
-              fr.transaction_date AS payment_date,
-              mwo.id AS work_order_id,
-              COALESCE(attachment_count.total, 0) AS attachment_count,
-              FALSE AS editable
-            FROM maintenance_work_orders mwo
-            JOIN units u ON u.id = mwo.unit_id
-            JOIN projects p ON p.id = u.project_id
-            LEFT JOIN cashflow_entries ce ON ce.id = mwo.cashflow_entry_id
-            LEFT JOIN finance_records fr ON fr.id = ce.finance_record_id
-            LEFT JOIN (
-              SELECT dl.entity_id AS work_order_id, COUNT(*) AS total
-              FROM document_links dl JOIN documents d ON d.id = dl.document_id
-              WHERE dl.entity_type = 'work_order' AND d.document_type = 'maintenance_attachment'
-              GROUP BY dl.entity_id
-            ) attachment_count ON attachment_count.work_order_id = mwo.id
-            WHERE mwo.cashflow_entry_id IS NULL AND mwo.status &lt;&gt; 'cancelled'
-              AND DATE(mwo.requested_at) &gt;= #{startDate}
-              AND DATE(mwo.requested_at) &lt; #{endDate}
-              AND EXISTS (
-                SELECT 1 FROM owner_units ou JOIN owners o ON o.id = ou.owner_id
-                WHERE ou.unit_id = mwo.unit_id AND ou.status = 'active' AND ou.asset_stage = 'OPERATING'
-                  AND o.status = 'active' AND (#{userId} IS NULL OR o.user_id = #{userId})
-              )
-            <if test="projectId != null">AND p.id = #{projectId}</if>
-            <if test="category != null and category != ''">AND mwo.category = #{category}</if>
             ORDER BY occurred_on DESC, id DESC
             </script>
             """)
@@ -232,6 +207,8 @@ public interface OwnerExpenseMaintenanceMapper {
               u.id AS unit_id,
               p.id AS project_id,
               p.name AS project_name,
+              p.state_name AS state,
+              p.city,
               u.unit_no,
               mwo.vendor_id,
               mwo.category,
@@ -242,15 +219,29 @@ public interface OwnerExpenseMaintenanceMapper {
               mwo.status,
               mwo.estimated_amount,
               COALESCE(mwo.actual_amount, mwo.estimated_amount, 0) AS amount,
+              mwo.cashflow_entry_id,
+              fr.confirmation_status,
+              fr.payment_status,
               COALESCE((SELECT SUM(rt.amount) FROM reserve_transactions rt
                 WHERE rt.transaction_type = 'debit'
                   AND (rt.maintenance_work_order_id = mwo.id OR rt.finance_record_id = fr.id)), 0) AS reserve_deducted_amount,
-              COALESCE(attachment_count.total, 0) AS attachment_count
+              COALESCE(attachment_count.total, 0) AS attachment_count,
+              CASE WHEN fr.id IS NULL OR fr.confirmation_status = 'rejected'
+                         OR (COALESCE(fr.confirmation_status, 'pending') &lt;&gt; 'confirmed'
+                             AND COALESCE(fr.payment_status, 'unpaid') &lt;&gt; 'voided'
+                             AND COALESCE(fr.sync_status, 'not_synced') &lt;&gt; 'exported')
+                   THEN TRUE ELSE FALSE END AS editable,
+              COALESCE(pr.payer_name, mwo.payer_name) AS payer_name,
+              COALESCE(CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0 THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', 1) ELSE NULLIF(pr.bank_reference, '') END, mwo.bank_name) AS bank_name,
+              COALESCE(CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0 THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', -1) ELSE NULL END, mwo.payment_account_no) AS payment_account_no,
+              COALESCE(pr.fee_account_type, mwo.fee_account_type) AS fee_account_key,
+              COALESCE(pr.fee_account_no, mwo.fee_account_no) AS fee_account_no
             FROM maintenance_work_orders mwo
             JOIN units u ON u.id = mwo.unit_id
             JOIN projects p ON p.id = u.project_id
             LEFT JOIN cashflow_entries ce ON ce.id = mwo.cashflow_entry_id
             LEFT JOIN finance_records fr ON fr.id = ce.finance_record_id
+            LEFT JOIN payment_receipts pr ON pr.finance_record_id = fr.id
             LEFT JOIN (
               SELECT dl.entity_id AS work_order_id, COUNT(*) AS total
               FROM document_links dl JOIN documents d ON d.id = dl.document_id
@@ -285,13 +276,17 @@ public interface OwnerExpenseMaintenanceMapper {
                 WHERE rt.transaction_type = 'debit'
                   AND (rt.maintenance_work_order_id = mwo.id OR rt.finance_record_id = fr.id)), 0) AS reserve_deducted_amount,
               fr.payment_status, fr.confirmation_status, fr.payment_method,
-              fr.transaction_date AS payment_date
+              fr.transaction_date AS payment_date,
+              COALESCE(pr.payer_name, mwo.payer_name) AS payer_name,
+              COALESCE(CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0 THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', 1) ELSE NULLIF(pr.bank_reference, '') END, mwo.bank_name) AS bank_name,
+              COALESCE(CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0 THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', -1) ELSE NULL END, mwo.payment_account_no) AS payment_account_no
             FROM maintenance_work_orders mwo
             JOIN units u ON u.id = mwo.unit_id
             JOIN projects p ON p.id = u.project_id
             LEFT JOIN vendors v ON v.id = mwo.vendor_id
             LEFT JOIN cashflow_entries ce ON ce.id = mwo.cashflow_entry_id
             LEFT JOIN finance_records fr ON fr.id = ce.finance_record_id
+            LEFT JOIN payment_receipts pr ON pr.finance_record_id = fr.id
             WHERE mwo.id = #{workOrderId}
               AND EXISTS (
                 SELECT 1 FROM owner_units ou JOIN owners o ON o.id = ou.owner_id
@@ -435,6 +430,9 @@ public interface OwnerExpenseMaintenanceMapper {
         private String confirmationStatus;
         private String paymentMethod;
         private LocalDate paymentDate;
+        private String payerName;
+        private String bankName;
+        private String paymentAccountNo;
         public Long getId() { return id; } public void setId(Long id) { this.id = id; }
         public String getWorkOrderNo() { return workOrderNo; } public void setWorkOrderNo(String value) { this.workOrderNo = value; }
         public String getProjectName() { return projectName; } public void setProjectName(String value) { this.projectName = value; }
@@ -453,6 +451,9 @@ public interface OwnerExpenseMaintenanceMapper {
         public String getConfirmationStatus() { return confirmationStatus; } public void setConfirmationStatus(String value) { this.confirmationStatus = value; }
         public String getPaymentMethod() { return paymentMethod; } public void setPaymentMethod(String value) { this.paymentMethod = value; }
         public LocalDate getPaymentDate() { return paymentDate; } public void setPaymentDate(LocalDate value) { this.paymentDate = value; }
+        public String getPayerName() { return payerName; } public void setPayerName(String value) { this.payerName = value; }
+        public String getBankName() { return bankName; } public void setBankName(String value) { this.bankName = value; }
+        public String getPaymentAccountNo() { return paymentAccountNo; } public void setPaymentAccountNo(String value) { this.paymentAccountNo = value; }
     }
 
     class WorkOrderAccess {

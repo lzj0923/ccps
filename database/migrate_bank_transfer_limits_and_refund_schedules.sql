@@ -1,0 +1,36 @@
+ALTER TABLE property_bank_accounts
+  ADD COLUMN transfer_limit DECIMAL(18,2) NULL COMMENT 'NULL or 0 means no daily transfer limit' AFTER swift_code,
+  ADD COLUMN is_overseas_bank TINYINT(1) NOT NULL DEFAULT 0 AFTER transfer_limit,
+  ADD COLUMN overseas_transfer_fee DECIMAL(18,2) NOT NULL DEFAULT 0 AFTER is_overseas_bank,
+  ADD CONSTRAINT chk_property_bank_transfer_limit CHECK (transfer_limit IS NULL OR transfer_limit >= 0),
+  ADD CONSTRAINT chk_property_bank_transfer_fee CHECK (overseas_transfer_fee >= 0);
+
+CREATE TABLE reserve_refund_transfers (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_reference VARCHAR(80) NOT NULL,
+  reserve_account_id BIGINT UNSIGNED NOT NULL,
+  bank_account_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NOT NULL,
+  fee_finance_record_id BIGINT UNSIGNED NULL,
+  installment_no SMALLINT UNSIGNED NOT NULL,
+  installment_count SMALLINT UNSIGNED NOT NULL,
+  scheduled_date DATE NOT NULL,
+  principal_amount DECIMAL(18,2) NOT NULL,
+  fee_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_reserve_refund_transfer_finance (finance_record_id),
+  KEY idx_reserve_refund_transfer_batch (batch_reference, installment_no),
+  KEY idx_reserve_refund_transfer_schedule (scheduled_date, status),
+  CONSTRAINT fk_reserve_refund_transfer_account FOREIGN KEY (reserve_account_id) REFERENCES reserve_accounts (id),
+  CONSTRAINT fk_reserve_refund_transfer_bank FOREIGN KEY (bank_account_id) REFERENCES property_bank_accounts (id),
+  CONSTRAINT fk_reserve_refund_transfer_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT fk_reserve_refund_transfer_fee FOREIGN KEY (fee_finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT fk_reserve_refund_transfer_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_reserve_refund_transfer_amount CHECK (principal_amount > 0),
+  CONSTRAINT chk_reserve_refund_transfer_fee CHECK (fee_amount >= 0),
+  CONSTRAINT chk_reserve_refund_transfer_status CHECK (status IN ('pending','completed','failed','cancelled'))
+);

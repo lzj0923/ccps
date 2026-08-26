@@ -253,13 +253,14 @@ BEGIN
   DECLARE v_unit_id BIGINT UNSIGNED;
   DECLARE v_owner_id BIGINT UNSIGNED;
   DECLARE v_amount DECIMAL(18,2);
+  DECLARE v_payment_method VARCHAR(30);
   DECLARE v_reserve_id BIGINT UNSIGNED;
   DECLARE v_balance DECIMAL(18,2);
   DECLARE v_after DECIMAL(18,2);
 
   DECLARE expense_cursor CURSOR FOR
-    SELECT ce.id, ce.finance_record_id, ce.unit_id, ce.owner_id, fr.amount
-     FROM cashflow_entries ce
+    SELECT ce.id, ce.finance_record_id, ce.unit_id, ce.owner_id, fr.amount, fr.payment_method
+      FROM cashflow_entries ce
       JOIN finance_records fr ON fr.id = ce.finance_record_id
      WHERE ce.direction = 'expense'
        AND fr.payment_status = 'paid'
@@ -274,7 +275,7 @@ BEGIN
 
   OPEN expense_cursor;
   expense_loop: LOOP
-    FETCH expense_cursor INTO v_cashflow_id, v_finance_id, v_unit_id, v_owner_id, v_amount;
+    FETCH expense_cursor INTO v_cashflow_id, v_finance_id, v_unit_id, v_owner_id, v_amount, v_payment_method;
     IF done THEN
       LEAVE expense_loop;
     END IF;
@@ -291,7 +292,12 @@ BEGIN
        AND ra.status = 'active'
      ORDER BY ra.id
      LIMIT 1;
-    IF v_reserve_id IS NOT NULL AND v_balance >= v_amount THEN
+    -- Explicit reserve-funded expenses must still be deducted when the account
+    -- is insufficient.  The negative balance is the owner's replenishment due.
+    -- For older records without an explicit reserve payment method, keep the
+    -- conservative auto-allocation rule and only use an available balance.
+    IF v_reserve_id IS NOT NULL
+       AND (v_payment_method = 'reserve_account' OR v_balance >= v_amount) THEN
       SET v_after = v_balance - v_amount;
       UPDATE cashflow_entries
          SET reserve_account_id = v_reserve_id,

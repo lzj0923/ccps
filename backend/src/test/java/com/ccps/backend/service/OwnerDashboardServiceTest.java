@@ -39,6 +39,7 @@ class OwnerDashboardServiceTest {
         Property second = property(2L, "125000.50");
         Property operating = property(3L, "0");
         operating.setAssetStage("OPERATING");
+        operating.setTenantDepositAmount(new BigDecimal("13750.00"));
         operating.setPendingMaintenanceCount(3);
 
         when(mapper.findPropertiesByUserId(userId)).thenReturn(List.of(first, second, operating));
@@ -54,6 +55,7 @@ class OwnerDashboardServiceTest {
         assertThat(result.summary().propertyCount()).isEqualTo(3);
         assertThat(result.summary().monthlyRentIncome()).isEqualByComparingTo("8450.00");
         assertThat(result.summary().unpaidPropertyAmount()).isEqualByComparingTo("475000.50");
+        assertThat(result.summary().tenantDepositAmount()).isEqualByComparingTo("13750.00");
         assertThat(result.summary().reserveBalance()).isEqualByComparingTo("12860.50");
         assertThat(result.summary().pendingMaintenanceCount()).isEqualTo(3);
         assertThat(result.pendingItems()).extracting(OwnerDashboardResponse.PendingItem::count)

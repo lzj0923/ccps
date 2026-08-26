@@ -19,7 +19,8 @@ class AdminPropertyOperationsMapperSqlTest {
         String invoiceSql = selectSql("findInvoice");
         String workOrderSql = selectSql("findWorkOrders");
 
-        assertThat(leaseSql).contains("l.status = 'active'", "ou.owner_id = #{ownerId}", "ou.id = #{ownerUnitId}");
+        assertThat(leaseSql).contains("l.status = 'active'", "ou.owner_id = #{ownerId}", "ou.id = #{ownerUnitId}",
+                "rs.space_name AS rental_space_name").doesNotContain("rs.name AS rental_space_name");
         assertThat(invoiceSql).contains("lease_id = #{leaseId}", "billing_month = #{billingMonth}");
         assertThat(workOrderSql).contains("mwo.lease_id = #{leaseId}");
     }
@@ -27,8 +28,18 @@ class AdminPropertyOperationsMapperSqlTest {
     @Test
     void operationsWriteScriptsParseAsMyBatisSql() throws Exception {
         assertScriptParses("insertCharge", Insert.class);
+        assertScriptParses("insertChargeFinanceReview", Insert.class);
         assertScriptParses("increaseInvoiceAmount", Update.class);
         assertScriptParses("insertWorkOrder", Insert.class);
+    }
+
+    @Test
+    void tenantChargeCreationLinksAPendingFinanceRecordInsteadOfPostingReceivable() throws Exception {
+        String financeSql = String.join(" ", method("insertChargeFinanceReview").getAnnotation(Insert.class).value());
+        String chargeSql = String.join(" ", method("insertCharge").getAnnotation(Insert.class).value());
+
+        assertThat(financeSql).contains("'tenant_charge'", "'pending'");
+        assertThat(chargeSql).contains("finance_record_id", "#{financeRecordId}");
     }
 
     private String selectSql(String methodName) throws Exception {

@@ -15,21 +15,32 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface AdminReportMapper {
     @Insert("""
-            INSERT IGNORE INTO report_definitions
+            INSERT INTO report_definitions
               (report_code, name, report_type, default_format, default_filters, enabled)
             VALUES
-              ('PROPERTY_PAYMENT', '房款收款與未收款', 'property_payment', 'XLSX', JSON_OBJECT(), 1),
+              ('PROPERTY_PAYMENT', '購房款收款與未收款', 'property_payment', 'XLSX', JSON_OBJECT(), 1),
               ('RENT_COLLECTION', '租金收款進度', 'rent_collection', 'XLSX', JSON_OBJECT(), 1),
               ('INCOME_EXPENSE', '收入與支出明細', 'income_expense', 'XLSX', JSON_OBJECT(), 1),
               ('MAINTENANCE', '維修費用統計', 'maintenance', 'PDF', JSON_OBJECT(), 1),
               ('RESERVE', '預備金餘額及流水', 'reserve', 'XLSX', JSON_OBJECT(), 1),
               ('RESERVE_REFUND', '業主預備金返還清單', 'reserve_refund', 'XLSX', JSON_OBJECT(), 1),
               ('FINANCE', '財務確認記錄', 'finance', 'XLSX', JSON_OBJECT(), 1),
-              ('SYNC', 'SQL Account 匯出結果', 'sync', 'PDF', JSON_OBJECT(), 1),
               ('OWNER_STATEMENT', '業主帳單', 'owner_statement', 'XLSX', JSON_OBJECT(), 1),
               ('TENANT_STATEMENT', '租客帳單', 'tenant_statement', 'PDF', JSON_OBJECT(), 1)
+            ON DUPLICATE KEY UPDATE name = VALUES(name)
             """)
     int ensureDefinitions();
+
+    @Update("UPDATE report_definitions SET enabled = 0 WHERE report_type = 'sync'")
+    int disableSyncDefinition();
+
+    @Update("""
+            UPDATE report_runs rr
+            JOIN report_definitions rd ON rd.id = rr.report_definition_id
+            SET rr.report_name = rd.name
+            WHERE rd.report_type = 'property_payment' AND rr.report_name <> rd.name
+            """)
+    int normalizePropertyPaymentRunNames();
 
     @Select("""
             SELECT (SELECT COUNT(*) FROM report_definitions WHERE enabled = 1) AS definition_count,
@@ -43,7 +54,7 @@ public interface AdminReportMapper {
     @Select("""
             SELECT id, report_code, name, report_type, default_format,
                    CAST(default_filters AS CHAR) AS default_filters, schedule_cron, enabled, updated_at
-            FROM report_definitions ORDER BY id
+            FROM report_definitions WHERE enabled = 1 ORDER BY id
             """)
     List<DefinitionRow> findDefinitions();
 
@@ -179,7 +190,9 @@ public interface AdminReportMapper {
             FROM finance_records fr LEFT JOIN units u ON u.id = fr.unit_id
             LEFT JOIN projects p ON p.id = u.project_id LEFT JOIN owners o ON o.id = fr.owner_id
             LEFT JOIN tenants t ON t.id = fr.tenant_id
-            WHERE fr.transaction_date BETWEEN #{start} AND #{end}
+            WHERE 1 = 1
+            <if test="start != null">AND fr.transaction_date &gt;= #{start}</if>
+            <if test="end != null">AND fr.transaction_date &lt;= #{end}</if>
             <if test="projectId != null">AND p.id = #{projectId}</if>
             <if test="ownerId != null">AND (fr.owner_id = #{ownerId} OR EXISTS (SELECT 1 FROM owner_units filter_ou WHERE filter_ou.unit_id=fr.unit_id AND filter_ou.owner_id=#{ownerId} AND filter_ou.status='active'))</if>
             <if test="unitId != null">AND fr.unit_id = #{unitId}</if>
@@ -198,14 +211,80 @@ public interface AdminReportMapper {
                                                @Param("ownerId") Long ownerId, @Param("unitId") Long unitId);
 
     @Select("""
-            SELECT ri.billing_month AS record_date, CONCAT('INV-', LPAD(ri.id, 6, '0')) AS reference_no,
+            <script>
+            SELECT property_payment_rows.*
+            FROM (
+              SELECT pi.due_date AS record_date,
+                     CONCAT(pc.contract_no, '-', LPAD(pi.installment_no, 2, '0')) AS reference_no,
+                     '房款分期' AS category, p.name AS project_name, u.unit_no,
+                     o.full_name AS party_name,
+                     CONCAT(COALESCE(NULLIF(pi.milestone, ''), CONCAT('第 ', pi.installment_no, ' 期')),
+                            ' · 到期日 ', DATE_FORMAT(pi.due_date, '%Y-%m-%d')) AS description,
+                     pi.amount_due AS amount,
+                     CASE WHEN pi.amount_paid &gt;= pi.amount_due THEN 'paid'
+                          WHEN pi.amount_paid &gt; 0 THEN 'partial'
+                          WHEN pi.due_date &lt; CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS status,
+                     CONCAT('已收 RM ', FORMAT(pi.amount_paid, 2),
+                            ' · 未收 RM ', FORMAT(GREATEST(pi.amount_due - pi.amount_paid, 0), 2)) AS extra_status
+              FROM payment_installments pi
+              JOIN payment_plans pp ON pp.id = pi.payment_plan_id
+              JOIN purchase_contracts pc ON pc.id = pp.purchase_contract_id
+              JOIN owner_units ou ON ou.id = pc.owner_unit_id
+              JOIN owners o ON o.id = ou.owner_id
+              JOIN units u ON u.id = ou.unit_id
+              JOIN projects p ON p.id = u.project_id
+              WHERE 1 = 1
+              <if test="start != null">AND pi.due_date &gt;= #{start}</if>
+              <if test="end != null">AND pi.due_date &lt;= #{end}</if>
+              <if test="projectId != null">AND p.id = #{projectId}</if>
+              <if test="ownerId != null">AND ou.owner_id = #{ownerId}</if>
+              <if test="unitId != null">AND ou.unit_id = #{unitId}</if>
+
+              UNION ALL
+
+              SELECT COALESCE(fallback_pc.signed_date, DATE(fallback_pc.created_at)) AS record_date,
+                     fallback_pc.contract_no AS reference_no,
+                     '房款合同' AS category, fallback_p.name AS project_name, fallback_u.unit_no,
+                     fallback_o.full_name AS party_name,
+                     '尚未建立房款分期计划' AS description,
+                     fallback_pc.purchase_price AS amount,
+                     'unpaid' AS status,
+                     CONCAT('已收 RM 0.00 · 未收 RM ', FORMAT(fallback_pc.purchase_price, 2)) AS extra_status
+              FROM purchase_contracts fallback_pc
+              JOIN owner_units fallback_ou ON fallback_ou.id = fallback_pc.owner_unit_id
+              JOIN owners fallback_o ON fallback_o.id = fallback_ou.owner_id
+              JOIN units fallback_u ON fallback_u.id = fallback_ou.unit_id
+              JOIN projects fallback_p ON fallback_p.id = fallback_u.project_id
+              WHERE fallback_pc.status &lt;&gt; 'cancelled'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM payment_plans missing_pp
+                  JOIN payment_installments missing_pi ON missing_pi.payment_plan_id = missing_pp.id
+                  WHERE missing_pp.purchase_contract_id = fallback_pc.id
+                )
+              <if test="start != null">AND COALESCE(fallback_pc.signed_date, DATE(fallback_pc.created_at)) &gt;= #{start}</if>
+              <if test="end != null">AND COALESCE(fallback_pc.signed_date, DATE(fallback_pc.created_at)) &lt;= #{end}</if>
+              <if test="projectId != null">AND fallback_p.id = #{projectId}</if>
+              <if test="ownerId != null">AND fallback_ou.owner_id = #{ownerId}</if>
+              <if test="unitId != null">AND fallback_ou.unit_id = #{unitId}</if>
+            ) property_payment_rows
+            ORDER BY property_payment_rows.record_date, property_payment_rows.reference_no
+            </script>
+            """)
+    List<ReportDataRow> findPropertyPaymentRows(@Param("start") LocalDate start, @Param("end") LocalDate end,
+                                                 @Param("projectId") Long projectId,
+                                                 @Param("ownerId") Long ownerId, @Param("unitId") Long unitId);
+
+    @Select("""
+            <script>
+            SELECT ri.billing_month AS record_date, CONCAT('RENT-', LPAD(ri.id, 6, '0')) AS reference_no,
                    '租金帳單' AS category, p.name AS project_name, u.unit_no,
                    t.full_name AS party_name,
                    CONCAT('租約 ', l.lease_no, ' · 到期日 ', DATE_FORMAT(ri.due_date, '%Y-%m-%d')) AS description,
                    ri.amount_due AS amount,
-                   CASE WHEN ri.amount_paid >= ri.amount_due THEN 'paid'
-                        WHEN ri.amount_paid > 0 THEN 'partial'
-                        WHEN ri.due_date < CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS status,
+                   CASE WHEN ri.amount_paid &gt;= ri.amount_due THEN 'paid'
+                        WHEN ri.amount_paid &gt; 0 THEN 'partial'
+                        WHEN ri.due_date &lt; CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS status,
                    CONCAT('已收 RM ', FORMAT(ri.amount_paid, 2),
                           ' · 未收 RM ', FORMAT(GREATEST(ri.amount_due - ri.amount_paid, 0), 2)) AS extra_status
             FROM rent_invoices ri
@@ -213,8 +292,44 @@ public interface AdminReportMapper {
             JOIN tenants t ON t.id = l.tenant_id
             JOIN units u ON u.id = l.unit_id
             JOIN projects p ON p.id = u.project_id
-            WHERE t.id = #{tenantId} AND ri.billing_month BETWEEN #{start} AND #{end}
+            WHERE 1 = 1
+            <if test="start != null">AND ri.billing_month &gt;= #{start}</if>
+            <if test="end != null">AND ri.billing_month &lt;= #{end}</if>
+            <if test="projectId != null">AND p.id = #{projectId}</if>
+            <if test="ownerId != null">AND EXISTS (
+              SELECT 1 FROM owner_units filter_ou
+              WHERE filter_ou.unit_id = l.unit_id AND filter_ou.owner_id = #{ownerId}
+            )</if>
+            <if test="unitId != null">AND l.unit_id = #{unitId}</if>
             ORDER BY ri.billing_month, ri.id
+            </script>
+            """)
+    List<ReportDataRow> findRentCollectionRows(@Param("start") LocalDate start, @Param("end") LocalDate end,
+                                                @Param("projectId") Long projectId,
+                                                @Param("ownerId") Long ownerId, @Param("unitId") Long unitId);
+
+    @Select("""
+            <script>
+            SELECT ri.billing_month AS record_date, CONCAT('INV-', LPAD(ri.id, 6, '0')) AS reference_no,
+                   '租金帳單' AS category, p.name AS project_name, u.unit_no,
+                   t.full_name AS party_name,
+                   CONCAT('租約 ', l.lease_no, ' · 到期日 ', DATE_FORMAT(ri.due_date, '%Y-%m-%d')) AS description,
+                   ri.amount_due AS amount,
+                   CASE WHEN ri.amount_paid &gt;= ri.amount_due THEN 'paid'
+                        WHEN ri.amount_paid &gt; 0 THEN 'partial'
+                        WHEN ri.due_date &lt; CURRENT_DATE THEN 'overdue' ELSE 'unpaid' END AS status,
+                   CONCAT('已收 RM ', FORMAT(ri.amount_paid, 2),
+                          ' · 未收 RM ', FORMAT(GREATEST(ri.amount_due - ri.amount_paid, 0), 2)) AS extra_status
+            FROM rent_invoices ri
+            JOIN leases l ON l.id = ri.lease_id
+            JOIN tenants t ON t.id = l.tenant_id
+            JOIN units u ON u.id = l.unit_id
+            JOIN projects p ON p.id = u.project_id
+            WHERE t.id = #{tenantId}
+            <if test="start != null">AND ri.billing_month &gt;= #{start}</if>
+            <if test="end != null">AND ri.billing_month &lt;= #{end}</if>
+            ORDER BY ri.billing_month, ri.id
+            </script>
             """)
     List<ReportDataRow> findTenantStatementRows(@Param("start") LocalDate start,
                                                  @Param("end") LocalDate end,
@@ -286,7 +401,26 @@ public interface AdminReportMapper {
                      ), ''),
                      NULLIF(pr.bank_reference,''),
                      ''
-                   ) AS bank_info
+                    ) AS bank_info,
+                    pr.payer_name AS payer_name,
+                    CASE ce.category
+                      WHEN 'electricity' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.electricity'))
+                      WHEN 'water' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.water'))
+                      WHEN 'sewerage' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.sewerage'))
+                      WHEN 'gas' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.gas'))
+                      WHEN 'withholding_tax' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.withholdingTax'))
+                      WHEN 'land_tax' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.landTax'))
+                      WHEN 'assessment_tax' THEN JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.assessmentTax'))
+                      WHEN 'utilities' THEN COALESCE(
+                        JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.water')),
+                        JSON_UNQUOTE(JSON_EXTRACT(pbp.profile_json, '$.paymentAccountNumbers.electricity')))
+                      ELSE property_bank.account_no
+                    END AS fee_account_no,
+                    property_bank.item_name AS bank_name,
+                    CASE WHEN INSTR(COALESCE(pr.bank_reference, ''), ' | ') > 0
+                         THEN SUBSTRING_INDEX(pr.bank_reference, ' | ', -1)
+                         ELSE NULLIF(pr.bank_reference, '') END AS payment_account_no,
+                    '' AS signature
             FROM finance_records fr
             LEFT JOIN cashflow_entries ce ON ce.finance_record_id=fr.id
             LEFT JOIN units u ON u.id=fr.unit_id
@@ -307,9 +441,11 @@ public interface AdminReportMapper {
                 AND (fr.owner_id IS NULL OR ou2.owner_id=fr.owner_id)
               ORDER BY ou2.is_primary DESC,ou2.id DESC LIMIT 1)
             LEFT JOIN property_bank_accounts property_bank ON property_bank.id=(
-              SELECT pba2.id FROM property_bank_accounts pba2 WHERE pba2.owner_unit_id=report_ou.id ORDER BY pba2.id DESC LIMIT 1)
+               SELECT pba2.id FROM property_bank_accounts pba2 WHERE pba2.owner_unit_id=report_ou.id ORDER BY pba2.id DESC LIMIT 1)
+            LEFT JOIN property_basic_profiles pbp ON pbp.owner_unit_id=report_ou.id
             WHERE fr.confirmation_status='confirmed'
-              AND fr.transaction_date BETWEEN #{start} AND #{end}
+            <if test="start != null">AND fr.transaction_date &gt;= #{start}</if>
+            <if test="end != null">AND fr.transaction_date &lt;= #{end}</if>
             <if test="projectId != null">AND p.id=#{projectId}</if>
             <if test="ownerId != null">AND (fr.owner_id=#{ownerId} OR EXISTS (SELECT 1 FROM owner_units filter_ou WHERE filter_ou.unit_id=fr.unit_id AND filter_ou.owner_id=#{ownerId} AND filter_ou.status='active'))</if>
             <if test="unitId != null">AND fr.unit_id=#{unitId}</if>
@@ -328,7 +464,9 @@ public interface AdminReportMapper {
                    m.status, CASE WHEN m.completed_at IS NULL THEN '未完成' ELSE '已完成' END AS extra_status
             FROM maintenance_work_orders m JOIN units u ON u.id = m.unit_id JOIN projects p ON p.id = u.project_id
             LEFT JOIN vendors v ON v.id = m.vendor_id
-            WHERE DATE(m.requested_at) BETWEEN #{start} AND #{end}
+            WHERE 1 = 1
+            <if test="start != null">AND DATE(m.requested_at) &gt;= #{start}</if>
+            <if test="end != null">AND DATE(m.requested_at) &lt;= #{end}</if>
             <if test="projectId != null">AND p.id = #{projectId}</if>
             <if test="ownerId != null">AND (m.owner_id=#{ownerId} OR EXISTS (SELECT 1 FROM owner_units filter_ou WHERE filter_ou.unit_id=m.unit_id AND filter_ou.owner_id=#{ownerId} AND filter_ou.status='active'))</if>
             <if test="unitId != null">AND m.unit_id=#{unitId}</if>
@@ -348,7 +486,9 @@ public interface AdminReportMapper {
             FROM reserve_transactions rt JOIN reserve_accounts ra ON ra.id = rt.reserve_account_id
             JOIN owner_units ou ON ou.id = ra.owner_unit_id JOIN owners o ON o.id = ou.owner_id
             JOIN units u ON u.id = ou.unit_id JOIN projects p ON p.id = u.project_id
-            WHERE DATE(rt.occurred_at) BETWEEN #{start} AND #{end}
+            WHERE 1 = 1
+            <if test="start != null">AND DATE(rt.occurred_at) &gt;= #{start}</if>
+            <if test="end != null">AND DATE(rt.occurred_at) &lt;= #{end}</if>
             <if test="projectId != null">AND p.id = #{projectId}</if>
             <if test="ownerId != null">AND ou.owner_id=#{ownerId}</if>
             <if test="unitId != null">AND ou.unit_id=#{unitId}</if>
@@ -360,14 +500,18 @@ public interface AdminReportMapper {
                                          @Param("ownerId") Long ownerId, @Param("unitId") Long unitId);
 
     @Select("""
+            <script>
             SELECT DATE(sb.created_at) AS record_date, sb.batch_no AS reference_no,
                    sb.source_module AS category, '—' AS project_name, '—' AS unit_no,
                    COALESCE(u.display_name, '系統') AS party_name, sb.trigger_mode AS description,
                    sb.total_count AS amount, sb.status,
                    CONCAT('成功 ', sb.success_count, ' / 失敗 ', sb.failure_count) AS extra_status
             FROM sync_batches sb LEFT JOIN users u ON u.id = sb.created_by
-            WHERE DATE(sb.created_at) BETWEEN #{start} AND #{end}
+            WHERE 1 = 1
+            <if test="start != null">AND DATE(sb.created_at) &gt;= #{start}</if>
+            <if test="end != null">AND DATE(sb.created_at) &lt;= #{end}</if>
             ORDER BY sb.created_at, sb.id
+            </script>
             """)
     List<ReportDataRow> findSyncRows(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
@@ -405,7 +549,7 @@ public interface AdminReportMapper {
     class UnitRow { private Long id,projectId; private String projectName,unitNo;
         public Long getId(){return id;} public void setId(Long v){id=v;} public Long getProjectId(){return projectId;} public void setProjectId(Long v){projectId=v;}
         public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} }
-    class ReportDataRow { private LocalDate recordDate,realDate,payDate,leaseStart,leaseEnd; private String referenceNo,category,projectName,unitNo,partyName,description,status,extraStatus,item,objectName,itemName,paymentName,paymentMethod,currency,note,bankInfo; private BigDecimal amount,income,expense,balance;
+    class ReportDataRow { private LocalDate recordDate,realDate,payDate,leaseStart,leaseEnd; private String referenceNo,category,projectName,unitNo,partyName,description,status,extraStatus,item,objectName,itemName,paymentName,paymentMethod,currency,note,bankInfo,payerName,feeAccountNo,bankName,paymentAccountNo,signature; private BigDecimal amount,income,expense,balance;
         public LocalDate getRecordDate(){return recordDate;} public void setRecordDate(LocalDate v){recordDate=v;} public String getReferenceNo(){return referenceNo;} public void setReferenceNo(String v){referenceNo=v;}
         public String getCategory(){return category;} public void setCategory(String v){category=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
         public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getPartyName(){return partyName;} public void setPartyName(String v){partyName=v;}
@@ -415,6 +559,9 @@ public interface AdminReportMapper {
         public String getItemName(){return itemName;} public void setItemName(String v){itemName=v;} public String getPaymentName(){return paymentName;} public void setPaymentName(String v){paymentName=v;}
         public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String v){paymentMethod=v;} public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;}
         public String getNote(){return note;} public void setNote(String v){note=v;} public String getBankInfo(){return bankInfo;} public void setBankInfo(String v){bankInfo=v;}
+        public String getPayerName(){return payerName;} public void setPayerName(String v){payerName=v;} public String getFeeAccountNo(){return feeAccountNo;} public void setFeeAccountNo(String v){feeAccountNo=v;}
+        public String getBankName(){return bankName;} public void setBankName(String v){bankName=v;} public String getPaymentAccountNo(){return paymentAccountNo;} public void setPaymentAccountNo(String v){paymentAccountNo=v;}
+        public String getSignature(){return signature;} public void setSignature(String v){signature=v;}
         public LocalDate getRealDate(){return realDate;} public void setRealDate(LocalDate v){realDate=v;} public LocalDate getPayDate(){return payDate;} public void setPayDate(LocalDate v){payDate=v;}
         public LocalDate getLeaseStart(){return leaseStart;} public void setLeaseStart(LocalDate v){leaseStart=v;} public LocalDate getLeaseEnd(){return leaseEnd;} public void setLeaseEnd(LocalDate v){leaseEnd=v;}
         public BigDecimal getIncome(){return income;} public void setIncome(BigDecimal v){income=v;} public BigDecimal getExpense(){return expense;} public void setExpense(BigDecimal v){expense=v;}

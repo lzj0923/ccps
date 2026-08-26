@@ -23,7 +23,20 @@ public interface OwnerReserveMapper {
 
     @Select("""
             SELECT
-              COALESCE(SUM(ra.current_balance), 0) AS total_balance,
+              COALESCE(SUM(ra.current_balance), 0) + COALESCE((SELECT SUM(rp.allocated_amount)
+                FROM rent_payments rp JOIN finance_records fr ON fr.id=rp.finance_record_id
+                JOIN owner_units rou ON rou.owner_id=fr.owner_id AND rou.unit_id=fr.unit_id
+                  AND rou.status='active' AND rou.asset_stage='OPERATING'
+                JOIN owners ro ON ro.id=rou.owner_id JOIN reserve_accounts rra ON rra.owner_unit_id=rou.id AND rra.status='active'
+                WHERE ro.user_id=#{userId} AND fr.record_type='rent_payment' AND fr.payment_status='paid'
+                  AND fr.confirmation_status='confirmed' AND fr.transaction_date<=CURRENT_DATE),0) AS total_balance,
+              COALESCE(SUM(ra.current_balance), 0) + COALESCE((SELECT SUM(fr.amount)
+                FROM rent_payments rp JOIN finance_records fr ON fr.id=rp.finance_record_id
+                JOIN owner_units rou ON rou.owner_id=fr.owner_id AND rou.unit_id=fr.unit_id
+                  AND rou.status='active' AND rou.asset_stage='OPERATING'
+                JOIN owners ro ON ro.id=rou.owner_id JOIN reserve_accounts rra ON rra.owner_unit_id=rou.id AND rra.status='active'
+                WHERE ro.user_id=#{userId} AND fr.record_type='rent_payment' AND fr.payment_status='paid'
+                  AND fr.confirmation_status='confirmed' AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE),0) AS accounting_balance,
               COALESCE(SUM(ra.minimum_balance), 0) AS minimum_balance,
               COUNT(*) AS account_count,
               COALESCE(SUM(CASE WHEN ra.current_balance < ra.minimum_balance THEN 1 ELSE 0 END), 0) AS low_balance_count,
@@ -55,9 +68,23 @@ public interface OwnerReserveMapper {
     SummaryRow findSummary(@Param("userId") Long userId);
 
     @Select("""
-            SELECT ra.id, ou.id AS owner_unit_id, p.id AS project_id, p.name AS project_name,
-                   u.unit_no, ra.minimum_balance, ra.current_balance,
-                   CASE WHEN ra.current_balance < ra.minimum_balance THEN 'low' ELSE 'sufficient' END AS balance_status,
+             SELECT ra.id, ou.id AS owner_unit_id, p.id AS project_id, p.name AS project_name,
+                    u.unit_no, ra.minimum_balance,
+                    ra.current_balance + COALESCE((SELECT SUM(rp.allocated_amount) FROM rent_payments rp
+                      JOIN finance_records fr ON fr.id=rp.finance_record_id
+                      WHERE fr.owner_id=o.id AND fr.unit_id=u.id AND fr.record_type='rent_payment'
+                        AND fr.payment_status='paid' AND fr.confirmation_status='confirmed'
+                        AND fr.transaction_date<=CURRENT_DATE),0) AS current_balance,
+                    ra.current_balance + COALESCE((SELECT SUM(fr.amount) FROM rent_payments rp
+                      JOIN finance_records fr ON fr.id=rp.finance_record_id
+                      WHERE fr.owner_id=o.id AND fr.unit_id=u.id AND fr.record_type='rent_payment'
+                        AND fr.payment_status='paid' AND fr.confirmation_status='confirmed'
+                        AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE),0) AS accounting_balance,
+                    CASE WHEN ra.current_balance + COALESCE((SELECT SUM(rp.allocated_amount) FROM rent_payments rp
+                      JOIN finance_records fr ON fr.id=rp.finance_record_id
+                      WHERE fr.owner_id=o.id AND fr.unit_id=u.id AND fr.record_type='rent_payment'
+                        AND fr.payment_status='paid' AND fr.confirmation_status='confirmed'
+                        AND fr.transaction_date<=CURRENT_DATE),0) < ra.minimum_balance THEN 'low' ELSE 'sufficient' END AS balance_status,
                    ra.low_balance_alert_enabled
             FROM reserve_accounts ra
             JOIN owner_units ou ON ou.id = ra.owner_unit_id AND ou.status = 'active' AND ou.asset_stage = 'OPERATING'
@@ -311,11 +338,12 @@ public interface OwnerReserveMapper {
     int updateTopupDocuments(@Param("financeRecordId") Long financeRecordId, @Param("status") String status);
 
     class SummaryRow {
-        private BigDecimal totalBalance; private BigDecimal minimumBalance;
+        private BigDecimal totalBalance; private BigDecimal accountingBalance; private BigDecimal minimumBalance;
         private BigDecimal totalTopups; private Integer topupCount;
         private BigDecimal totalDebits; private Integer debitCount;
         private Integer lowBalanceCount; private Integer accountCount;
         public BigDecimal getTotalBalance() { return totalBalance; } public void setTotalBalance(BigDecimal v) { totalBalance = v; }
+        public BigDecimal getAccountingBalance() { return accountingBalance; } public void setAccountingBalance(BigDecimal v) { accountingBalance = v; }
         public BigDecimal getMinimumBalance() { return minimumBalance; } public void setMinimumBalance(BigDecimal v) { minimumBalance = v; }
         public BigDecimal getTotalTopups() { return totalTopups; } public void setTotalTopups(BigDecimal v) { totalTopups = v; }
         public Integer getTopupCount() { return topupCount; } public void setTopupCount(Integer v) { topupCount = v; }

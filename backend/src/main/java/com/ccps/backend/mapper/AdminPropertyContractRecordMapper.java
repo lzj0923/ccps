@@ -35,26 +35,42 @@ public interface AdminPropertyContractRecordMapper {
                    t.full_name AS tenantName, l.start_date AS leaseStart, l.end_date AS leaseEnd,
                    l.monthly_rent AS monthlyRent, l.status AS leaseStatus, 'L_LEASE' AS contractType,
                    l.lease_no AS contractNo,
-                   CASE WHEN EXISTS (SELECT 1 FROM electronic_signature_requests esr
-                                     WHERE esr.source_document_id=l.contract_document_id
-                                       AND esr.entity_type='lease' AND esr.entity_id=l.id
-                                       AND esr.status='signed'
-                                       AND EXISTS (SELECT 1 FROM documents signed_doc WHERE signed_doc.id=esr.signed_document_id AND signed_doc.status NOT IN ('voided','superseded'))) THEN l.start_date ELSE NULL END AS signedDate,
+                   CASE WHEN final_sr.id IS NOT NULL THEN DATE(final_sr.signed_at) ELSE NULL END AS signedDate,
                    l.start_date AS validFrom,
                    l.end_date AS validTo,
-                   CASE WHEN EXISTS (SELECT 1 FROM electronic_signature_requests esr
-                                     WHERE esr.source_document_id=l.contract_document_id
-                                       AND esr.entity_type='lease' AND esr.entity_id=l.id
-                                       AND esr.status='signed'
-                                       AND EXISTS (SELECT 1 FROM documents signed_doc WHERE signed_doc.id=esr.signed_document_id AND signed_doc.status NOT IN ('voided','superseded'))) THEN 'completed'
+                   CASE WHEN final_sr.id IS NOT NULL THEN 'completed'
                         ELSE 'pending' END AS status,
-                   NULL AS notes, d.original_name AS originalName, d.storage_key AS storageKey,
-                   d.mime_type AS mimeType, d.file_size AS fileSize,
-                   l.created_at AS createdAt, l.updated_at AS updatedAt
+                   NULL AS notes,
+                   COALESCE(signed.original_name,d.original_name) AS originalName,
+                   COALESCE(signed.storage_key,d.storage_key) AS storageKey,
+                   COALESCE(signed.mime_type,d.mime_type) AS mimeType,
+                   COALESCE(signed.file_size,d.file_size) AS fileSize,
+                   COALESCE(final_sr.signed_at,l.created_at) AS createdAt,
+                   COALESCE(final_sr.signed_at,l.updated_at) AS updatedAt
             FROM owner_units ou
             JOIN leases l ON l.unit_id=ou.unit_id
             JOIN tenants t ON t.id=l.tenant_id
-            LEFT JOIN documents d ON d.id=l.contract_document_id AND d.document_type='lease'
+            JOIN documents d ON d.id=l.contract_document_id AND d.document_type='lease'
+            JOIN document_links dl ON dl.document_id=d.id AND dl.entity_type='lease'
+              AND dl.entity_id=l.id AND dl.relation_type='contract'
+            LEFT JOIN electronic_signature_requests final_sr ON final_sr.id = (
+                SELECT completed.id
+                FROM electronic_signature_requests completed
+                JOIN documents completed_doc ON completed_doc.id=completed.signed_document_id
+                WHERE COALESCE(completed.root_document_id,completed.source_document_id)=l.contract_document_id
+                  AND completed.entity_type='lease' AND completed.entity_id=l.id
+                  AND completed.status='signed'
+                  AND completed_doc.status NOT IN ('voided','superseded')
+                  AND (SELECT COUNT(DISTINCT package_signer.signer_role)
+                       FROM electronic_signature_requests package_signer
+                       WHERE COALESCE(package_signer.root_document_id,package_signer.source_document_id)=l.contract_document_id
+                         AND package_signer.entity_type='lease' AND package_signer.entity_id=l.id
+                         AND package_signer.status='signed') >= 2
+                ORDER BY completed.signed_at DESC,completed.id DESC
+                LIMIT 1
+            )
+            LEFT JOIN documents signed ON signed.id=final_sr.signed_document_id
+              AND signed.status NOT IN ('voided','superseded')
             WHERE ou.id=#{ownerUnitId}
             ORDER BY l.start_date DESC, l.id DESC
             """)
@@ -75,16 +91,19 @@ public interface AdminPropertyContractRecordMapper {
 
     @Select("""
             SELECT l.id AS leaseId, l.rental_mandate_id AS rentalMandateId, l.lease_no AS leaseNo, l.tenant_id AS tenantId, t.full_name AS tenantName,
+                   t.identity_no AS tenantIdentity, t.phone AS tenantPhone, t.email AS tenantEmail,
                    l.start_date AS startDate, l.end_date AS endDate, l.monthly_rent AS monthlyRent,
                    l.deposit_amount AS depositAmount, l.payment_day AS paymentDay, l.status,
+                   l.rental_space_id AS rentalSpaceId, rs.space_name AS rentalSpaceName, rs.space_type AS rentalSpaceType,
                    CASE WHEN l.contract_document_id IS NULL THEN FALSE ELSE TRUE END AS linked,
                    CASE WHEN l.contract_document_id IS NULL THEN 'not_generated'
-                        WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.source_document_id=l.contract_document_id AND sr.status='signed') THEN 'signed'
+                        WHEN (SELECT COUNT(DISTINCT sr.signer_role) FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND COALESCE(sr.root_document_id,sr.source_document_id)=l.contract_document_id AND sr.status='signed') >= 2 THEN 'signed'
                         WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.source_document_id=l.contract_document_id AND sr.status IN ('pending','sent','viewed')) THEN 'pending'
                         ELSE 'ready_to_sign' END AS signatureStatus
             FROM owner_units ou
             JOIN leases l ON l.unit_id=ou.unit_id
             JOIN tenants t ON t.id=l.tenant_id
+            LEFT JOIN rental_spaces rs ON rs.id=l.rental_space_id
             WHERE ou.id=#{ownerUnitId}
             ORDER BY l.start_date DESC, l.id DESC
             """)
@@ -194,7 +213,13 @@ public interface AdminPropertyContractRecordMapper {
         private Long rentalMandateId;
         private String leaseNo;
         private Long tenantId;
+        private Long rentalSpaceId;
         private String tenantName;
+        private String tenantIdentity;
+        private String tenantPhone;
+        private String tenantEmail;
+        private String rentalSpaceName;
+        private String rentalSpaceType;
         private LocalDate startDate;
         private LocalDate endDate;
         private BigDecimal monthlyRent;
@@ -208,6 +233,9 @@ public interface AdminPropertyContractRecordMapper {
         public String getLeaseNo() { return leaseNo; } public void setLeaseNo(String value) { leaseNo=value; }
         public Long getTenantId() { return tenantId; } public void setTenantId(Long value) { tenantId=value; }
         public String getTenantName() { return tenantName; } public void setTenantName(String value) { tenantName=value; }
+        public String getTenantIdentity() { return tenantIdentity; } public void setTenantIdentity(String value) { tenantIdentity=value; }
+        public String getTenantPhone() { return tenantPhone; } public void setTenantPhone(String value) { tenantPhone=value; }
+        public String getTenantEmail() { return tenantEmail; } public void setTenantEmail(String value) { tenantEmail=value; }
         public LocalDate getStartDate() { return startDate; } public void setStartDate(LocalDate value) { startDate=value; }
         public LocalDate getEndDate() { return endDate; } public void setEndDate(LocalDate value) { endDate=value; }
         public BigDecimal getMonthlyRent() { return monthlyRent; } public void setMonthlyRent(BigDecimal value) { monthlyRent=value; }
@@ -216,5 +244,8 @@ public interface AdminPropertyContractRecordMapper {
         public String getStatus() { return status; } public void setStatus(String value) { status=value; }
         public boolean isLinked() { return linked; } public void setLinked(boolean value) { linked=value; }
         public String getSignatureStatus() { return signatureStatus; } public void setSignatureStatus(String value) { signatureStatus=value; }
+        public Long getRentalSpaceId() { return rentalSpaceId; } public void setRentalSpaceId(Long value) { rentalSpaceId=value; }
+        public String getRentalSpaceName() { return rentalSpaceName; } public void setRentalSpaceName(String value) { rentalSpaceName=value; }
+        public String getRentalSpaceType() { return rentalSpaceType; } public void setRentalSpaceType(String value) { rentalSpaceType=value; }
     }
 }

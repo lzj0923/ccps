@@ -14,6 +14,7 @@ public record OwnerReserveResponse(
 
     public record Summary(
             BigDecimal totalBalance,
+            BigDecimal accountingBalance,
             BigDecimal minimumBalance,
             BigDecimal totalTopups,
             int topupCount,
@@ -30,6 +31,7 @@ public record OwnerReserveResponse(
             String unitNo,
             BigDecimal minimumBalance,
             BigDecimal currentBalance,
+            BigDecimal accountingBalance,
             String balanceStatus,
             boolean lowBalanceAlertEnabled) { }
 

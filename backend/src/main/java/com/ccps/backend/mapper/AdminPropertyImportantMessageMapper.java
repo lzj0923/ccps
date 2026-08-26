@@ -23,6 +23,10 @@ public interface AdminPropertyImportantMessageMapper {
     @Select("SELECT COUNT(*) FROM owner_units WHERE id=#{ownerUnitId} AND owner_id=#{ownerId} AND status='active'")
     int ownsProperty(@Param("ownerId") Long ownerId,@Param("ownerUnitId") Long ownerUnitId);
 
+    @Select("SELECT COUNT(*) FROM owner_units ou JOIN owners o ON o.id=ou.owner_id "
+            + "WHERE ou.id=#{ownerUnitId} AND o.user_id=#{userId} AND o.status='active' AND ou.status='active'")
+    int ownsPropertyForUser(@Param("userId") Long userId,@Param("ownerUnitId") Long ownerUnitId);
+
     @Select("SELECT "+COLUMNS+JOINS+"WHERE m.owner_unit_id=#{ownerUnitId} ORDER BY m.announcement_start_date DESC,m.id DESC")
     List<MessageRow> list(@Param("ownerUnitId") Long ownerUnitId);
 

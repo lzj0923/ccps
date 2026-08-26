@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -56,7 +57,8 @@ public class AdminReportService {
             "收支項目/Item", "物件名稱/ObjName", "物件項目/ItemName", "付款名稱/Name",
             "狀態/Status", "付款方式/Payment", "實際收付款日期/RealDate", "確認收付款日期/PayDate",
             "收入/Income", "支出/Expense", "餘額/Balance", "幣別/Currency", "租期(起)", "租期(迄)",
-            "備註/Note", "匯款銀行/Bank Info");
+            "備註/Note", "匯款銀行/Bank Info", "付款方/Payee", "費用帳戶號碼/Fee Account",
+            "銀行/Bank", "支付帳戶號碼/Payment Account", "簽字/Signature");
     private final AdminReportMapper mapper;
     private final ObjectMapper objectMapper;
     private final Path reportRoot;
@@ -70,6 +72,8 @@ public class AdminReportService {
     public AdminReportResponse overview(int requestedPage, int requestedPageSize, String keyword,
                                         String project, String status) {
         mapper.ensureDefinitions();
+        mapper.disableSyncDefinition();
+        mapper.normalizePropertyPaymentRunNames();
         SummaryRow summary = mapper.findSummary();
         int pageSize = Math.max(1, Math.min(requestedPageSize, 100));
         String normalizedKeyword = normalize(keyword);
@@ -116,7 +120,7 @@ public class AdminReportService {
     }
 
     public AdminReportResponse.Run generate(Long actorId, AdminReportGenerateRequest request) {
-        if (request.dateEnd().isBefore(request.dateStart())) {
+        if (request.dateStart() != null && request.dateEnd() != null && request.dateEnd().isBefore(request.dateStart())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Report end date cannot be before start date");
         }
         int scopeCount = (request.projectId() == null ? 0 : 1) + (request.ownerId() == null ? 0 : 1)
@@ -144,7 +148,7 @@ public class AdminReportService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Report run could not be created");
         }
         try {
-            List<ReportDataRow> rows = data(request);
+            List<ReportDataRow> rows = newestFirst(data(request));
             Path target = target(run.getId(), definition.getReportCode(), request.outputFormat());
             Files.createDirectories(target.getParent());
             if ("PDF".equals(request.outputFormat())) writePdf(target, definition.getName(), request, rows);
@@ -172,6 +176,10 @@ public class AdminReportService {
 
     private List<ReportDataRow> data(AdminReportGenerateRequest request) {
         return switch (request.reportType()) {
+            case "property_payment" -> mapper.findPropertyPaymentRows(request.dateStart(), request.dateEnd(),
+                    request.projectId(), request.ownerId(), request.unitId());
+            case "rent_collection" -> mapper.findRentCollectionRows(request.dateStart(), request.dateEnd(),
+                    request.projectId(), request.ownerId(), request.unitId());
             case "income_expense", "owner_statement" -> withRunningBalance(mapper.findIncomeExpenseRows(
                     request.dateStart(), request.dateEnd(), request.projectId(), request.ownerId(), request.unitId()));
             case "tenant_statement" -> mapper.findTenantStatementRows(
@@ -189,10 +197,16 @@ public class AdminReportService {
     private List<ReportDataRow> withRunningBalance(List<ReportDataRow> rows) {
         BigDecimal runningBalance = BigDecimal.ZERO;
         for (ReportDataRow row : rows) {
+            runningBalance = runningBalance.add(zero(row.getIncome())).subtract(zero(row.getExpense()));
             row.setBalance(runningBalance);
-            runningBalance = runningBalance.add(zero(row.getExpense())).subtract(zero(row.getIncome()));
         }
         return rows;
+    }
+
+    private List<ReportDataRow> newestFirst(List<ReportDataRow> rows) {
+        List<ReportDataRow> ordered = new ArrayList<>(rows);
+        Collections.reverse(ordered);
+        return ordered;
     }
 
     private void writeXlsx(Path target, String title, AdminReportGenerateRequest request,
@@ -204,7 +218,7 @@ public class AdminReportService {
                 CellStyle titleStyle = workbook.createCellStyle(); Font titleFont = workbook.createFont();
                 titleFont.setBold(true); titleFont.setFontHeightInPoints((short) 16); titleStyle.setFont(titleFont);
                 Row titleRow = sheet.createRow(0); Cell titleCell = titleRow.createCell(0); titleCell.setCellValue(title); titleCell.setCellStyle(titleStyle);
-                sheet.createRow(1).createCell(0).setCellValue(request.dateStart() + " ~ " + request.dateEnd());
+                sheet.createRow(1).createCell(0).setCellValue(periodText(request.dateStart(), request.dateEnd()));
             }
             CellStyle headerStyle = workbook.createCellStyle(); Font headerFont = workbook.createFont(); headerFont.setBold(true);
             headerFont.setColor(incomeExpense ? IndexedColors.BLACK.getIndex() : IndexedColors.WHITE.getIndex());
@@ -247,7 +261,7 @@ public class AdminReportService {
             com.lowagie.text.Font titleFont = new com.lowagie.text.Font(base, 16, com.lowagie.text.Font.BOLD);
             com.lowagie.text.Font bodyFont = new com.lowagie.text.Font(base, 8);
             Paragraph heading = new Paragraph(title, titleFont); heading.setAlignment(Element.ALIGN_CENTER); document.add(heading);
-            Paragraph period = new Paragraph(request.dateStart() + " ~ " + request.dateEnd() + "　記錄數：" + rows.size(), bodyFont);
+            Paragraph period = new Paragraph(periodText(request.dateStart(), request.dateEnd()) + "　記錄數：" + rows.size(), bodyFont);
             period.setAlignment(Element.ALIGN_CENTER); period.setSpacingAfter(12); document.add(period);
             List<String> headers = headers(request.reportType());
             PdfPTable table = new PdfPTable(headers.size()); table.setWidthPercentage(100);
@@ -267,7 +281,9 @@ public class AdminReportService {
                     dateText(row.getRealDate()), dateText(row.getPayDate()), zero(row.getIncome()).setScale(2).toPlainString(),
                     zero(row.getExpense()).setScale(2).toPlainString(), zero(row.getBalance()).setScale(2).toPlainString(),
                     text(row.getCurrency()), dateText(row.getLeaseStart()), dateText(row.getLeaseEnd()),
-                    text(row.getNote()), text(row.getBankInfo()));
+                    text(row.getNote()), text(row.getBankInfo()), text(row.getPayerName()),
+                    text(row.getFeeAccountNo()), text(row.getBankName()), text(row.getPaymentAccountNo()),
+                    text(row.getSignature()));
         }
         List<String> values = new ArrayList<>(); values.add(text(row.getRecordDate())); values.add(text(row.getReferenceNo()));
         values.add(text(row.getCategory())); values.add(text(row.getProjectName())); values.add(text(row.getUnitNo()));
@@ -280,12 +296,17 @@ public class AdminReportService {
     private Path target(Long runId, String code, String format) { String month = LocalDateTime.now().toLocalDate().toString().substring(0, 7); return reportRoot.resolve(month).resolve(runId + "-" + safe(code) + "." + format.toLowerCase(Locale.ROOT)).normalize(); }
     private String downloadName(RunRow run) {
         String scope = run.getScopeName() == null || run.getScopeName().isBlank() ? "全部範圍" : run.getScopeName();
-        String period = run.getDateStart() != null && run.getDateEnd() != null ? run.getDateStart() + "至" + run.getDateEnd()
-                : run.getDateStart() != null ? run.getDateStart().toString() : run.getDateEnd() != null ? run.getDateEnd().toString() : "未設定期間";
+        String period = periodText(run.getDateStart(), run.getDateEnd()).replace(" ~ ", "至");
         String format = run.getOutputFormat() == null ? "xlsx" : run.getOutputFormat().toLowerCase(Locale.ROOT);
         return filenamePart(run.getReportName()) + "_" + filenamePart(scope) + "_" + period + "." + format;
     }
     private String filenamePart(String value) { String name = value == null || value.isBlank() ? "報表" : value.trim(); return name.replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_"); }
+    private String periodText(LocalDate start, LocalDate end) {
+        if (start != null && end != null) return start + " ~ " + end;
+        if (start != null) return start + " 起";
+        if (end != null) return "截至 " + end;
+        return "全部時間";
+    }
     private String filters(AdminReportGenerateRequest request) { try { return objectMapper.writeValueAsString(request); } catch (JsonProcessingException e) { return "{}"; } }
     private String safe(String value) { return value == null ? "report" : value.replaceAll("[^A-Za-z0-9_\\-\\p{IsHan}]", "_"); }
     private String message(Exception e) {
@@ -294,7 +315,10 @@ public class AdminReportService {
         return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
     }
     private String text(Object value) { return value == null || String.valueOf(value).isBlank() ? "—" : String.valueOf(value); }
-    private String dateText(LocalDate value) { return value == null ? "" : value.getYear() + "/" + value.getMonthValue() + "/" + value.getDayOfMonth(); }
+    private String dateText(LocalDate value) {
+        return value == null ? "" : String.format(Locale.ROOT, "%02d/%02d/%04d",
+                value.getDayOfMonth(), value.getMonthValue(), value.getYear());
+    }
     private String displayStatus(String value) {
         if (value == null || value.isBlank()) return "—";
         return switch (value) {

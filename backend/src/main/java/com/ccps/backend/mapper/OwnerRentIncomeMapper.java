@@ -116,7 +116,7 @@ public interface OwnerRentIncomeMapper {
               CASE
                 WHEN rcs.amount_paid >= rcs.amount_due THEN 'paid'
                 WHEN rcs.amount_paid > 0 THEN 'partial'
-                WHEN CURRENT_DATE > GREATEST(rcs.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
+                WHEN CURRENT_DATE > rcs.due_date THEN 'overdue'
                 ELSE 'unpaid'
               END AS status,
               CASE
@@ -160,7 +160,7 @@ public interface OwnerRentIncomeMapper {
               AND (CASE
                 WHEN rcs.amount_paid >= rcs.amount_due THEN 'paid'
                 WHEN rcs.amount_paid > 0 THEN 'partial'
-                WHEN CURRENT_DATE > GREATEST(rcs.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
+                WHEN CURRENT_DATE > rcs.due_date THEN 'overdue'
                 ELSE 'unpaid'
               END) = #{status}
             </if>

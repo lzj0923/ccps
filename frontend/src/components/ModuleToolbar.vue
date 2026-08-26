@@ -1,12 +1,19 @@
 <template>
   <section class="toolbar" :class="{ 'owner-toolbar': currentModule.shell === 'owner-shell' }">
     <label class="search-box"><span class="search-mark">⌕</span><input v-model="moduleSearch" :placeholder="toolbarSearchHint"></label>
+    <select v-if="currentId === 'adminMaintenance'" v-model="page.adminMaintenanceDistrictFilter" class="maintenance-toolbar-district" aria-label="行政区筛选">
+      <option value="">全部行政区</option>
+      <option value="kuala_lumpur">吉隆坡</option>
+      <option value="johor">新山</option>
+      <option value="melaka">马六甲</option>
+      <option value="other">其他</option>
+    </select>
     <select v-model="projectFilter">
       <option value="全部建案">{{ $t('ui.allProjects') }}</option>
       <option v-for="(project, index) in projectOptions" :key="projectOptionKey(project, index)" :value="project">{{ optionLabel(project) }}</option>
     </select>
     <select v-if="showStatusFilter" v-model="statusFilter"><option v-for="status in statusOptions" :key="status" :value="status">{{ optionLabel(status) }}</option></select>
-    <button class="primary-btn" @click="triggerPrimaryAction">{{ toolbarPrimaryAction }}</button><button v-if="showBuildingPropertyAction" class="primary-btn muted" @click="triggerBuildingPropertyAction">{{ $t('building.addPreHandoverProperty') }}</button><button v-if="showSecondaryAction" class="primary-btn muted" @click="triggerSecondaryAction">{{ toolbarSecondaryAction }}</button><button v-if="showReserveRefundAction" class="primary-btn muted" @click="triggerReserveRefundAction">{{ $t('ui.ownerReserveRefund') }}</button><button class="ghost-btn" @click="exportCsv">{{ $t('ui.export') }}</button>
+    <button v-if="canManageCurrentAdminModule" class="primary-btn" @click="triggerPrimaryAction">{{ toolbarPrimaryAction }}</button><button v-if="canManageCurrentAdminModule && showBuildingPropertyAction" class="primary-btn muted" @click="triggerBuildingPropertyAction">{{ $t('building.addPreHandoverProperty') }}</button><button v-if="canManageCurrentAdminModule && showSecondaryAction" class="primary-btn muted" @click="triggerSecondaryAction">{{ toolbarSecondaryAction }}</button><button v-if="canManageCurrentAdminModule && showReserveRefundAction" class="primary-btn muted" @click="triggerReserveRefundAction">{{ $t('ui.ownerReserveRefund') }}</button><button class="ghost-btn" @click="exportCsv">{{ $t('ui.export') }}</button>
   </section>
 </template>
 
@@ -19,7 +26,7 @@ export default {
     toolbarSearchHint() { if (this.embeddedAccounts) return this.$t('ui.searchAccounts'); if (this.currentId === 'adminOwners') return this.$t('ui.searchOwners'); if (this.currentId === 'adminProperties') return this.$t('properties.searchProperties'); if (this.currentId === 'adminAlerts') return this.$t('ui.searchReminders'); if (this.currentId === 'adminFinance') return this.$t('finance.search'); return this.currentModule.searchHint; },
     toolbarPrimaryAction() { if (this.currentId === 'adminAlerts') return this.$t('ui.addReminderRule'); if (this.currentId === 'adminFinance') return this.$t('ui.reload'); if (this.currentId === 'adminProperties') return this.$t('properties.addProperty'); if (this.currentId === 'adminOwners') return this.$t('ui.addOwner'); if (this.currentId === 'adminData') return this.$t('building.createProject'); if (this.currentId === 'adminTenants') return this.$t('ui.addTenant'); if (this.currentId === 'adminMaintenance') return this.$t('ui.addExpense'); if (this.currentId === 'adminReserve') return this.$t('ui.addReserveTopup'); if (this.currentId === 'adminReports') return this.$t('ui.addReport'); return this.embeddedAccounts ? this.$t('ui.addAccount') : this.currentModule.primaryAction; },
     toolbarSecondaryAction() { if (this.currentId === 'adminAlerts') return this.$t('ui.runAllRules'); if (this.currentId === 'adminData') return this.$t('building.createPaymentPlan'); if (this.currentId === 'adminReports') return this.$t('ui.reload'); if (this.currentId === 'adminFinance') return this.$t('finance.batchConfirm'); if (this.currentId === 'adminTenants') return this.$t('ui.addLease'); if (this.currentId === 'adminMaintenance') return this.$t('ui.addMaintenance'); if (this.currentId === 'adminReserve') return this.$t('ui.addReserveDebit'); return this.embeddedAccounts ? this.$t('ui.accountHelp') : this.currentModule.secondaryAction; },
-    showSecondaryAction() { return !['adminOwners', 'adminProperties'].includes(this.currentId) && !(this.currentId === 'adminFinance' && (this.page.adminFinanceMode === 'rent' || this.page.adminFinanceViewMode === 'history')); },
+    showSecondaryAction() { return Boolean(String(this.toolbarSecondaryAction || '').trim()) && !['adminOwners', 'adminProperties'].includes(this.currentId) && !(this.currentId === 'adminFinance' && this.page.adminFinanceViewMode === 'history'); },
     showBuildingPropertyAction() { return this.currentId === 'adminData'; },
     showReserveRefundAction() { return this.currentId === 'adminReserve'; },
     showStatusFilter() { return !(this.currentId === 'adminFinance' && this.page.adminFinanceViewMode !== 'history' && this.page.adminFinanceMode !== 'rent'); },

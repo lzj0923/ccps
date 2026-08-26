@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -15,11 +16,14 @@ import org.springframework.web.server.ResponseStatusException;
 import com.ccps.backend.dto.AdminMaintenanceCompleteRequest;
 import com.ccps.backend.dto.AdminMaintenanceCreateRequest;
 import com.ccps.backend.dto.AdminMaintenanceHandlingResponse;
+import com.ccps.backend.dto.AdminMaintenanceResubmitRequest;
 import com.ccps.backend.dto.AdminMaintenanceOptionsResponse;
 import com.ccps.backend.dto.AdminExpenseCreateRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.AdminPropertyMaintenanceResponse;
 import com.ccps.backend.dto.AdminPropertyMaintenanceUpdateRequest;
+import com.ccps.backend.dto.AdminRecycleBinItem;
+import com.ccps.backend.dto.AdminRecycleBinResponse;
 import com.ccps.backend.dto.MaintenanceDetailResponse;
 import com.ccps.backend.mapper.AdminMaintenanceMapper;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.CompletionContext;
@@ -31,6 +35,8 @@ import com.ccps.backend.mapper.AdminMaintenanceMapper.NewExpenseFinance;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.NewWorkOrder;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.PropertyContext;
 import com.ccps.backend.mapper.AdminMaintenanceMapper.UnitContext;
+import com.ccps.backend.mapper.AdminMaintenanceMapper.RecycleBinContext;
+import com.ccps.backend.mapper.AdminMaintenanceMapper.RecycleBinCreate;
 
 @Service
 public class AdminMaintenanceService {
@@ -71,6 +77,8 @@ public class AdminMaintenanceService {
         workOrder.setCategory(request.category()); workOrder.setTitle(request.title());
         workOrder.setDescription(request.description()); workOrder.setRequestedAt(request.requestedAt());
         workOrder.setEstimatedAmount(request.estimatedAmount()); workOrder.setActorId(actorId);
+        applyPaymentSnapshot(workOrder, request.payerName(), request.bankName(), request.paymentAccountNo(),
+                request.feeAccountKey(), request.feeAccountNo());
         mapper.insertWorkOrder(workOrder);
         mapper.insertSubmittedHistory(workOrder.getId(), request.requestedAt(), actorId);
         mapper.insertCreateAudit(actorId, "create_maintenance", "maintenance_work_order", workOrder.getId(),
@@ -83,18 +91,28 @@ public class AdminMaintenanceService {
             Long workOrderId, AdminPropertyMaintenanceUpdateRequest request) {
         PropertyContext property = propertyContext(ownerId, ownerUnitId);
         AdminPropertyMaintenanceResponse existing = propertyMaintenance(property.getUnitId(), workOrderId);
-        if ("completed".equals(existing.status()) || "cancelled".equals(existing.status())) {
+        if ("cancelled".equals(existing.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Completed or cancelled maintenance records cannot be edited");
+                    "Cancelled maintenance records cannot be edited");
         }
-        if (!EDITABLE_STATUSES.contains(request.status())) {
+        if (!existing.editable()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "财务已确认，维修记录不能再编辑");
+        }
+        boolean completed = "completed".equals(existing.status());
+        if (completed && !"completed".equals(request.status())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Completed maintenance records can only update details, not their status");
+        }
+        if (!completed && !EDITABLE_STATUSES.contains(request.status())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Use the maintenance completion workflow to complete a work order");
         }
         validateVendor(request.vendorId());
         if (mapper.updatePropertyMaintenance(property.getUnitId(), workOrderId, request.vendorId(),
                 request.category(), request.title(), request.description(), request.requestedAt(),
-                request.estimatedAmount(), request.status()) != 1) {
+                request.estimatedAmount(), request.status(), request.payerName(), request.bankName(),
+                request.paymentAccountNo(), request.feeAccountKey(), request.feeAccountNo()) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Maintenance record changed; please reload");
         }
         if (!existing.status().equals(request.status())) {
@@ -109,9 +127,12 @@ public class AdminMaintenanceService {
     public void cancelForProperty(Long actorId, Long ownerId, Long ownerUnitId, Long workOrderId) {
         PropertyContext property = propertyContext(ownerId, ownerUnitId);
         AdminPropertyMaintenanceResponse existing = propertyMaintenance(property.getUnitId(), workOrderId);
-        if ("completed".equals(existing.status()) || existing.cashflowEntryId() != null) {
+        if ("cancelled".equals(existing.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Maintenance record has already been deleted");
+        }
+        if (!existing.editable()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Maintenance records linked to finance cannot be deleted");
+                    "财务已确认，维修记录不能再删除");
         }
         if (mapper.cancelPropertyMaintenance(property.getUnitId(), workOrderId) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Maintenance record changed; please reload");
@@ -136,9 +157,11 @@ public class AdminMaintenanceService {
         finance.setTransactionNo(reference); finance.setUnitId(unit.getUnitId()); finance.setOwnerId(unit.getOwnerId());
         finance.setAmount(request.amount()); finance.setOccurredOn(request.occurredOn()); finance.setActorId(actorId);
         finance.setPaymentMethod(reserve ? "reserve_account" : "direct_payment".equals(request.settlementMethod()) ? "direct_payment" : null);
-        finance.setPaymentStatus(reserve ? "paid" : "unpaid");
-        finance.setConfirmationStatus(reserve ? "confirmed" : "pending");
+        finance.setPaymentStatus("unpaid");
+        finance.setConfirmationStatus("pending");
         mapper.insertExpenseFinance(finance);
+        savePaymentDetails(finance.getId(), request.payerName(), request.bankName(), request.paymentAccountNo(),
+                request.feeAccountKey(), request.feeAccountNo());
 
         NewExpenseCashflow cashflow = new NewExpenseCashflow();
         cashflow.setFinanceRecordId(finance.getId()); cashflow.setUnitId(unit.getUnitId()); cashflow.setOwnerId(unit.getOwnerId());
@@ -172,31 +195,40 @@ public class AdminMaintenanceService {
         reverseExpenseReserve(actorId, current, "支出修改，回冲原预备金扣款");
         String paymentMethod = reserve ? "reserve_account"
                 : "direct_payment".equals(request.settlementMethod()) ? "direct_payment" : null;
-        String paymentStatus = reserve ? "paid" : "unpaid";
-        String confirmationStatus = reserve ? "confirmed" : "pending";
+        String paymentStatus = "unpaid";
+        String confirmationStatus = "pending";
         if (mapper.updateExpenseFinance(current.getFinanceRecordId(), request.amount(), request.occurredOn(),
                 paymentMethod, paymentStatus, confirmationStatus, actorId) != 1
                 || mapper.updateExpenseCashflow(cashflowId, request.category(), request.description(),
                         request.occurredOn(), reserve ? unit.getReserveAccountId() : null) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense record changed; please reload");
         }
-        if (reserve) debitExpenseReserve(actorId, current.getFinanceRecordId(), unit.getReserveAccountId(), request.amount());
+        savePaymentDetails(current.getFinanceRecordId(), request.payerName(), request.bankName(), request.paymentAccountNo(),
+                request.feeAccountKey(), request.feeAccountNo());
         mapper.insertCreateAudit(actorId, "update_expense", "cashflow_entry", cashflowId,
                 "{\"settlementMethod\":\"" + request.settlementMethod() + "\"}");
         return new AdminRecordCreateResponse(cashflowId, current.getTransactionNo());
     }
 
     @Transactional
-    public void deleteExpense(Long actorId, Long cashflowId) {
+    public Long deleteExpense(Long actorId, Long cashflowId) {
         ExpenseContext current = expenseContext(cashflowId);
         requireExpenseEditable(current);
+        RecycleBinCreate recycle = new RecycleBinCreate();
+        recycle.setEntityType("expense"); recycle.setEntityId(cashflowId); recycle.setFinanceRecordId(current.getFinanceRecordId());
+        recycle.setPreviousPaymentStatus(current.getPaymentStatus()); recycle.setPreviousConfirmationStatus(current.getConfirmationStatus());
+        recycle.setPreviousSyncStatus(current.getSyncStatus()); recycle.setPreviousPaymentMethod(current.getPaymentMethod());
+        recycle.setPreviousReserveAccountId(current.getReserveAccountId()); recycle.setPreviousReserveAmount(zero(current.getReserveDebitAmount()));
+        recycle.setDeletedBy(actorId);
+        if (mapper.insertRecycleBin(recycle) != 1) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create recycle bin snapshot");
         reverseExpenseReserve(actorId, current, "支出作废，回冲预备金扣款");
         mapper.clearExpenseReserve(cashflowId);
         if (mapper.voidExpenseFinance(current.getFinanceRecordId()) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense record changed; please reload");
         }
         mapper.insertCreateAudit(actorId, "delete_expense", "cashflow_entry", cashflowId,
-                "{\"status\":\"voided\"}");
+                "{\"status\":\"voided\",\"recycleBinId\":" + recycle.getId() + "}");
+        return recycle.getId();
     }
 
     @Transactional
@@ -208,6 +240,8 @@ public class AdminMaintenanceService {
         workOrder.setVendorId(request.vendorId()); workOrder.setCategory(request.category()); workOrder.setTitle(request.title());
         workOrder.setDescription(request.description()); workOrder.setRequestedAt(request.requestedAt());
         workOrder.setEstimatedAmount(request.estimatedAmount()); workOrder.setActorId(actorId);
+        applyPaymentSnapshot(workOrder, request.payerName(), request.bankName(), request.paymentAccountNo(),
+                request.feeAccountKey(), request.feeAccountNo());
         mapper.insertWorkOrder(workOrder);
         mapper.insertSubmittedHistory(workOrder.getId(), request.requestedAt(), actorId);
         mapper.insertCreateAudit(actorId, "create_maintenance", "maintenance_work_order", workOrder.getId(),
@@ -226,12 +260,76 @@ public class AdminMaintenanceService {
     }
 
     @Transactional
-    public void deleteMaintenance(Long actorId, Long workOrderId) {
+    public Long deleteMaintenance(Long actorId, Long workOrderId) {
         CompletionContext current = context(workOrderId);
         if (current.getOwnerId() == null || current.getOwnerUnitId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The maintenance record is not linked to an owner unit");
         }
+        // 财务确认前允许删除；必须在写入回收站快照前校验，避免已确认记录先写入快照后再抛错导致 500。
+        requireMaintenanceEditable(current);
+        RecycleBinCreate recycle = new RecycleBinCreate();
+        recycle.setEntityType("maintenance"); recycle.setEntityId(workOrderId); recycle.setWorkOrderId(workOrderId);
+        recycle.setPreviousMaintenanceStatus(current.getStatus());
+        // 维修工单没有备用金快照时也必须写入 0，数据库字段不允许 NULL。
+        recycle.setPreviousReserveAmount(BigDecimal.ZERO);
+        recycle.setDeletedBy(actorId);
+        if (mapper.insertRecycleBin(recycle) != 1) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create recycle bin snapshot");
         cancelForProperty(actorId, current.getOwnerId(), current.getOwnerUnitId(), workOrderId);
+        mapper.insertCreateAudit(actorId, "delete_maintenance", "maintenance_work_order", workOrderId,
+                "{\"status\":\"cancelled\",\"recycleBinId\":" + recycle.getId() + "}");
+        return recycle.getId();
+    }
+
+    @Transactional
+    public AdminRecycleBinResponse recycleBin() {
+        mapper.purgeExpiredRecycleBin();
+        List<AdminRecycleBinItem> items = mapper.findActiveRecycleBin();
+        return new AdminRecycleBinResponse(items);
+    }
+
+    @Transactional
+    public void restoreRecycleBin(Long actorId, Long recycleBinId) {
+        RecycleBinContext deleted = mapper.lockRecycleBin(recycleBinId);
+        if (deleted == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Recycle bin item not found or expired");
+        if ("expense".equals(deleted.getEntityType())) {
+            if (mapper.restoreExpenseFinance(deleted.getFinanceRecordId(), deleted.getPreviousPaymentStatus(),
+                    deleted.getPreviousConfirmationStatus(), deleted.getPreviousSyncStatus(), deleted.getPreviousPaymentMethod()) != 1
+                    || mapper.restoreExpenseCashflow(deleted.getEntityId(), deleted.getPreviousReserveAccountId()) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense record changed; please reload");
+            }
+            if (deleted.getPreviousReserveAccountId() != null && zero(deleted.getPreviousReserveAmount()).signum() > 0) {
+                debitExpenseReserve(actorId, deleted.getFinanceRecordId(), deleted.getPreviousReserveAccountId(), deleted.getPreviousReserveAmount());
+            }
+        } else if ("maintenance".equals(deleted.getEntityType())) {
+            if (mapper.restoreMaintenance(deleted.getWorkOrderId(), deleted.getPreviousMaintenanceStatus()) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Maintenance record changed; please reload");
+            }
+            mapper.insertPropertyHistory(deleted.getWorkOrderId(), deleted.getPreviousMaintenanceStatus(), "管理端於回收站恢復維修工單", actorId);
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported recycle bin item");
+        }
+        if (mapper.markRecycleBinRestored(recycleBinId, actorId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Recycle bin item changed; please reload");
+        }
+        mapper.insertCreateAudit(actorId, "restore_recycle_bin", deleted.getEntityType(), deleted.getEntityId(),
+                "{\"recycleBinId\":" + recycleBinId + "}");
+    }
+
+    @Transactional
+    public void purgeRecycleBinItem(Long actorId, Long recycleBinId) {
+        RecycleBinContext deleted = mapper.lockRecycleBin(recycleBinId);
+        if (deleted == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Recycle bin item not found or expired");
+        if (mapper.purgeRecycleBinItem(recycleBinId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Recycle bin item changed; please reload");
+        }
+        mapper.insertCreateAudit(actorId, "purge_recycle_bin", deleted.getEntityType(), deleted.getEntityId(),
+                "{\"recycleBinId\":" + recycleBinId + "}");
+    }
+
+    @Scheduled(cron = "0 0 * * * *")
+    @Transactional
+    public void purgeRecycleBin() {
+        mapper.purgeExpiredRecycleBin();
     }
 
     @Transactional
@@ -246,7 +344,7 @@ public class AdminMaintenanceService {
     @Transactional
     public MaintenanceDetailResponse complete(Long actorId, Long workOrderId, AdminMaintenanceCompleteRequest request) {
         CompletionContext context = context(workOrderId);
-        if ("completed".equals(context.getStatus())) {
+        if ("completed".equals(context.getStatus()) && !"rejected".equals(context.getConfirmationStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Maintenance work order is already completed");
         }
         if ("cancelled".equals(context.getStatus())) {
@@ -259,12 +357,14 @@ public class AdminMaintenanceService {
         if (context.getOwnerId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The work order is not linked to an owner");
         }
-        if (mapper.countPhotos(workOrderId, "before_photo") < 1 || mapper.countPhotos(workOrderId, "after_photo") < 1) {
+        BigDecimal amount = request.actualAmount();
+        if (amount.compareTo(BigDecimal.valueOf(500)) > 0
+                && (mapper.countPhotos(workOrderId, "before_photo") < 1
+                        || mapper.countPhotos(workOrderId, "after_photo") < 1)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "At least one before photo and one after photo are required");
+                    "For maintenance amounts above RM 500, at least one before photo and one after photo are required");
         }
 
-        BigDecimal amount = request.actualAmount();
         BigDecimal alreadyDeducted = zero(context.getReserveDeductedAmount());
         if ("direct_payment".equals(request.settlementMethod()) && alreadyDeducted.signum() > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -278,22 +378,48 @@ public class AdminMaintenanceService {
 
         String paymentMethod = "reserve".equals(request.settlementMethod()) ? "reserve_account" : "direct_payment";
         Long financeRecordId = ensureFinance(context, actorId, amount, paymentMethod);
+        savePaymentDetails(financeRecordId,
+                firstNonBlank(request.payerName(), context.getPayerName()),
+                firstNonBlank(request.bankName(), context.getBankName()),
+                firstNonBlank(request.paymentAccountNo(), context.getPaymentAccountNo()),
+                firstNonBlank(request.feeAccountKey(), context.getFeeAccountKey()),
+                firstNonBlank(request.feeAccountNo(), context.getFeeAccountNo()));
         Long reserveAccountId = "reserve".equals(request.settlementMethod()) ? context.getReserveAccountId() : null;
         Long cashflowEntryId = ensureCashflow(context, financeRecordId, reserveAccountId, request.completionNote());
-
-        if ("reserve".equals(request.settlementMethod())) {
-            mapper.linkReserveDebitToWorkOrder(financeRecordId, workOrderId);
-            BigDecimal deductedAmount = zero(mapper.findReserveDebitAmount(financeRecordId, workOrderId));
-            if (deductedAmount.compareTo(amount) != 0) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Reserve deduction did not match the maintenance amount; transaction rolled back");
-            }
-        }
 
         mapper.completeWorkOrder(workOrderId, cashflowEntryId, amount);
         mapper.insertHistory(workOrderId, request.completionNote(), actorId);
         mapper.insertAudit(actorId, workOrderId, amount, request.settlementMethod());
         maintenanceRecordService.syncCompletedWorkOrder(actorId, workOrderId, request.completionNote());
+        return detailService.getMaintenanceDetail(null, workOrderId);
+    }
+
+    @Transactional
+    public MaintenanceDetailResponse resubmitFinance(Long actorId, Long workOrderId,
+            AdminMaintenanceResubmitRequest request) {
+        CompletionContext context = context(workOrderId);
+        if (!"completed".equals(context.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Only completed maintenance work orders can be resubmitted for finance review");
+        }
+        if (context.getFinanceRecordId() == null
+                || !"rejected".equals(context.getConfirmationStatus())
+                || !"voided".equals(context.getPaymentStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This maintenance work order is not in a rejected finance state");
+        }
+        if ("exported".equals(context.getSyncStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Exported finance records cannot be resubmitted");
+        }
+        if (mapper.resetRejectedMaintenanceWorkOrder(workOrderId) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Maintenance work order changed; please reload and try again");
+        }
+        String note = request == null || request.note() == null || request.note().isBlank()
+                ? "财务退回，工单退回待处理" : request.note().trim();
+        mapper.insertPropertyHistory(workOrderId, "submitted", note, actorId);
+        mapper.insertResubmitFinanceAudit(actorId, workOrderId, note);
         return detailService.getMaintenanceDetail(null, workOrderId);
     }
 
@@ -324,6 +450,13 @@ public class AdminMaintenanceService {
         return result;
     }
 
+    private void requireMaintenanceEditable(CompletionContext current) {
+        if ("confirmed".equalsIgnoreCase(current.getConfirmationStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "财务已确认，维修工单不能再编辑或删除");
+        }
+    }
+
     private void validateVendor(Long vendorId) {
         if (vendorId != null && mapper.findVendorOptions().stream()
                 .noneMatch(vendor -> vendorId.equals(vendor.id()))) {
@@ -341,6 +474,31 @@ public class AdminMaintenanceService {
     private String reference(String prefix) {
         return prefix + "-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+    }
+
+    private void savePaymentDetails(Long financeRecordId, String payerName, String bankName, String paymentAccountNo,
+            String feeAccountKey, String feeAccountNo) {
+        if (financeRecordId == null) return;
+        if ((payerName == null || payerName.isBlank()) && (bankName == null || bankName.isBlank())
+                && (paymentAccountNo == null || paymentAccountNo.isBlank())
+                && (feeAccountNo == null || feeAccountNo.isBlank())) return;
+        mapper.upsertPaymentReceipt(financeRecordId, blankToNull(payerName), blankToNull(bankName),
+                blankToNull(paymentAccountNo), blankToNull(feeAccountKey), blankToNull(feeAccountNo));
+    }
+
+    private void applyPaymentSnapshot(NewWorkOrder workOrder, String payerName, String bankName,
+            String paymentAccountNo, String feeAccountKey, String feeAccountNo) {
+        workOrder.setPayerName(blankToNull(payerName)); workOrder.setBankName(blankToNull(bankName));
+        workOrder.setPaymentAccountNo(blankToNull(paymentAccountNo)); workOrder.setFeeAccountKey(blankToNull(feeAccountKey));
+        workOrder.setFeeAccountNo(blankToNull(feeAccountNo));
+    }
+
+    private String firstNonBlank(String preferred, String fallback) {
+        return preferred == null || preferred.isBlank() ? fallback : preferred;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private void validateExpenseSettlement(String settlementMethod) {
@@ -372,6 +530,10 @@ public class AdminMaintenanceService {
         }
         if ("voided".equals(context.getPaymentStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The expense record has already been deleted");
+        }
+        if ("confirmed".equals(context.getConfirmationStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "财务已确认，收支记录不能再编辑或删除；如需修改请先在财务历史记录退回");
         }
         if ("exported".equals(context.getSyncStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -405,7 +567,7 @@ public class AdminMaintenanceService {
     }
 
     private Long ensureFinance(CompletionContext context, Long actorId, BigDecimal amount, String method) {
-        String confirmationStatus = "reserve_account".equals(method) ? "confirmed" : "pending";
+        String confirmationStatus = "pending";
         if (context.getFinanceRecordId() != null) {
             mapper.updateFinance(context.getFinanceRecordId(), amount, method, confirmationStatus, actorId);
             return context.getFinanceRecordId();

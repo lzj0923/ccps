@@ -5,12 +5,12 @@ const computedKeys = [
   'detailStatus', 'detailTotal', 'detailPaid', 'detailPending', 'detailProgress', 'kanbanColumns',
   'selectedIndex', 'activeStep', 'viewMode', 'ownerPage', 'ownerPageSize', 'modalMode', 'dateStart',
   'dateEnd', 'datePreset', 'dateScope', 'dateNote', 'moduleSearch', 'globalSearch', 'projectFilter',
-  'statusFilter', 'modalTitle', 'toastText', 'toastVisible', 'form', 'alertItems'
+  'statusFilter', 'modalTitle', 'toastText', 'toastVisible', 'form', 'alertItems', 'canManageCurrentAdminModule'
 ];
 
 const methodKeys = [
   'selectModule', 'initials', 'toNumber', 'isMoney', 'isStatus', 'tagClass', 'moneyClass', 'ownerMetricIcon', 'openModal',
-  'openDatePanel', 'openAlertPanel', 'triggerPrimaryAction', 'triggerSecondaryAction', 'applyDatePreset', 'confirmModal', 'selectAlert', 'metricIcon',
+  'openDatePanel', 'openAlertPanel', 'triggerPrimaryAction', 'triggerSecondaryAction', 'triggerReserveRefundAction', 'applyDatePreset', 'confirmModal', 'selectAlert', 'metricIcon',
   'setupReportTabs', 'renderReportTab', 'openUploadModal', 'saveForm', 'exportCsv', 'showToast', 'handleLogout'
 ];
 

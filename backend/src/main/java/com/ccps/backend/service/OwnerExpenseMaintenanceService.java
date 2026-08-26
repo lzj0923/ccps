@@ -92,7 +92,8 @@ public class OwnerExpenseMaintenanceService {
                 zero(header.getEstimatedAmount()), zero(header.getActualAmount()),
                 zero(header.getReserveDeductedAmount()), header.getPaymentStatus(),
                 header.getConfirmationStatus(), header.getPaymentMethod(), header.getPaymentDate(),
-                safeList(mapper.findStatusHistory(workOrderId)), safeList(mapper.findAttachments(workOrderId)));
+                safeList(mapper.findStatusHistory(workOrderId)), safeList(mapper.findAttachments(workOrderId)),
+                header.getPayerName(), header.getBankName(), header.getPaymentAccountNo());
     }
 
     private ExpenseTotals totals(Long userId, Long projectId, LocalDate start, LocalDate end) {

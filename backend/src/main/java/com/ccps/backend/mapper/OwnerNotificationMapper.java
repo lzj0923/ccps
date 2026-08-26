@@ -53,15 +53,24 @@ public interface OwnerNotificationMapper {
                                 @Param("enabled") boolean enabled);
 
     @Select("""
-            SELECT DISTINCT n.id AS notification_id, s.user_id, s.destination, n.title, n.body
-            FROM notification_subscriptions s
-            JOIN notifications n ON n.recipient_user_id = s.user_id
-              OR n.recipient_owner_id IN (SELECT id FROM owners WHERE user_id = s.user_id)
+            SELECT DISTINCT n.id AS notification_id,
+                   COALESCE(s.user_id, n.recipient_user_id) AS user_id,
+                   COALESCE(d.destination, s.destination) AS destination,
+                   n.title, n.body
+            FROM notifications n
             LEFT JOIN notification_deliveries d
               ON d.notification_id = n.id AND d.channel = 'email'
-            WHERE s.channel = 'email' AND s.enabled = 1 AND s.verified_at IS NOT NULL
-              AND (n.created_at >= s.verified_at OR d.status = 'pending')
-              AND (d.id IS NULL OR d.status = 'pending' OR (d.status = 'failed' AND d.attempt_count < 3))
+            LEFT JOIN notification_subscriptions s
+              ON (s.user_id = n.recipient_user_id
+                  OR s.user_id IN (SELECT user_id FROM owners WHERE id = n.recipient_owner_id))
+             AND s.channel = 'email'
+            WHERE (
+                d.id IS NOT NULL AND d.destination IS NOT NULL
+                AND (d.status = 'pending' OR (d.status = 'failed' AND d.attempt_count < 3))
+              ) OR (
+                d.id IS NULL AND s.enabled = 1 AND s.verified_at IS NOT NULL
+                AND n.created_at >= s.verified_at
+              )
             ORDER BY n.id
             LIMIT 50
             """)
@@ -116,6 +125,16 @@ public interface OwnerNotificationMapper {
             ORDER BY p.name, u.unit_no
             """)
     List<UnitReference> findOwnerUnits(@Param("userId") Long userId);
+
+    @Select("""
+            SELECT p.name AS project_name, p.city, u.unit_no
+            FROM owner_units ou
+            JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
+            JOIN units u ON u.id = ou.unit_id
+            JOIN projects p ON p.id = u.project_id
+            WHERE o.user_id = #{userId} AND ou.id = #{ownerUnitId} AND ou.status = 'active'
+            """)
+    UnitReference findOwnerUnit(@Param("userId") Long userId, @Param("ownerUnitId") Long ownerUnitId);
 
     @Update("""
             UPDATE notifications

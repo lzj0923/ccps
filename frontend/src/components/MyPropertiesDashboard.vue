@@ -86,6 +86,7 @@
                 <template v-if="property.hasRental">
                   <div><span>{{ $t('legacy.t_f73ddf8aaf4a') }}</span><strong>{{ property.tenantName }}</strong></div>
                   <div><span>{{ $t('legacy.t_35231ac50ed8') }}</span><strong>{{ property.monthlyRentText }}</strong></div>
+                  <div><span>{{ tenantDepositLabel }}</span><strong>{{ property.tenantDepositText }}</strong></div>
                   <div><span>{{ $t('legacy.t_75a9b0272f59') }}</span><strong :class="{ 'gold-value': property.hasRentOutstanding }">{{ property.monthRentProgress }}</strong></div>
                   <div><span>{{ $t('legacy.t_4c2e681c838a') }}</span><strong>{{ property.leaseEndDateText }}</strong></div>
                 </template>
@@ -146,7 +147,7 @@
       </aside>
     </section>
 
-    <div v-if="selectedProperty" class="property-detail-overlay" @click.self="selectedProperty = null">
+    <div v-if="selectedProperty" class="property-detail-overlay" @pointerdown.self="selectedProperty = null">
       <section class="property-detail-dialog" role="dialog" aria-modal="true" :aria-label="$t('legacy.t_c2119703b8d0')">
         <header><div><span>{{ $t('legacy.t_c2119703b8d0') }}</span><h2>{{ selectedProperty.projectName }} · {{ selectedProperty.unit }}</h2></div><button @click="selectedProperty = null">×</button></header>
         <div class="property-detail-grid">
@@ -173,6 +174,7 @@
             <dl>
               <div><dt>{{ $t('legacy.t_f73ddf8aaf4a') }}</dt><dd>{{ selectedProperty.tenantName }}</dd></div>
               <div><dt>{{ $t('legacy.t_35231ac50ed8') }}</dt><dd>{{ selectedProperty.monthlyRentText }}</dd></div>
+              <div><dt>{{ tenantDepositLabel }}</dt><dd>{{ selectedProperty.tenantDepositText }}</dd></div>
               <div><dt>{{ $t('legacy.t_72bd77e1d37d') }}</dt><dd>{{ selectedProperty.currentMonthRentPaidText }}</dd></div>
               <div><dt>{{ $t('legacy.t_c08daf0f9b3a') }}</dt><dd>{{ selectedProperty.currentMonthRentOutstandingText }}</dd></div>
               <div><dt>{{ $t('legacy.t_4c2e681c838a') }}</dt><dd>{{ selectedProperty.leaseEndDateText }}</dd></div>
@@ -187,7 +189,7 @@
               <div><dt>{{ $t('legacy.t_1c58f3dcbf5f') }}</dt><dd>{{ selectedProperty.monthlyExpenseText }}</dd></div>
               <div><dt>{{ $t('legacy.t_e9aff9439a39') }}</dt><dd>{{ selectedProperty.monthlyNetText }}</dd></div>
             </dl>
-            <button class="service-secondary-action" @click="openServiceModule('ownerExpenses')">{{ $t('legacy.t_3fe6a3311d65') }}</button>
+            <button class="service-secondary-action" @click="openPropertyCashflow(selectedProperty)">{{ $t('legacy.t_3fe6a3311d65') }}</button>
           </article>
           <article v-if="selectedProperty.hasResale" class="resale">
             <header><div><b>{{ $t('legacy.t_cd5a943f140a') }}</b><span>{{ $t('legacy.t_bb1a3917e52b') }}</span></div></header>
@@ -198,7 +200,7 @@
       </section>
     </div>
 
-    <div v-if="serviceDialogProperty" class="property-detail-overlay" @click.self="closeServiceStatusEditor">
+    <div v-if="serviceDialogProperty" class="property-detail-overlay" @pointerdown.self="closeServiceStatusEditor">
       <section class="property-detail-dialog service-status-dialog" role="dialog" aria-modal="true" :aria-label="$t('legacy.t_1511fb7564fa')">
         <header>
           <div><span>{{ $t('legacy.t_ae5c8302f547') }}</span><h2>{{ serviceDialogProperty.projectName }} · {{ serviceDialogProperty.unit }}</h2></div>
@@ -227,6 +229,7 @@
 
 <script>
 import { updateOwnerPropertyServices } from '../services/propertyApi';
+import { navigate } from '../router';
 
 const paymentStates = {
   paying: { label: '正常繳費中', css: 'green' },
@@ -272,6 +275,7 @@ export default {
   computed: {
     sourceProperties() { return this.page.ownerDashboard?.properties || []; },
     serviceOptions() { return serviceOptions; },
+    tenantDepositLabel() { return this.$i18n.locale === 'zh-TW' ? '租客押金' : this.$i18n.locale === 'en' ? 'Tenant deposit' : '租客押金'; },
     properties() {
       return this.sourceProperties.map((property) => {
         const state = paymentStates[property.paymentStatus] || paymentStates.paying;
@@ -305,6 +309,7 @@ export default {
           hasManagement: services.includes('MANAGEMENT'),
           tenantName: property.tenantName || '尚未出租',
           monthlyRentText: this.money(property.monthlyRent),
+          tenantDepositText: this.money(property.tenantDepositAmount),
           currentMonthRentPaidText: this.money(currentMonthRentPaid),
           currentMonthRentOutstandingText: this.money(property.currentMonthRentOutstanding),
           monthRentProgress: `${this.money(currentMonthRentPaid)} / ${this.money(currentMonthRentDue)}`,
@@ -359,7 +364,7 @@ export default {
         { icon: '▥', mark: '♧', label: '名下房產數量', value: `${summary.propertyCount || 0}`, note: `${this.stageCounts.preHandover} 未交房 · ${this.stageCounts.operating} 出租中` },
         { icon: '▤', mark: '▱', label: '未交房待繳', value: this.money(summary.unpaidPropertyAmount), note: '僅計未交房房產' },
         { icon: '◉', mark: '⌁', label: '出租中本月租金', value: this.money(summary.monthlyRentIncome), note: '已付款並確認' },
-        { icon: '♢', mark: '♢', label: '出租中預備金', value: this.money(summary.reserveBalance), note: '可用餘額' },
+        { icon: '♢', mark: '♢', label: this.tenantDepositLabel, value: this.money(summary.tenantDepositAmount), note: '有效租约押金合计' },
         { icon: '⚒', mark: '!', label: '待處理維修', value: `${summary.pendingMaintenanceCount || 0}`, note: '出租中房產' }
       ];
     },
@@ -443,6 +448,15 @@ export default {
     openServiceModule(moduleId) {
       this.selectedProperty = null;
       this.page.selectModule(moduleId);
+    },
+    openPropertyCashflow(property) {
+      const ownerUnitId = property?.ownerUnitId;
+      this.selectedProperty = null;
+      if (!ownerUnitId) {
+        this.page.selectModule('ownerFinance');
+        return;
+      }
+      navigate(`/owner/finance?ownerUnitId=${encodeURIComponent(ownerUnitId)}&tab=cashflow`);
     }
   }
 };

@@ -8,6 +8,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.ReserveTopupReviewRequest;
@@ -91,15 +93,15 @@ public class AdminReserveController {
     @PostMapping("/topups/{financeRecordId}/review")
     public ReserveTopupReviewResponse review(@PathVariable Long financeRecordId,
             @RequestBody ReserveTopupReviewRequest request, HttpServletRequest servletRequest) {
-        return service.review(AuthInterceptor.userId(servletRequest), financeRecordId,
-                request.approved(), request.note());
+        throw new ResponseStatusException(HttpStatus.GONE,
+                "预备金充值只能在财务确认模块处理");
     }
 
     @PostMapping("/topups/batch-confirm")
     public ResponseEntity<Void> confirmBatch(@RequestBody AdminFinanceBatchConfirmRequest request,
             HttpServletRequest servletRequest) {
-        service.confirmBatch(AuthInterceptor.userId(servletRequest), request.ids(), request.note());
-        return ResponseEntity.noContent().build();
+        throw new ResponseStatusException(HttpStatus.GONE,
+                "预备金充值只能在财务确认模块处理");
     }
 
     @GetMapping("/proofs/{documentId}")

@@ -13,7 +13,7 @@
               </button>
             </div>
           </div>
-          <button v-else :class="{ active: module.id === currentId, 'owner-notice-link': module.id === 'ownerNotice' }" @click="selectModule(module.id)">{{ ownerNavLabel(module) }}<b v-if="module.id === 'ownerNotice'" class="owner-nav-badge">{{ $t('legacy.t_77de68daecd8') }}</b></button>
+          <button v-else :class="{ active: module.id === currentId, 'owner-notice-link': module.id === 'ownerNotice' }" @click="selectModule(module.id)">{{ ownerNavLabel(module) }}<b v-if="module.id === 'ownerNotice' && ownerNotificationUnreadCount > 0" class="owner-nav-badge">{{ ownerNotificationUnreadCount }}</b></button>
         </template>
       </nav>
       <div class="owner-tools">
@@ -22,7 +22,6 @@
           <button class="owner-account-trigger" type="button" :aria-expanded="accountOpen" aria-haspopup="menu" @click.stop="accountOpen = !accountOpen">♙ {{ $t('common.account') }}</button>
           <div v-if="accountOpen" class="owner-account-menu" role="menu">
             <span>{{ $t('common.accountMenu') }}</span>
-            <button class="portal-menu-item" type="button" role="menuitem" @click="openAdminSystem">{{ $t('common.enterAdmin') }}</button>
             <button type="button" role="menuitem" :disabled="loggingOut" @click="performLogout">{{ loggingOut ? $t('common.loggingOut') : $t('common.logout') }}</button>
           </div>
         </div>
@@ -32,31 +31,51 @@
   </header>
   <header v-else class="topbar">
     <div><h1>{{ moduleText(currentModule, 'title') }}</h1><p>{{ moduleText(currentModule, 'hint') }}</p></div>
-    <div class="top-actions"><label class="global-search"><Search class="top-action-icon" :size="16" :stroke-width="2" aria-hidden="true" /><input v-model="globalSearch" @input="showToast($t('common.searchApplied'))" :placeholder="$t('common.searchPlaceholder')"></label><LanguageSwitcher /><button class="date-btn" @click="openDatePanel"><CalendarDays :size="16" :stroke-width="1.9" aria-hidden="true" /><span>{{ dateRange }}</span></button><button class="icon-btn" :title="$t('common.notifications')" @click="openAlertPanel"><Bell :size="18" :stroke-width="2" aria-hidden="true" /><b>{{ alertItems.length }}</b></button><button class="user-btn"><span>{{ $t('legacy.t_b1fb3bec6fdb') }}</span>{{ $t('legacy.t_dcc12647b008') }}</button></div>
+    <div class="top-actions">
+      <label class="global-search"><Search class="top-action-icon" :size="16" :stroke-width="2" aria-hidden="true" /><input v-model="globalSearch" @input="showToast($t('common.searchApplied'))" :placeholder="$t('common.searchPlaceholder')"></label>
+      <LanguageSwitcher />
+      <button class="date-btn" @click="openDatePanel"><CalendarDays :size="16" :stroke-width="1.9" aria-hidden="true" /><span>{{ dateRange }}</span></button>
+      <button class="icon-btn" :title="$t('common.notifications')" @click="openAlertPanel"><Bell :size="18" :stroke-width="2" aria-hidden="true" /><b>{{ alertItems.length }}</b></button>
+      <div ref="accountMenu" class="admin-account">
+        <button class="user-btn admin-account-trigger" type="button" :aria-expanded="accountOpen" aria-haspopup="menu" @click.stop="accountOpen = !accountOpen">
+          <span>{{ adminInitial }}</span><strong>{{ adminDisplayName }}</strong><ChevronDown :size="14" :class="{ rotated: accountOpen }" aria-hidden="true" />
+        </button>
+        <div v-if="accountOpen" class="admin-account-menu" role="menu">
+          <div class="admin-account-summary"><span>{{ adminDisplayName }}</span><small>{{ adminRoleLabel }}</small></div>
+          <button type="button" role="menuitem" :disabled="loggingOut" @click="performLogout"><LogOut :size="16" aria-hidden="true" />{{ loggingOut ? $t('common.loggingOut') : $t('common.logout') }}</button>
+        </div>
+      </div>
+    </div>
   </header>
 </template>
 
 <script>
 import pageBridge from '../pageBridge';
-import { navigate } from '../router';
 import LanguageSwitcher from './LanguageSwitcher.vue';
-import { Bell, CalendarDays, ChevronDown, Search } from '@lucide/vue';
+import { Bell, CalendarDays, ChevronDown, LogOut, Search } from '@lucide/vue';
+import { ADMIN_STAFF_ROLES, adminStaffRole } from '../utils/adminPermissions';
+import { fetchOwnerNotifications } from '../services/propertyApi';
 const FINANCE_MODULE_IDS = ['rentIncome', 'ownerExpenses', 'ownerReserve'];
 export default {
   props: { ownerPaymentSubview: { type: String, default: 'details' } },
   mixins: [pageBridge],
-  components: { Bell, CalendarDays, ChevronDown, LanguageSwitcher, Search },
+  components: { Bell, CalendarDays, ChevronDown, LanguageSwitcher, LogOut, Search },
   data() {
     return { accountOpen: false, financeOpen: false, loggingOut: false };
   },
   computed: {
     financeModules() { return FINANCE_MODULE_IDS.map(id => this.ownerModules.find(module => module.id === id)).filter(Boolean); },
     primaryOwnerModules() { return this.ownerModules.filter(module => !FINANCE_MODULE_IDS.includes(module.id)); },
-    financeSectionActive() { return this.currentId === 'ownerFinance' || FINANCE_MODULE_IDS.includes(this.currentId); }
+    financeSectionActive() { return this.currentId === 'ownerFinance' || FINANCE_MODULE_IDS.includes(this.currentId); },
+    ownerNotificationUnreadCount() { return Number(this.page.ownerNotificationUnreadCount || 0); },
+    adminDisplayName() { return this.page.currentUser?.displayName || this.page.currentUser?.username || '管理员'; },
+    adminInitial() { return String(this.adminDisplayName).trim().slice(0, 1).toUpperCase() || '管'; },
+    adminRoleLabel() { return ADMIN_STAFF_ROLES[adminStaffRole(this.page.currentUser)] || '后台管理员'; }
   },
   mounted() {
     document.addEventListener('click', this.closeAccountMenu);
     document.addEventListener('keydown', this.handleAccountKeydown);
+    if (this.currentModule?.shell === 'owner-shell') this.loadOwnerNotificationCount();
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeAccountMenu);
@@ -78,7 +97,15 @@ export default {
     },
     openFinanceOverview() { this.financeOpen = false; this.selectModule('ownerFinance'); },
     selectFinanceModule(id) { this.financeOpen = false; this.selectModule(id); },
-    openAdminSystem() { navigate('/admin'); },
+    async loadOwnerNotificationCount() {
+      try {
+        const data = await fetchOwnerNotifications();
+        const notifications = Array.isArray(data?.notifications) ? data.notifications : [];
+        this.page.ownerNotificationUnreadCount = notifications.filter(item => item.status !== 'read').length;
+      } catch {
+        // 通知中心页面成功加载后会再次同步准确数量。
+      }
+    },
     async performLogout() {
       if (this.loggingOut) return;
       this.loggingOut = true;

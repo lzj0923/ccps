@@ -16,7 +16,10 @@
                 <td><span class="tag" :class="rentalStatusClass(property.rentalStatus)">{{ rentalStatusLabel(property.rentalStatus) }}</span></td>
                 <td>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.purchasePrice) }}</td><td>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.paidAmount) }}</td>
                 <td :class="{ 'money-red': Number(property.remainingAmount || 0) > 0 }">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.remainingAmount) }}</td>
-                <td><button class="row-actions owner-row-arrow" type="button" :title="$t('properties.enterManagement')" @click.stop="selectProperty(property)">{{ $t('legacy.t_0596bf73ba05') }}</button></td>
+                <td class="property-actions-cell"><div class="property-list-actions">
+                  <button class="row-actions property-open-action" type="button" :title="$t('properties.enterManagement')" @click.stop="selectProperty(property)"><span>{{ $t('legacy.t_0596bf73ba05') }}</span><ArrowUpRight :size="14" aria-hidden="true" /></button>
+                  <button class="row-actions property-delete-action" type="button" :disabled="propertyDeletingId !== null" :title="$t('properties.deleteProperty')" :aria-label="$t('properties.deleteProperty')" :aria-busy="propertyDeletingId === property.unitId" :data-state="propertyDeletingId === property.unitId ? 'loading' : 'default'" @click.stop="removeProperty(property)"><LoaderCircle v-if="propertyDeletingId === property.unitId" class="property-action-spinner" :size="15" aria-hidden="true" /><Trash2 v-else :size="15" aria-hidden="true" /></button>
+                </div></td>
               </tr>
               <tr v-if="!loading && !filteredProperties.length"><td colspan="10" class="admin-owner-empty">{{ $t('properties.noMatchingProperties') }}</td></tr>
             </tbody>
@@ -76,7 +79,7 @@
       <div class="owners-pager"><span>{{ $t('ui.records', { count: filteredOwners.length }) }}</span><div class="admin-building-pager"><button :disabled="ownerPageNumber <= 1" @click="goOwnerPage(ownerPageNumber - 1)">&lt;</button><button v-for="n in ownerVisiblePages" :key="n" :class="{ active: n === ownerPageNumber }" @click="goOwnerPage(n)">{{ n }}</button><button :disabled="ownerPageNumber >= ownerTotalPages" @click="goOwnerPage(ownerPageNumber + 1)">&gt;</button><select v-model.number="ownerPageSize"><option :value="5">{{ $t('building.recordsPerPage', { count: 5 }) }}</option><option :value="10">{{ $t('building.recordsPerPage', { count: 10 }) }}</option><option :value="20">{{ $t('building.recordsPerPage', { count: 20 }) }}</option><option :value="50">{{ $t('building.recordsPerPage', { count: 50 }) }}</option></select></div></div>
     </div>
 
-    <div v-if="ownerDetailOpen && selectedOwner" class="admin-owner-detail-modal" role="dialog" aria-modal="true" @click.self="closeOwnerDetail">
+    <div v-if="ownerDetailOpen && selectedOwner" class="admin-owner-detail-modal" role="dialog" aria-modal="true" @pointerdown.self="closeOwnerDetail">
       <section class="panel owners-detail admin-owner-detail">
         <div class="admin-owner-detail-modal-head">
           <strong>{{ $t('ui.ownerDetails') }}</strong>
@@ -143,7 +146,16 @@
         <div class="modal-head"><h3>{{ ownerEditingId ? $t('legacy.t_56ca7e123ac5') : $t('legacy.t_4bc730395ca1') }}</h3><button class="icon-close" type="button" @click="closeOwnerDialog">×</button></div>
         <div class="form-grid">
           <label class="wide">{{ $t('legacy.t_1c4f579e884d') }}<input v-model.trim="ownerForm.fullName" maxlength="160" required :placeholder="$t('legacy.t_87746aa5b712')"></label>
-          <label>{{ $t('legacy.t_45d661f5882e') }}<input v-model.trim="ownerForm.mobilePhone" maxlength="40" required :placeholder="$t('legacy.t_fccc6804ec32')"></label>
+          <label class="wide owner-mobile-field">{{ $t('legacy.t_45d661f5882e') }}
+            <span class="owner-phone-entry">
+              <select v-model="ownerForm.mobileCountry" aria-label="国家或地区" @change="validateOwnerPhone(false)">
+                <option v-for="country in phoneCountries" :key="country.code" :value="country.code">{{ country.label }} {{ country.dialCode }}</option>
+              </select>
+              <input v-model.trim="ownerForm.mobileNational" inputmode="tel" autocomplete="tel-national" maxlength="30" required :placeholder="selectedOwnerPhoneCountry.example" @blur="validateOwnerPhone(true)">
+            </span>
+            <small>该完整号码将作为业主登录账号。</small>
+            <small v-if="ownerPhoneError" class="owner-phone-error">{{ ownerPhoneError }}</small>
+          </label>
           <label>{{ $t('legacy.t_898dcb50fa59') }}<input v-model.trim="ownerForm.homePhone" maxlength="40"></label>
           <label>{{ $t('legacy.t_89d89b88795a') }}<input v-model.trim="ownerForm.officePhone" maxlength="40"></label>
           <label>{{ $t('legacy.t_d2fbfa77a8af') }}<input v-model.trim="ownerForm.email" type="email" maxlength="190" :placeholder="$t('legacy.t_66f171d88474')"></label>
@@ -153,7 +165,7 @@
           <p class="admin-owner-form-note wide">{{ $t('legacy.t_86e05c5b59d5') }}</p>
           <p v-if="ownerFormError" class="admin-property-error wide">{{ ownerFormError }}</p>
         </div>
-        <menu><button type="button" @click="closeOwnerDialog">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn" :disabled="ownerSaving">{{ ownerSaving ? $t('legacy.t_59d9eae44030') : $t('legacy.t_f2a2753dcacf') }}</button></menu>
+        <menu><button type="button" @click="closeOwnerDialog">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn" :disabled="ownerSaving">{{ ownerSaving ? $t('legacy.t_59d9eae44030') : (ownerEditingId ? $t('legacy.t_60b4ae9082a3') : $t('legacy.t_f2a2753dcacf')) }}</button></menu>
       </form>
     </dialog>
 
@@ -259,20 +271,23 @@
 </template>
 
 <script>
-import { createAdminOwner, createAdminOwnerProperty, fetchAdminOwnerProperty, fetchAdminOwnerSummary, fetchAdminOwners, fetchAdminProperties, fetchAdminPropertyProjects, updateAdminOwner, updateAdminOwnerProperty } from '../services/propertyApi';
+import { ArrowUpRight, LoaderCircle, Trash2 } from '@lucide/vue';
+import { createAdminOwner, createAdminOwnerProperty, deleteAdminProperty, fetchAdminOwnerProperty, fetchAdminOwnerSummary, fetchAdminOwners, fetchAdminProperties, fetchAdminPropertyProjects, updateAdminOwner, updateAdminOwnerProperty } from '../services/propertyApi';
 import { navigate } from '../router';
+import { PHONE_COUNTRIES, phoneCountry, splitPhone, validatePhone } from '../utils/tenantPhone';
 
 export default {
+  components: { ArrowUpRight, LoaderCircle, Trash2 },
   inject: ['page'],
   props: { mode: { type: String, default: 'owners' } },
   data() {
     return {
       workspaceTab: 'owners',
-      owners: [], propertyRows: [], loading: false, errorMessage: '', selectedOwnerId: null, selectedPropertyKey: null,
+      owners: [], propertyRows: [], loading: false, errorMessage: '', selectedOwnerId: null, selectedPropertyKey: null, propertyDeletingId: null,
       propertyPageNumber: 1, propertyPageSize: 5, propertyTotalRows: 0, propertyTotalPages: 1, propertyRequestSerial: 0,
       ownerPageNumber: 1, ownerPageSize: 5, ownerDetailOpen: false,
-      ownerSaving: false, ownerFormError: '', ownerEditingId: null,
-      ownerForm: { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' },
+      ownerSaving: false, ownerFormError: '', ownerPhoneError: '', ownerEditingId: null, phoneCountries: PHONE_COUNTRIES,
+      ownerForm: { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', mobileCountry: 'MY', mobileNational: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' },
       propertyProjects: [], propertyCreateStep: 1, propertyOwnerSearch: '', propertyOwnerId: null,
       propertyCreating: false, propertyCreateError: '',
       serviceOptions: [{ value: 'RENTAL', label: '出租' }, { value: 'RESALE', label: '代售' }, { value: 'MANAGEMENT', label: '代管' }],
@@ -331,7 +346,8 @@ export default {
     preHandoverProperties() { return (this.selectedOwner?.properties || []).filter(item => item.assetStage === 'PRE_HANDOVER'); },
     ownerTotal() { return this.preHandoverProperties.reduce((sum, item) => sum + Number(item.purchasePrice || 0), 0); },
     ownerPending() { return this.preHandoverProperties.reduce((sum, item) => sum + Number(item.remainingAmount || 0), 0); },
-    ownerProgress() { return this.ownerTotal ? Math.max(0, Math.min(100, Math.round((this.ownerTotal - this.ownerPending) / this.ownerTotal * 100))) : 0; }
+    ownerProgress() { return this.ownerTotal ? Math.max(0, Math.min(100, Math.round((this.ownerTotal - this.ownerPending) / this.ownerTotal * 100))) : 0; },
+    selectedOwnerPhoneCountry() { return phoneCountry(this.ownerForm.mobileCountry); }
   },
   watch: {
     workspaceTab(value) {
@@ -442,7 +458,7 @@ export default {
       try {
         const response = await fetchAdminProperties({ page: this.propertyPageNumber, pageSize: this.propertyPageSize, keyword: this.page.globalSearch || this.page.moduleSearch || '', projectName: String(this.page.projectFilter || '').includes('全部') ? '' : this.page.projectFilter, rentalStatus: this.rentalStatusParam(this.page.statusFilter) });
         if (serial !== this.propertyRequestSerial) return;
-        this.propertyRows = (response.rows || []).map(item => ({ ...item.property, ownerId: item.ownerId, ownerName: item.ownerName, ownerPhone: item.ownerPhone, ownerEmail: item.ownerEmail, rentalStatus: item.rentalStatus, rowKey: `${item.ownerId}-${item.property.ownerUnitId}` }));
+        this.propertyRows = (response.rows || []).map(item => ({ ...item.property, paymentAccountNumbers: { electricity: item.property.electricityAccountNo || '', water: item.property.waterAccountNo || '', sewerage: item.property.sewerageAccountNo || '', gas: item.property.gasAccountNo || '', withholdingTax: item.property.withholdingTaxAccountNo || '', landTax: item.property.landTaxAccountNo || '', assessmentTax: item.property.assessmentTaxAccountNo || '' }, ownerId: item.ownerId, ownerName: item.ownerName, ownerPhone: item.ownerPhone, ownerEmail: item.ownerEmail, rentalStatus: item.rentalStatus, rowKey: `${item.ownerId}-${item.property.ownerUnitId}` }));
         this.propertyTotalRows = Number(response.page?.totalRows || 0); this.propertyTotalPages = Number(response.page?.totalPages || 1); this.propertyPageNumber = Number(response.page?.page || 1);
         this.selectedPropertyKey = this.propertyRows.some(property => property.rowKey === preferredKey) ? preferredKey : this.propertyRows[0]?.rowKey || null;
         const selected = this.propertyRows.find(property => property.rowKey === this.selectedPropertyKey); if (selected) this.selectedOwnerId = selected.ownerId;
@@ -457,34 +473,63 @@ export default {
     selectOwner(owner) { this.selectedOwnerId = owner.id; this.ownerDetailOpen = true; },
     closeOwnerDetail() { this.ownerDetailOpen = false; },
     selectProperty(property) { this.selectedPropertyKey = property.rowKey; this.selectedOwnerId = property.ownerId; if (this.isPropertyMode && property?.unitId) navigate(`/admin/properties/${property.unitId}`); },
+    async removeProperty(property) {
+      if (!property?.unitId || !window.confirm(this.$t('properties.deletePropertyConfirm', { name: `${property.projectName || ''} ${property.unitNo || ''}`.trim() }))) return;
+      this.propertyDeletingId = property.unitId;
+      try {
+        await deleteAdminProperty(property.unitId);
+        this.page.showToast(this.$t('properties.propertyDeleted'));
+        await this.loadOwners();
+        await this.loadProperties();
+      } catch (error) {
+        this.page.showToast(error?.message || this.$t('properties.propertyDeleteFailed'));
+      } finally {
+        this.propertyDeletingId = null;
+      }
+    },
     openCreateOwner() {
       this.ownerEditingId = null;
-      this.ownerForm = { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' };
-      this.ownerFormError = '';
+      this.ownerForm = { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', mobileCountry: 'MY', mobileNational: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' };
+      this.ownerFormError = ''; this.ownerPhoneError = '';
       this.$refs.ownerDialog.showModal();
     },
     closeOwnerDialog() { this.$refs.ownerDialog?.close(); },
     openOwnerEdit() {
       const owner = this.selectedOwner;
       if (!owner) return;
+      const mobile = splitPhone(owner.mobilePhone || owner.phone || '');
       this.ownerEditingId = owner.id;
-      this.ownerForm = { ownerNo: owner.ownerNo || '', fullName: owner.fullName || '', identityNo: owner.identityNo || '', phone: owner.phone || '', mobilePhone: owner.mobilePhone || owner.phone || '', homePhone: owner.homePhone || '', officePhone: owner.officePhone || '', passportNo: owner.passportNo || '', email: owner.email || '', status: owner.status || 'active' };
-      this.ownerFormError = '';
+      this.ownerForm = { ownerNo: owner.ownerNo || '', fullName: owner.fullName || '', identityNo: owner.identityNo || '', phone: owner.phone || '', mobilePhone: owner.mobilePhone || owner.phone || '', mobileCountry: mobile.country, mobileNational: mobile.nationalNumber, homePhone: owner.homePhone || '', officePhone: owner.officePhone || '', passportNo: owner.passportNo || '', email: owner.email || '', status: owner.status || 'active' };
+      this.ownerFormError = ''; this.ownerPhoneError = '';
       this.$refs.ownerDialog.showModal();
+    },
+    validateOwnerPhone(showError = false) {
+      const result = validatePhone(this.ownerForm.mobileNational, this.ownerForm.mobileCountry, true);
+      if (showError || result.valid) {
+        if (result.reason === 'country_mismatch') this.ownerPhoneError = `号码国家码与所选的${this.selectedOwnerPhoneCountry.label}不一致。`;
+        else if (result.reason === 'invalid') this.ownerPhoneError = `请输入有效的${this.selectedOwnerPhoneCountry.label}手机号，例如 ${this.selectedOwnerPhoneCountry.example}。`;
+        else if (result.reason === 'required') this.ownerPhoneError = '请填写业主手机号，该号码将作为登录账号。';
+        else this.ownerPhoneError = '';
+      }
+      return result;
     },
     async saveOwner() {
       if (!this.ownerForm.fullName) { this.ownerFormError = '請填寫業主姓名'; return; }
-      if (!this.ownerForm.mobilePhone) { this.ownerFormError = '請填寫行動電話，系統會用它建立登入帳號'; return; }
-      this.ownerForm.phone = this.ownerForm.mobilePhone;
+      const mobile = this.validateOwnerPhone(true);
+      if (!mobile.valid) { this.ownerFormError = this.ownerPhoneError; return; }
+      this.ownerForm.phone = mobile.e164;
+      this.ownerForm.mobilePhone = mobile.e164;
       this.ownerSaving = true; this.ownerFormError = '';
       try {
         const payload = { ...this.ownerForm };
         delete payload.ownerNo;
+        delete payload.mobileCountry;
+        delete payload.mobileNational;
         const owner = this.ownerEditingId ? await updateAdminOwner(this.ownerEditingId, payload) : await createAdminOwner(payload);
         await this.loadOwners(owner.id);
         this.closeOwnerDialog();
         this.page.showToast(this.ownerEditingId ? '房主資料已更新' : '業主已新增，登入帳號為手機號，初始密碼 123456');
-      } catch (error) { this.ownerFormError = error.message || '新增業主失敗'; }
+      } catch (error) { this.ownerFormError = error.message || (this.ownerEditingId ? '房主资料更新失败' : '新增业主失败'); }
       finally { this.ownerSaving = false; }
     },
     emptyPropertyCreateForm() {
@@ -540,8 +585,8 @@ export default {
       this.page.adminOwnerExportRows = owners.map(owner => [owner.fullName, owner.identityNo || '', owner.phone || '', owner.email || '', owner.properties.length, owner.status === 'active' ? '啟用' : '停用']);
     },
     syncPropertyExportRows(properties) {
-      this.page.adminOwnerExportHeaders = ['建案／項目', '城市', '棟', '樓層', '單位編號', '業主姓名', '手機號', '房型', '面積（m²）', '房產階段', '單位狀態', '房產總價（RM）', '已繳金額（RM）', '未繳金額（RM）', '持有比例（%）', '主房主'];
-      this.page.adminOwnerExportRows = properties.map(property => [property.projectName || '', property.city || '', property.building || '', property.floorNo || '', property.unitNo || '', property.ownerName || '', property.ownerPhone || '', property.unitType || '', property.areaSqm ?? '', this.lifecycleLabel(property.assetStage), this.listingStatusLabel(property.listingStatus), Number(property.purchasePrice || 0), Number(property.paidAmount || 0), Number(property.remainingAmount || 0), property.ownershipPercent ?? '', property.primary ? '是' : '否']);
+          this.page.adminOwnerExportHeaders = ['建案／項目', '城市', '棟', '樓層', '單位編號', '業主姓名', '手機號', '房型', '面積（m²）', '房產階段', '單位狀態', '房產總價（RM）', '已繳金額（RM）', '未繳金額（RM）', '持有比例（%）', '主房主', '电费账户号码', '水费账户号码', '排污费账户号码', '瓦斯费账户号码', '预扣税账户号码', '地税账户号码', '门牌税账户号码'];
+          this.page.adminOwnerExportRows = properties.map(property => [property.projectName || '', property.city || '', property.building || '', property.floorNo || '', property.unitNo || '', property.ownerName || '', property.ownerPhone || '', property.unitType || '', property.areaSqm ?? '', this.lifecycleLabel(property.assetStage), this.listingStatusLabel(property.listingStatus), Number(property.purchasePrice || 0), Number(property.paidAmount || 0), Number(property.remainingAmount || 0), property.ownershipPercent ?? '', property.primary ? '是' : '否', property.paymentAccountNumbers?.electricity || '', property.paymentAccountNumbers?.water || '', property.paymentAccountNumbers?.sewerage || '', property.paymentAccountNumbers?.gas || '', property.paymentAccountNumbers?.withholdingTax || '', property.paymentAccountNumbers?.landTax || '', property.paymentAccountNumbers?.assessmentTax || '']);
     },
     async openDetails(property) { await this.openPropertyDialog('details', property); },
     async openEdit(property) { await this.openPropertyDialog('edit', property); },
@@ -575,3 +620,26 @@ export default {
   }
 };
 </script>
+<style scoped>
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
+/* Hallmark · component: property row actions · genre: modern-minimal · theme: existing CCPS
+ * states: default · hover · focus · active · disabled · loading · error/success via existing toast
+ * contrast: pass
+ */
+.property-list-actions{--property-action-accent:var(--admin-accent,#087f87);--property-action-accent-dark:var(--admin-accent-dark,#05646c);--property-action-line:var(--admin-line,#d9e4eb);--property-action-paper:#fff;--property-action-soft:#eff9fa;--property-action-danger:#b33a3a;--property-action-danger-line:#e7bcbc;--property-action-danger-soft:#fff3f3;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.property-list-workspace .owners-table-wrap th:last-child,.property-list-workspace .owners-table-wrap td:last-child{width:120px!important;min-width:120px!important;padding-inline:7px!important}
+.property-list-workspace .owners-table-wrap .property-actions-cell{overflow:visible!important;text-overflow:clip!important}
+.property-list-workspace .owners-table-wrap .property-list-actions .row-actions{display:inline-flex;box-sizing:border-box;align-items:center;justify-content:center;height:34px!important;margin:0;padding:0;border-radius:8px;line-height:1;cursor:pointer;transition:transform .12s ease-out,background-color .12s ease-out,border-color .12s ease-out,color .12s ease-out,opacity .12s ease-out}
+.property-list-workspace .owners-table-wrap .property-list-actions .property-open-action{width:64px!important;min-width:64px!important;gap:4px;border-color:var(--property-action-line);background:var(--property-action-paper);color:var(--property-action-accent-dark);font-size:12px!important;font-weight:800}
+.property-list-workspace .owners-table-wrap .property-list-actions .property-delete-action{width:34px!important;min-width:34px!important;border-color:var(--property-action-danger-line);background:var(--property-action-paper);color:var(--property-action-danger)}
+@media(hover:hover) and (pointer:fine){.property-list-actions .property-open-action:hover{border-color:var(--property-action-accent);background:var(--property-action-soft);color:var(--property-action-accent-dark)}.property-list-actions .property-delete-action:hover{border-color:var(--property-action-danger);background:var(--property-action-danger-soft)}}
+.property-list-actions .row-actions:focus-visible{outline:2px solid var(--property-action-accent);outline-offset:2px}
+.property-list-actions .property-delete-action:focus-visible{outline-color:var(--property-action-danger)}
+.property-list-actions .row-actions:active{transform:translateY(1px)}
+.property-list-actions .row-actions:disabled{cursor:not-allowed;opacity:.42;transform:none}
+.property-list-actions .property-delete-action[data-state='loading']{border-color:var(--property-action-danger-line);background:var(--property-action-danger-soft)}
+.property-action-spinner{animation:property-action-spin .8s linear infinite}
+@keyframes property-action-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.property-list-actions .row-actions{transition:none}.property-action-spinner{animation-duration:1.6s}}
+.owner-mobile-field{display:grid;gap:7px}.owner-phone-entry{display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:14px}.owner-phone-entry>select,.owner-phone-entry>input{margin-top:0!important;border-radius:9px!important}.owner-mobile-field>small{color:#71889f;font-size:11px}.owner-mobile-field .owner-phone-error{color:#c43d45;font-weight:700}@media(max-width:720px){.owner-phone-entry{grid-template-columns:1fr;row-gap:10px}}
+</style>

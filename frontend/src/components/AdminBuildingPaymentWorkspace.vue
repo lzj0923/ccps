@@ -15,11 +15,11 @@
           <tbody>
             <tr v-for="row in filteredRows" :key="row.id" :class="{ selected: row.id === selectedId }" @click="selectRow(row)">
               <td><strong>{{ row.installmentNo }}. {{ row.milestone || row.planName || $t('building.paymentInstallment') }}</strong><small>{{ row.projectName }} · {{ row.unitNo }}</small></td>
-              <td>{{ row.dueDate || '—' }}</td>
+              <td>{{ displayDate(row.dueDate) }}</td>
               <td>{{ money(row.amountDue) }}</td>
               <td :class="{ 'money-green': Number(row.amountPaid) > 0 }">{{ money(row.amountPaid) }}</td>
               <td :class="{ 'money-red': Number(row.unpaidAmount) > 0, 'money-green': Number(row.unpaidAmount) === 0 }">{{ money(row.unpaidAmount) }}</td>
-              <td>{{ row.paymentDate || '—' }}</td>
+              <td>{{ displayDate(row.paymentDate) }}</td>
               <td><span class="tag" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span></td>
               <td>{{ row.receiptNo || '—' }}</td>
               <td><button type="button" class="row-actions" :title="$t('building.viewDetails')" @click.stop="selectRow(row)">…</button></td>
@@ -42,7 +42,7 @@
         </div>
         <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_356a192b7913') }}</span>{{ $t('building.information') }}</h4><div class="kv"><span>{{ $t('ui.owner') }}</span><b>{{ selectedRow.ownerName || '—' }}</b></div><div class="kv"><span>{{ $t('building.contractNo') }}</span><b>{{ selectedRow.contractNo || '—' }}</b></div><div class="kv"><span>{{ $t('building.paymentPlan') }}</span><b>{{ selectedRow.planName || '—' }}</b></div></div>
         <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_da4b9237bacc') }}</span>{{ $t('building.paymentStatus') }}</h4><div class="kv"><span>{{ $t('building.amountDue') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.amountDue) }}</b></div><div class="kv"><span>{{ $t('building.amountPaid') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.amountPaid) }}</b></div><div class="kv"><span>{{ $t('building.amountUnpaid') }}</span><b class="money-red">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.unpaidAmount) }}</b></div></div>
-        <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_77de68daecd8') }}</span>{{ $t('building.paymentProgress') }}</h4><div class="kv"><span>{{ $t('building.dueDate') }}</span><b>{{ selectedRow.dueDate || '—' }}</b></div><div class="kv"><span>{{ $t('building.paymentDate') }}</span><b>{{ selectedRow.paymentDate || '—' }}</b></div><div class="progress"><i :style="{ width: paymentProgress + '%' }"></i></div></div>
+        <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_77de68daecd8') }}</span>{{ $t('building.paymentProgress') }}</h4><div class="kv"><span>{{ $t('building.dueDate') }}</span><b>{{ displayDate(selectedRow.dueDate) }}</b></div><div class="kv"><span>{{ $t('building.paymentDate') }}</span><b>{{ displayDate(selectedRow.paymentDate) }}</b></div><div class="progress"><i :style="{ width: paymentProgress + '%' }"></i></div></div>
       </div>
       <div v-else class="admin-owner-empty">{{ $t('building.noPaymentData') }}</div>
     </aside>
@@ -151,7 +151,7 @@
         <div class="modal-head"><div><h3>{{ $t('building.paymentRecord') }}</h3><small>{{ selectedRow?.projectName }} · {{ selectedRow?.unitNo }} · {{ $t('building.installments', { count: selectedRow?.installmentNo }) }}</small></div><button class="icon-close" type="button" @click="closePaymentRecord">×</button></div>
         <div class="installment-record-grid">
           <div><span>{{ $t('building.receiptNo') }}</span><b>{{ selectedRow?.receiptNo || '—' }}</b></div>
-          <div><span>{{ $t('building.paymentDate') }}</span><b>{{ selectedRow?.paymentDate || '—' }}</b></div>
+          <div><span>{{ $t('building.paymentDate') }}</span><b>{{ displayDate(selectedRow?.paymentDate) }}</b></div>
           <div><span>{{ $t('building.paymentMethod') }}</span><b>{{ paymentMethodLabel(selectedRow?.paymentMethod) }}</b></div>
           <div><span>{{ $t('building.financeConfirmation') }}</span><b><i class="tag" :class="confirmationClass(selectedRow?.confirmationStatus)">{{ confirmationLabel(selectedRow?.confirmationStatus) }}</i></b></div>
           <div class="wide"><span>{{ $t('building.bankReference') }}</span><b>{{ selectedRow?.bankReference || '—' }}</b></div>
@@ -170,6 +170,7 @@
 import pageBridge from '../pageBridge';
 import { i18n } from '../i18n';
 import { createAdminBuildingProject, createAdminOwnerProperty, createAdminPaymentPlan, fetchAdminBuildingPaymentProgress, fetchAdminOwners, fetchAdminPaymentContracts, fetchAdminPropertyProjects, sendAdminPaymentReminder, updateAdminPaymentInstallment } from '../services/propertyApi';
+import { formatDate } from '../utils/dateFormat';
 
 export default {
   mixins: [pageBridge],
@@ -408,6 +409,7 @@ export default {
     statusParam(status) { return ({ '已完成': 'paid', '部分付款': 'partial', '待付款': 'pending', '逾期': 'overdue' })[status] || ''; },
     statusLabel(status) { return ({ paid: this.$t('building.complete'), partial: this.$t('building.partialPayment'), pending: this.$t('building.pendingPayment'), overdue: this.$t('building.overdue') })[status] || this.$t('building.pendingPayment'); },
     statusClass(status) { return status === 'paid' ? 'green' : status === 'overdue' ? 'red' : 'orange'; },
+    displayDate(value) { return formatDate(value); },
     money(value) { return Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   }
 };

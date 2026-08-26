@@ -21,8 +21,10 @@ DROP VIEW IF EXISTS v_unit_payment_progress;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS report_runs;
 DROP TABLE IF EXISTS report_definitions;
+DROP TABLE IF EXISTS whatsapp_delivery_attempts;
 DROP TABLE IF EXISTS notification_deliveries;
 DROP TABLE IF EXISTS notification_subscriptions;
+DROP TABLE IF EXISTS tenant_whatsapp_subscriptions;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS notification_rules;
 DROP TABLE IF EXISTS sync_batch_items;
@@ -30,10 +32,12 @@ DROP TABLE IF EXISTS sync_batches;
 DROP TABLE IF EXISTS property_attachments;
 DROP TABLE IF EXISTS property_handover_reports;
 DROP TABLE IF EXISTS property_important_messages;
+DROP TABLE IF EXISTS reserve_refund_transfers;
 DROP TABLE IF EXISTS property_bank_accounts;
 DROP TABLE IF EXISTS property_photos;
 DROP TABLE IF EXISTS document_links;
 DROP TABLE IF EXISTS electronic_signature_events;
+DROP TABLE IF EXISTS electronic_signature_participants;
 DROP TABLE IF EXISTS electronic_signature_requests;
 DROP TABLE IF EXISTS documents;
 DROP TABLE IF EXISTS reserve_transactions;
@@ -158,13 +162,35 @@ CREATE TABLE units (
   unit_type VARCHAR(80) NULL,
   area_sqm DECIMAL(12,2) NULL,
   bedroom_count TINYINT UNSIGNED NULL,
+  rental_mode VARCHAR(20) NOT NULL DEFAULT 'whole_unit' COMMENT 'whole_unit / shared',
   listing_status VARCHAR(30) NOT NULL DEFAULT 'available',
+  rental_listing_status VARCHAR(20) NOT NULL DEFAULT 'listed' COMMENT 'listed / off_market',
+  rental_off_market_reason_code VARCHAR(40) NULL,
+  rental_off_market_note VARCHAR(500) NULL,
+  rental_off_market_at DATETIME NULL,
+  rental_off_market_by BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_units_project_unit (project_id, unit_no),
   KEY idx_units_project_status (project_id, listing_status),
-  CONSTRAINT fk_units_project FOREIGN KEY (project_id) REFERENCES projects (id)
+  KEY idx_units_rental_listing_status (rental_listing_status, rental_off_market_at),
+  CONSTRAINT fk_units_project FOREIGN KEY (project_id) REFERENCES projects (id),
+  CONSTRAINT fk_units_rental_off_market_by FOREIGN KEY (rental_off_market_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE unit_rental_listing_status_history (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  unit_id BIGINT UNSIGNED NOT NULL,
+  action VARCHAR(20) NOT NULL COMMENT 'off_market / relisted',
+  reason_code VARCHAR(40) NULL,
+  note VARCHAR(500) NULL,
+  changed_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_unit_rental_listing_history (unit_id, created_at),
+  CONSTRAINT fk_unit_rental_listing_history_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_unit_rental_listing_history_actor FOREIGN KEY (changed_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE owners (
@@ -179,6 +205,7 @@ CREATE TABLE owners (
   office_phone VARCHAR(40) NULL,
   passport_no VARCHAR(80) NULL,
   email VARCHAR(190) NULL,
+  mailing_address VARCHAR(500) NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -269,6 +296,7 @@ CREATE TABLE rental_mandates (
   reviewed_at DATETIME NULL,
   review_note VARCHAR(500) NULL,
   termination_reason VARCHAR(500) NULL,
+  rental_appointment_details JSON NULL,
   created_by BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -374,8 +402,11 @@ CREATE TABLE finance_records (
   tenant_id BIGINT UNSIGNED NULL,
   amount DECIMAL(18,2) NOT NULL,
   currency CHAR(3) NOT NULL DEFAULT 'MYR',
+  requested_transaction_date DATE NULL COMMENT 'Business-proposed date retained when finance determines the final date',
   transaction_date DATE NOT NULL,
+  receipt_date DATE NULL COMMENT 'Actual cash receipt date used for accounting reconciliation',
   payment_method VARCHAR(40) NULL,
+  allocation_note VARCHAR(500) NULL COMMENT 'Informational finance note; does not split the bill or change balances',
   payment_status VARCHAR(30) NOT NULL DEFAULT 'unpaid',
   confirmation_status VARCHAR(30) NOT NULL DEFAULT 'pending',
   confirmed_by BIGINT UNSIGNED NULL,
@@ -389,6 +420,7 @@ CREATE TABLE finance_records (
   UNIQUE KEY uk_finance_records_no (transaction_no),
   KEY idx_finance_records_review (confirmation_status, transaction_date),
   KEY idx_finance_records_unit_date (unit_id, transaction_date),
+  KEY idx_finance_records_receipt_date (receipt_date, record_type, confirmation_status),
   KEY idx_finance_records_sync (sync_status, sync_batch_id),
   CONSTRAINT fk_finance_records_unit FOREIGN KEY (unit_id) REFERENCES units (id),
   CONSTRAINT fk_finance_records_owner FOREIGN KEY (owner_id) REFERENCES owners (id),
@@ -500,6 +532,8 @@ CREATE TABLE payment_receipts (
   receipt_no VARCHAR(60) NULL,
   payer_name VARCHAR(160) NULL,
   bank_reference VARCHAR(120) NULL,
+  fee_account_type VARCHAR(40) NULL,
+  fee_account_no VARCHAR(120) NULL,
   proof_document_id BIGINT UNSIGNED NULL,
   submission_note VARCHAR(500) NULL,
   review_note VARCHAR(500) NULL,
@@ -526,9 +560,30 @@ CREATE TABLE payment_receipt_allocations (
 -- 4. Tenancy and rent collection
 -- ============================================================
 
+CREATE TABLE rental_spaces (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  unit_id BIGINT UNSIGNED NOT NULL,
+  space_code VARCHAR(40) NOT NULL,
+  space_name VARCHAR(100) NOT NULL,
+  space_type VARCHAR(20) NOT NULL COMMENT 'whole_unit / room',
+  capacity SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  area_sqm DECIMAL(12,2) NULL,
+  recommended_rent DECIMAL(18,2) NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_rental_spaces_unit_code (unit_id, space_code),
+  KEY idx_rental_spaces_unit_status (unit_id, status, space_type),
+  CONSTRAINT fk_rental_spaces_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT chk_rental_spaces_type CHECK (space_type IN ('whole_unit','room'))
+) ENGINE=InnoDB;
+
 CREATE TABLE leases (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   unit_id BIGINT UNSIGNED NOT NULL,
+  rental_space_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
   rental_mandate_id BIGINT UNSIGNED NULL,
   lease_no VARCHAR(60) NOT NULL,
@@ -546,9 +601,11 @@ CREATE TABLE leases (
   UNIQUE KEY uk_leases_no (lease_no),
   KEY idx_leases_rental_mandate (rental_mandate_id, status),
   KEY idx_leases_unit_status (unit_id, status),
+  KEY idx_leases_space_status (rental_space_id, status, start_date, end_date),
   KEY idx_leases_tenant_status (tenant_id, status),
   KEY idx_leases_end_date (end_date, status),
   CONSTRAINT fk_leases_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_leases_rental_space FOREIGN KEY (rental_space_id) REFERENCES rental_spaces (id),
   CONSTRAINT fk_leases_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id),
   CONSTRAINT fk_leases_rental_mandate FOREIGN KEY (rental_mandate_id) REFERENCES rental_mandates (id),
   CONSTRAINT chk_leases_dates CHECK (end_date >= start_date),
@@ -588,7 +645,7 @@ CREATE TABLE security_deposit_entries (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_security_deposit_lease (lease_id),
+  KEY idx_security_deposit_lease (lease_id),
   UNIQUE KEY uk_security_deposit_finance (finance_record_id),
   KEY idx_security_deposit_status (status, created_at),
   CONSTRAINT fk_security_deposit_lease FOREIGN KEY (lease_id) REFERENCES leases (id),
@@ -649,6 +706,7 @@ CREATE TABLE rent_invoices (
 CREATE TABLE rent_invoice_items (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   invoice_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NULL COMMENT '待财务确认的租客账单费用；历史记录为空即视为已确认',
   charge_type VARCHAR(40) NOT NULL COMMENT 'management / utilities / maintenance / other',
   description VARCHAR(255) NOT NULL,
   amount DECIMAL(18,2) NOT NULL,
@@ -660,8 +718,10 @@ CREATE TABLE rent_invoice_items (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_invoice_items_invoice (invoice_id),
+  UNIQUE KEY uk_invoice_items_finance (finance_record_id),
   KEY idx_invoice_items_source (source_type, source_id),
   CONSTRAINT fk_invoice_items_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_invoice_items_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
   CONSTRAINT fk_invoice_items_creator FOREIGN KEY (created_by) REFERENCES users (id),
   CONSTRAINT chk_invoice_items_amount CHECK (amount > 0),
   CONSTRAINT chk_invoice_items_payer CHECK (payer IN ('tenant', 'owner', 'agency'))
@@ -671,6 +731,7 @@ CREATE TABLE rent_payments (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   rent_invoice_id BIGINT UNSIGNED NOT NULL,
   finance_record_id BIGINT UNSIGNED NOT NULL,
+  allocated_amount DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT 'Amount recognized for the linked rental month',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_rent_payments_finance (finance_record_id),
@@ -694,6 +755,7 @@ CREATE TABLE cashflow_entries (
   direction VARCHAR(10) NOT NULL COMMENT 'income / expense',
   category VARCHAR(60) NOT NULL COMMENT 'rent / maintenance / utilities / management / deposit / other',
   description VARCHAR(500) NOT NULL,
+  allocation_note VARCHAR(500) NULL COMMENT 'Informational finance note; does not split the bill or change balances',
   occurred_on DATE NOT NULL,
   reserve_account_id BIGINT UNSIGNED NULL,
   attachment_status VARCHAR(30) NOT NULL DEFAULT 'missing',
@@ -729,6 +791,11 @@ CREATE TABLE maintenance_work_orders (
   status VARCHAR(30) NOT NULL DEFAULT 'open',
   estimated_amount DECIMAL(18,2) NULL,
   actual_amount DECIMAL(18,2) NULL,
+  payer_name VARCHAR(160) NULL,
+  bank_name VARCHAR(120) NULL,
+  payment_account_no VARCHAR(120) NULL,
+  fee_account_type VARCHAR(40) NULL,
+  fee_account_no VARCHAR(120) NULL,
   created_by BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -791,16 +858,56 @@ CREATE TABLE reserve_accounts (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   owner_unit_id BIGINT UNSIGNED NOT NULL,
   minimum_balance DECIMAL(18,2) NOT NULL DEFAULT 0,
+  minimum_balance_mode VARCHAR(20) NOT NULL DEFAULT 'auto' COMMENT 'auto / manual',
+  calculated_minimum_balance DECIMAL(18,2) NOT NULL DEFAULT 0,
+  rent_buffer_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  monthly_expense_average DECIMAL(18,2) NOT NULL DEFAULT 0,
+  expense_buffer_months SMALLINT UNSIGNED NOT NULL DEFAULT 3,
+  minimum_balance_calculated_at DATETIME NULL,
   current_balance DECIMAL(18,2) NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   low_balance_alert_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  remarks VARCHAR(500) NULL COMMENT 'Account-level reserve remarks',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_reserve_accounts_owner_unit (owner_unit_id),
   KEY idx_reserve_accounts_balance (current_balance, minimum_balance),
   CONSTRAINT fk_reserve_accounts_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
-  CONSTRAINT chk_reserve_accounts_balance CHECK (minimum_balance >= 0)
+  CONSTRAINT chk_reserve_accounts_balance CHECK (minimum_balance >= 0),
+  CONSTRAINT chk_reserve_accounts_mode CHECK (minimum_balance_mode IN ('auto','manual'))
+) ENGINE=InnoDB;
+
+CREATE TABLE cashflow_note_defaults (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  unit_id BIGINT UNSIGNED NOT NULL,
+  direction VARCHAR(10) NOT NULL,
+  category VARCHAR(60) NOT NULL,
+  note VARCHAR(500) NOT NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_cashflow_note_default (unit_id, direction, category),
+  CONSTRAINT fk_cashflow_note_default_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_cashflow_note_default_user FOREIGN KEY (updated_by) REFERENCES users (id),
+  CONSTRAINT chk_cashflow_note_default_direction CHECK (direction IN ('income', 'expense'))
+) ENGINE=InnoDB;
+
+CREATE TABLE finance_allocation_note_defaults (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  unit_id BIGINT UNSIGNED NOT NULL,
+  record_type VARCHAR(40) NOT NULL,
+  note VARCHAR(500) NOT NULL,
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_finance_allocation_note_default (unit_id, record_type),
+  CONSTRAINT fk_finance_allocation_note_default_unit FOREIGN KEY (unit_id) REFERENCES units (id),
+  CONSTRAINT fk_finance_allocation_note_default_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT fk_finance_allocation_note_default_updater FOREIGN KEY (updated_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
 ALTER TABLE cashflow_entries
@@ -932,6 +1039,23 @@ CREATE TABLE electronic_signature_requests (
   CONSTRAINT fk_e_signature_root_document FOREIGN KEY (root_document_id) REFERENCES documents (id),
   CONSTRAINT fk_e_signature_signed_document FOREIGN KEY (signed_document_id) REFERENCES documents (id),
   CONSTRAINT fk_e_signature_requester FOREIGN KEY (requested_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE electronic_signature_participants (
+  root_document_id BIGINT UNSIGNED NOT NULL,
+  document_kind VARCHAR(64) NOT NULL,
+  signer_role VARCHAR(32) NOT NULL,
+  signing_order INT NOT NULL,
+  signer_name VARCHAR(190) NOT NULL,
+  signer_email VARCHAR(190) NOT NULL,
+  expires_in_days INT NOT NULL DEFAULT 7,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (root_document_id, signer_role),
+  UNIQUE KEY uk_e_signature_participant_order (root_document_id, signing_order),
+  CONSTRAINT fk_e_signature_participant_document FOREIGN KEY (root_document_id) REFERENCES documents (id),
+  CONSTRAINT fk_e_signature_participant_user FOREIGN KEY (updated_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE electronic_signature_events (
@@ -1101,6 +1225,117 @@ CREATE TABLE notification_subscriptions (
   CONSTRAINT fk_notification_subscriptions_user FOREIGN KEY (user_id) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
+INSERT INTO notification_rules
+  (code, name, event_type, days_before, channels, recipient_role, enabled, created_by)
+VALUES
+  ('LEASE_EXPIRY_BUSINESS_30D', '租约结束前一个月通知业务人员', 'lease_expiry', 30,
+   JSON_ARRAY('whatsapp'), 'business', 1, NULL)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  event_type = 'lease_expiry',
+  days_before = 30,
+  channels = JSON_ARRAY('whatsapp'),
+  recipient_role = 'business',
+  enabled = 1;
+
+CREATE TABLE tenant_whatsapp_subscriptions (
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  destination VARCHAR(40) NOT NULL COMMENT 'E.164 digits without plus sign',
+  enabled TINYINT(1) NOT NULL DEFAULT 0,
+  opted_in_at DATETIME NULL,
+  opted_out_at DATETIME NULL,
+  opt_in_source VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (tenant_id),
+  KEY idx_tenant_whatsapp_enabled (enabled, updated_at),
+  CONSTRAINT fk_tenant_whatsapp_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE whatsapp_delivery_attempts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  delivery_id BIGINT UNSIGNED NOT NULL,
+  attempt_number SMALLINT UNSIGNED NOT NULL,
+  provider_message_id VARCHAR(191) NULL,
+  provider_wa_id VARCHAR(40) NULL,
+  template_name VARCHAR(160) NOT NULL,
+  template_language VARCHAR(20) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sending',
+  status_at DATETIME NULL,
+  delivered_at DATETIME NULL,
+  read_at DATETIME NULL,
+  meta_error_code INT NULL,
+  meta_error_subcode INT NULL,
+  meta_error_details VARCHAR(500) NULL,
+  fbtrace_id VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_whatsapp_delivery_attempt (delivery_id, attempt_number),
+  UNIQUE KEY uk_whatsapp_provider_message (provider_message_id),
+  KEY idx_whatsapp_attempt_status (status, status_at),
+  CONSTRAINT fk_whatsapp_attempt_delivery FOREIGN KEY (delivery_id) REFERENCES notification_deliveries (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE rent_collection_workflows (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  invoice_id BIGINT UNSIGNED NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT 'active / on_hold / resolved',
+  hold_reason VARCHAR(500) NULL,
+  held_by BIGINT UNSIGNED NULL,
+  held_at DATETIME NULL,
+  resolved_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_rent_collection_workflow_invoice (invoice_id),
+  KEY idx_rent_collection_workflow_status (status, updated_at),
+  CONSTRAINT fk_rent_collection_workflow_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_rent_collection_workflow_holder FOREIGN KEY (held_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE rent_collection_actions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  invoice_id BIGINT UNSIGNED NOT NULL,
+  stage VARCHAR(32) NOT NULL COMMENT 'first_reminder / second_reminder / final_reminder / termination_notice',
+  threshold_days SMALLINT UNSIGNED NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sent' COMMENT 'sent / cancelled / failed',
+  title VARCHAR(200) NOT NULL,
+  body VARCHAR(1000) NOT NULL,
+  notification_id BIGINT UNSIGNED NULL,
+  acted_by BIGINT UNSIGNED NULL,
+  acted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_rent_collection_action_stage (invoice_id, stage),
+  KEY idx_rent_collection_action_date (scheduled_date, status),
+  CONSTRAINT fk_rent_collection_action_invoice FOREIGN KEY (invoice_id) REFERENCES rent_invoices (id),
+  CONSTRAINT fk_rent_collection_action_notification FOREIGN KEY (notification_id) REFERENCES notifications (id),
+  CONSTRAINT fk_rent_collection_action_actor FOREIGN KEY (acted_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE system_financial_notification_actions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  action_type VARCHAR(40) NOT NULL COMMENT 'building_payment / reserve',
+  related_id BIGINT UNSIGNED NOT NULL,
+  stage VARCHAR(40) NOT NULL,
+  period_key VARCHAR(20) NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sent',
+  notification_id BIGINT UNSIGNED NULL,
+  title VARCHAR(200) NOT NULL,
+  body VARCHAR(1000) NOT NULL,
+  sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_system_financial_notice (action_type, related_id, stage, period_key),
+  KEY idx_system_financial_notice_schedule (scheduled_date, status),
+  KEY idx_system_financial_notice_notification (notification_id),
+  CONSTRAINT fk_system_financial_notice_notification
+    FOREIGN KEY (notification_id) REFERENCES notifications (id)
+) ENGINE=InnoDB;
+
 -- ============================================================
 -- 9. SQL Account synchronization
 -- ============================================================
@@ -1149,8 +1384,8 @@ CREATE TABLE report_runs (
   report_definition_id BIGINT UNSIGNED NULL,
   report_name VARCHAR(160) NOT NULL,
   requested_by BIGINT UNSIGNED NULL,
-  date_start DATE NOT NULL,
-  date_end DATE NOT NULL,
+  date_start DATE NULL,
+  date_end DATE NULL,
   project_id BIGINT UNSIGNED NULL,
   output_format VARCHAR(10) NOT NULL,
   filters JSON NULL,
@@ -1225,7 +1460,7 @@ SELECT
   CASE
     WHEN ri.amount_paid >= ri.amount_due THEN 'paid'
     WHEN ri.amount_paid > 0 THEN 'partial'
-    WHEN CURRENT_DATE > GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
+    WHEN CURRENT_DATE > ri.due_date THEN 'overdue'
     ELSE 'unpaid'
   END AS calculated_status
 FROM rent_invoices ri
@@ -1266,6 +1501,12 @@ CREATE TABLE property_bank_accounts (
   item_name VARCHAR(120) NOT NULL,
   payment_name VARCHAR(160) NOT NULL,
   account_no VARCHAR(120) NOT NULL,
+  bank_address VARCHAR(500) NULL,
+  branch_code VARCHAR(80) NULL,
+  swift_code VARCHAR(80) NULL,
+  transfer_limit DECIMAL(18,2) NULL COMMENT 'NULL or 0 means no daily transfer limit',
+  is_overseas_bank TINYINT(1) NOT NULL DEFAULT 0,
+  overseas_transfer_fee DECIMAL(18,2) NOT NULL DEFAULT 0,
   remarks VARCHAR(1000) NULL,
   created_by BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1273,7 +1514,39 @@ CREATE TABLE property_bank_accounts (
   PRIMARY KEY (id),
   KEY idx_property_bank_accounts_owner_unit (owner_unit_id, id),
   CONSTRAINT fk_property_bank_accounts_owner_unit FOREIGN KEY (owner_unit_id) REFERENCES owner_units (id),
-  CONSTRAINT fk_property_bank_accounts_creator FOREIGN KEY (created_by) REFERENCES users (id)
+  CONSTRAINT fk_property_bank_accounts_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_property_bank_transfer_limit CHECK (transfer_limit IS NULL OR transfer_limit >= 0),
+  CONSTRAINT chk_property_bank_transfer_fee CHECK (overseas_transfer_fee >= 0)
+);
+
+CREATE TABLE reserve_refund_transfers (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_reference VARCHAR(80) NOT NULL,
+  reserve_account_id BIGINT UNSIGNED NOT NULL,
+  bank_account_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NOT NULL,
+  fee_finance_record_id BIGINT UNSIGNED NULL,
+  installment_no SMALLINT UNSIGNED NOT NULL,
+  installment_count SMALLINT UNSIGNED NOT NULL,
+  scheduled_date DATE NOT NULL,
+  principal_amount DECIMAL(18,2) NOT NULL,
+  fee_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_reserve_refund_transfer_finance (finance_record_id),
+  KEY idx_reserve_refund_transfer_batch (batch_reference, installment_no),
+  KEY idx_reserve_refund_transfer_schedule (scheduled_date, status),
+  CONSTRAINT fk_reserve_refund_transfer_account FOREIGN KEY (reserve_account_id) REFERENCES reserve_accounts (id),
+  CONSTRAINT fk_reserve_refund_transfer_bank FOREIGN KEY (bank_account_id) REFERENCES property_bank_accounts (id),
+  CONSTRAINT fk_reserve_refund_transfer_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT fk_reserve_refund_transfer_fee FOREIGN KEY (fee_finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT fk_reserve_refund_transfer_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT chk_reserve_refund_transfer_amount CHECK (principal_amount > 0),
+  CONSTRAINT chk_reserve_refund_transfer_fee CHECK (fee_amount >= 0),
+  CONSTRAINT chk_reserve_refund_transfer_status CHECK (status IN ('pending','completed','failed','cancelled'))
 );
 
 CREATE OR REPLACE VIEW v_reserve_balances AS

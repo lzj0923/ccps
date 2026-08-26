@@ -29,7 +29,7 @@ test('财务下拉菜单不会被顶部导航容器裁切', () => {
   assert.match(styles, /\.owner-finance-menu\{[^}]*width:100%;min-width:100%/);
 });
 
-test('财务中心显示总收入、总支出、净结余、预备金和金额流水', () => {
+test('财务中心显示房产概览并按单位查看完整金额流水', () => {
   assert.match(ownerPage, /OwnerFinanceDashboard v-else-if="currentId === 'ownerFinance'"/);
   assert.match(dashboard, /totalIncome: '本月总收入'/);
   assert.match(dashboard, /totalExpense: '本月总支出'/);
@@ -43,4 +43,9 @@ test('财务中心显示总收入、总支出、净结余、预备金和金额�
   assert.match(dashboard, /fetchOwnerRentIncome/);
   assert.match(dashboard, /fetchOwnerExpenses/);
   assert.match(dashboard, /fetchOwnerReserve/);
+  assert.match(dashboard, /owner-property-overview-grid/);
+  assert.match(dashboard, /selectedPropertyCashflow\(\)/);
+  assert.match(dashboard, /fetchOwnerPropertyCashflows\(ownerUnitId\)/);
+  assert.match(dashboard, /row\.balanceAfter/);
+  assert.doesNotMatch(dashboard, /<th>\{\{ copy\.status \}\}<\/th>/);
 });

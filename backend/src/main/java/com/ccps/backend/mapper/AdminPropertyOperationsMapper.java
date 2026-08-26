@@ -17,16 +17,33 @@ import org.apache.ibatis.annotations.Update;
 public interface AdminPropertyOperationsMapper {
     @Select("""
             SELECT l.id, u.id AS unit_id, l.lease_no, l.tenant_id, t.full_name AS tenant_name,
-                   l.start_date, l.end_date, l.monthly_rent
+                   l.start_date, l.end_date, l.monthly_rent,
+                   l.rental_space_id, rs.space_name AS rental_space_name, rs.space_type AS rental_space_type
             FROM owner_units ou
             JOIN units u ON u.id = ou.unit_id
             JOIN leases l ON l.unit_id = u.id AND l.status = 'active'
             JOIN tenants t ON t.id = l.tenant_id
+            LEFT JOIN rental_spaces rs ON rs.id = l.rental_space_id
             WHERE ou.id = #{ownerUnitId} AND ou.owner_id = #{ownerId}
             ORDER BY l.start_date DESC, l.id DESC
             LIMIT 1
             """)
     LeaseRow findActiveLease(@Param("ownerId") Long ownerId, @Param("ownerUnitId") Long ownerUnitId);
+
+    @Select("""
+            SELECT l.id, u.id AS unit_id, l.lease_no, l.tenant_id, t.full_name AS tenant_name,
+                   l.start_date, l.end_date, l.monthly_rent,
+                   l.rental_space_id, rs.space_name AS rental_space_name, rs.space_type AS rental_space_type
+            FROM owner_units ou
+            JOIN units u ON u.id = ou.unit_id
+            JOIN leases l ON l.unit_id = u.id AND l.status = 'active'
+            JOIN tenants t ON t.id = l.tenant_id
+            LEFT JOIN rental_spaces rs ON rs.id = l.rental_space_id
+            WHERE ou.id = #{ownerUnitId} AND ou.owner_id = #{ownerId}
+            ORDER BY CASE WHEN rs.space_type = 'whole_unit' THEN 0 ELSE 1 END,
+                     rs.sort_order, rs.id, l.start_date DESC, l.id DESC
+            """)
+    List<LeaseRow> findActiveLeases(@Param("ownerId") Long ownerId, @Param("ownerUnitId") Long ownerUnitId);
 
     @Select("""
             SELECT id, billing_month, due_date, amount_due, amount_paid,
@@ -47,8 +64,13 @@ public interface AdminPropertyOperationsMapper {
             + "FROM rent_invoices WHERE id=#{invoiceId} AND lease_id=#{leaseId} LIMIT 1 FOR UPDATE")
     InvoiceRow lockInvoice(@Param("leaseId") Long leaseId, @Param("invoiceId") Long invoiceId);
 
-    @Insert("INSERT INTO rent_invoice_items (invoice_id, charge_type, description, amount, payer, source_type, source_id, created_by) "
-            + "VALUES (#{invoiceId}, #{chargeType}, #{description}, #{amount}, #{payer}, #{sourceType}, #{sourceId}, #{actorId})")
+    @Insert("INSERT INTO finance_records (transaction_no, record_type, unit_id, owner_id, tenant_id, amount, currency, transaction_date, payment_method, payment_status, confirmation_status, sync_status, created_by) "
+            + "VALUES (#{transactionNo}, 'tenant_charge', #{unitId}, #{ownerId}, #{tenantId}, #{amount}, 'MYR', #{transactionDate}, 'tenant_invoice', 'unpaid', 'pending', 'not_synced', #{actorId})")
+    @Options(useGeneratedKeys = true, keyProperty = "financeRecordId")
+    int insertChargeFinanceReview(ChargeWriteRow row);
+
+    @Insert("INSERT INTO rent_invoice_items (invoice_id, finance_record_id, charge_type, description, amount, payer, source_type, source_id, created_by) "
+            + "VALUES (#{invoiceId}, #{financeRecordId}, #{chargeType}, #{description}, #{amount}, #{payer}, #{sourceType}, #{sourceId}, #{actorId})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertCharge(ChargeWriteRow row);
 
@@ -56,10 +78,13 @@ public interface AdminPropertyOperationsMapper {
     int increaseInvoiceAmount(@Param("invoiceId") Long invoiceId, @Param("amount") BigDecimal amount);
 
     @Select("""
-            SELECT id, charge_type, description, amount, payer, source_type, source_id, created_at
-            FROM rent_invoice_items
-            WHERE invoice_id = #{invoiceId}
-            ORDER BY id
+            SELECT rii.id, rii.finance_record_id, rii.charge_type, rii.description, rii.amount, rii.payer,
+                   rii.source_type, rii.source_id, rii.created_at,
+                   COALESCE(fr.confirmation_status, 'confirmed') AS confirmation_status
+            FROM rent_invoice_items rii
+            LEFT JOIN finance_records fr ON fr.id = rii.finance_record_id
+            WHERE rii.invoice_id = #{invoiceId}
+            ORDER BY rii.id
             """)
     List<ChargeRow> findCharges(@Param("invoiceId") Long invoiceId);
 
@@ -90,8 +115,8 @@ public interface AdminPropertyOperationsMapper {
             @Param("afterData") String afterData);
 
     class LeaseRow {
-        private Long id, unitId, tenantId;
-        private String leaseNo, tenantName;
+        private Long id, unitId, tenantId, rentalSpaceId;
+        private String leaseNo, tenantName, rentalSpaceName, rentalSpaceType;
         private LocalDate startDate, endDate;
         private BigDecimal monthlyRent;
         public Long getId() { return id; }
@@ -110,6 +135,12 @@ public interface AdminPropertyOperationsMapper {
         public void setEndDate(LocalDate value) { endDate = value; }
         public BigDecimal getMonthlyRent() { return monthlyRent; }
         public void setMonthlyRent(BigDecimal value) { monthlyRent = value; }
+        public Long getRentalSpaceId() { return rentalSpaceId; }
+        public void setRentalSpaceId(Long value) { rentalSpaceId = value; }
+        public String getRentalSpaceName() { return rentalSpaceName; }
+        public void setRentalSpaceName(String value) { rentalSpaceName = value; }
+        public String getRentalSpaceType() { return rentalSpaceType; }
+        public void setRentalSpaceType(String value) { rentalSpaceType = value; }
     }
 
     class InvoiceRow {
@@ -134,14 +165,16 @@ public interface AdminPropertyOperationsMapper {
     }
 
     class ChargeRow {
-        private Long id, sourceId;
-        private String chargeType, description, payer, sourceType;
+        private Long id, sourceId, financeRecordId;
+        private String chargeType, description, payer, sourceType, confirmationStatus;
         private BigDecimal amount;
         private LocalDateTime createdAt;
         public Long getId() { return id; }
         public void setId(Long value) { id = value; }
         public Long getSourceId() { return sourceId; }
         public void setSourceId(Long value) { sourceId = value; }
+        public Long getFinanceRecordId() { return financeRecordId; }
+        public void setFinanceRecordId(Long value) { financeRecordId = value; }
         public String getChargeType() { return chargeType; }
         public void setChargeType(String value) { chargeType = value; }
         public String getDescription() { return description; }
@@ -150,6 +183,8 @@ public interface AdminPropertyOperationsMapper {
         public void setPayer(String value) { payer = value; }
         public String getSourceType() { return sourceType; }
         public void setSourceType(String value) { sourceType = value; }
+        public String getConfirmationStatus() { return confirmationStatus; }
+        public void setConfirmationStatus(String value) { confirmationStatus = value; }
         public BigDecimal getAmount() { return amount; }
         public void setAmount(BigDecimal value) { amount = value; }
         public LocalDateTime getCreatedAt() { return createdAt; }
@@ -219,9 +254,11 @@ public interface AdminPropertyOperationsMapper {
     }
 
     class ChargeWriteRow {
-        private Long id, invoiceId, sourceId, actorId;
+        private Long id, invoiceId, sourceId, actorId, financeRecordId, unitId, ownerId, tenantId;
         private String chargeType, description, payer, sourceType;
         private BigDecimal amount;
+        private String transactionNo;
+        private LocalDate transactionDate;
         public Long getId() { return id; }
         public void setId(Long value) { id = value; }
         public Long getInvoiceId() { return invoiceId; }
@@ -230,6 +267,18 @@ public interface AdminPropertyOperationsMapper {
         public void setSourceId(Long value) { sourceId = value; }
         public Long getActorId() { return actorId; }
         public void setActorId(Long value) { actorId = value; }
+        public Long getFinanceRecordId() { return financeRecordId; }
+        public void setFinanceRecordId(Long value) { financeRecordId = value; }
+        public Long getUnitId() { return unitId; }
+        public void setUnitId(Long value) { unitId = value; }
+        public Long getOwnerId() { return ownerId; }
+        public void setOwnerId(Long value) { ownerId = value; }
+        public Long getTenantId() { return tenantId; }
+        public void setTenantId(Long value) { tenantId = value; }
+        public String getTransactionNo() { return transactionNo; }
+        public void setTransactionNo(String value) { transactionNo = value; }
+        public LocalDate getTransactionDate() { return transactionDate; }
+        public void setTransactionDate(LocalDate value) { transactionDate = value; }
         public String getChargeType() { return chargeType; }
         public void setChargeType(String value) { chargeType = value; }
         public String getDescription() { return description; }

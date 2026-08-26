@@ -24,6 +24,14 @@ import com.lowagie.text.pdf.parser.PdfTextExtractor;
 
 class TenancyAgreementPdfServiceTest {
     @Test
+    void defaultsMissingInventoryQuantityToOneWithoutChangingEnteredQuantity() {
+        assertEquals("1", TenancyAgreementPdfService.displayInventoryQuantity(null));
+        assertEquals("1", TenancyAgreementPdfService.displayInventoryQuantity("   "));
+        assertEquals("0", TenancyAgreementPdfService.displayInventoryQuantity("0"));
+        assertEquals("2", TenancyAgreementPdfService.displayInventoryQuantity(" 2 "));
+    }
+
+    @Test
     void generatesTheOriginalTwentyTwoPageAgreementWithNewLeaseValues() throws Exception {
         TenancyAgreementPdfService service = new TenancyAgreementPdfService();
         byte[] result = service.generate(Map.ofEntries(
@@ -61,6 +69,33 @@ class TenancyAgreementPdfServiceTest {
         assertTrue(text.contains("New property address"));
         assertTrue(text.contains("NEW LANDLORD"));
         assertTrue(text.contains("NEW TENANT"));
+        reader.close();
+    }
+
+    @Test
+    void writesLeaseSchedulePaymentRenewalConditionsAndMeterReadingsWhenProvided() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.ofEntries(
+                Map.entry("monthlyRent", "RM 4,500.00"),
+                Map.entry("leaseStart", "2026-08-01"),
+                Map.entry("leaseEnd", "2027-07-31"),
+                Map.entry("paymentMode", "Cash"),
+                Map.entry("renewalOption", "Two (2) years by mutual agreement"),
+                Map.entry("specialConditions", "No pets without written approval."),
+                Map.entry("electricityMeter", "ELEC-IN-001"),
+                Map.entry("waterMeter", "WATER-IN-002"),
+                Map.entry("gasMeter", "GAS-IN-003")));
+
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        String schedule = extractor.getTextFromPage(14, true);
+        String meters = extractor.getTextFromPage(18, true);
+        assertTrue(schedule.contains("Cash"));
+        assertTrue(schedule.contains("Two (2) years by mutual agreement"));
+        assertTrue(schedule.contains("No pets without written approval."));
+        assertTrue(meters.contains("ELEC-IN-001"));
+        assertTrue(meters.contains("WATER-IN-002"));
+        assertTrue(meters.contains("GAS-IN-003"));
         reader.close();
     }
 
@@ -116,6 +151,178 @@ class TenancyAgreementPdfServiceTest {
         reader.close();
     }
 
+    @Test
+    void keepsStandardInventoryCategoriesTogetherAndKeepsClauseTenSeventeenOnItsReferencePage() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        List<TenancyAgreementPdfService.InventoryItem> items = new java.util.ArrayList<>();
+        addItems(items, "客廳 Living Room", "LIVING", 17);
+        addItems(items, "飯廳 Dining Room", "DINING", 7);
+        addItems(items, "廚房 Kitchen", "KITCHEN", 14);
+        addItems(items, "主臥室 Master Bedroom", "BEDROOM", 17);
+        addItems(items, "主浴室 Master Bathroom", "BATHROOM", 9);
+        addItems(items, "遙控器 Remote Control", "REMOTE", 4);
+        addItems(items, "鑰匙 Keys", "KEY", 13);
+        addItems(items, "門禁卡 Access Card", "ACCESS", 5);
+
+        byte[] result = service.generate(Map.of("landlordName", "Owner", "tenantName", "Tenant",
+                "leaseStart", "2026-08-10", "leaseEnd", "2028-12-31"), List.of(), items);
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        String page15 = extractor.getTextFromPage(15, true);
+        String page16 = extractor.getTextFromPage(16, true);
+        String page17 = extractor.getTextFromPage(17, true);
+        String page10Content = new String(reader.getPageContent(10), StandardCharsets.ISO_8859_1);
+        String page11Content = new String(reader.getPageContent(11), StandardCharsets.ISO_8859_1);
+
+        assertTrue(page10Content.contains("Special Conditions shall prevail"));
+        assertTrue(!page11Content.contains("Special Conditions shall prevail"));
+        assertTogether(page15, page16, page17, "KITCHEN-1", "KITCHEN-14");
+        assertTogether(page15, page16, page17, "BATHROOM-1", "BATHROOM-9");
+        reader.close();
+    }
+
+    @Test
+    void manualSizedInventoryUsesTheSameThreePageDistributionAsTheReference() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        List<TenancyAgreementPdfService.InventoryItem> items = new java.util.ArrayList<>();
+        addItems(items, "客廳 Living Room", "LIVING", 7);
+        addItems(items, "飯廳 Dining Room", "DINING", 3);
+        addItems(items, "廚房 Kitchen", "KITCHEN", 6);
+        addItems(items, "主臥室 Master Bedroom", "MASTER", 7);
+        addItems(items, "主浴室 Master Bathroom", "MASTER-BATH", 7);
+        addItems(items, "次臥 Bedroom 2", "BEDROOM-2", 4);
+        addItems(items, "次浴室 Bathroom 2", "BATHROOM-2", 6);
+        addItems(items, "遙控器 Remote Control", "REMOTE", 2);
+        addItems(items, "鑰匙 Keys", "KEY", 2);
+        addItems(items, "門禁卡 Access Card", "ACCESS", 2);
+
+        byte[] result = service.generate(Map.of("landlordName", "Owner", "tenantName", "Tenant",
+                "leaseStart", "2026-08-10", "leaseEnd", "2028-12-31"), List.of(), items);
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        String page15 = extractor.getTextFromPage(15, true);
+        String page16 = extractor.getTextFromPage(16, true);
+        String page17 = extractor.getTextFromPage(17, true);
+
+        assertTrue(page15.contains("LIVING-1"));
+        assertTrue(page15.contains("KITCHEN-6"));
+        assertTrue(!page15.contains("MASTER-1"));
+        assertTrue(page16.contains("MASTER-1"));
+        assertTrue(page16.contains("MASTER-BATH-1"));
+        assertTrue(page16.contains("BEDROOM-2-1"));
+        assertTrue(!page16.contains("BATHROOM-2-1"));
+        assertTrue(page17.contains("BATHROOM-2-1"));
+        assertTrue(page17.contains("REMOTE-1"));
+        assertTrue(page17.contains("KEY-1"));
+        assertTrue(page17.contains("ACCESS-1"));
+        reader.close();
+    }
+
+    @Test
+    void clearsTheFullSignatureIdentityRowsBeforeWritingNewParties() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.of(
+                "landlordName", "NEW OWNER",
+                "landlordIdentity", "OWNER-ID",
+                "tenantName", "NEW TENANT",
+                "tenantIdentity", "TENANT-ID"));
+
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        String page12Content = new String(reader.getPageContent(12), StandardCharsets.ISO_8859_1);
+        assertTrue(page12Content.contains("68 628 300 68 re"));
+        assertTrue(page12Content.contains("68 400 300 68 re"));
+        reader.close();
+    }
+
+    @Test
+    void derivesTheStandardAdvanceDepositUtilityAndUseWhenTheLeaseOnlyProvidesMonthlyRent() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.of(
+                "monthlyRent", "RM 1,000.00",
+                "leaseStart", "2026-08-07",
+                "leaseEnd", "2028-10-07"));
+
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        String page13 = new PdfTextExtractor(reader).getTextFromPage(13, true);
+        String page14 = new PdfTextExtractor(reader).getTextFromPage(14, true);
+        assertTrue(page13.contains("Two (2) years and Two (2) months"));
+        assertTrue(page13.contains("7 August 2026"));
+        assertTrue(page14.contains("Ringgit Malaysia Two thousand (RM 2,000.00) Only"));
+        assertTrue(page14.contains("Ringgit Malaysia Five hundred (RM 500.00) Only"));
+        assertTrue(page14.contains("For Residential use only"));
+        assertTrue(page14.contains("1st day of every month"));
+        reader.close();
+    }
+
+    @Test
+    void keepsThePropertyAndTermRowsVisuallySeparatedAfterWritingTheFirstSchedule() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.of(
+                "propertyAddress", "102, 团结街道202",
+                "leaseStart", "2026-08-07",
+                "leaseEnd", "2028-10-07"));
+
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        String page13Content = new String(reader.getPageContent(13), StandardCharsets.ISO_8859_1);
+        int propertyCover = page13Content.lastIndexOf("245 328 284 52 re");
+        assertTrue(propertyCover >= 0);
+        String contentAfterCover = page13Content.substring(propertyCover);
+        assertTrue(contentAfterCover.contains("245 328 m"));
+        assertTrue(contentAfterCover.contains("529 328 l"));
+        reader.close();
+    }
+
+    @Test
+    void keepsTheReferenceInventoryWhenThePropertyHasNoMaintainedChecklist() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.of(), List.of(), List.of());
+
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        String inventory = extractor.getTextFromPage(15, true)
+                + extractor.getTextFromPage(16, true)
+                + extractor.getTextFromPage(17, true);
+        assertTrue(inventory.contains("Pendant Lamp"));
+        reader.close();
+    }
+
+    @Test
+    void fillsOwnerTenantMoveInAndMeterReadingDataOnTheFinalSchedules() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.ofEntries(
+                Map.entry("landlordName", "OWNER COMPLETE NAME"),
+                Map.entry("landlordIdentity", "OWNER-ID-10086"),
+                Map.entry("landlordAddress", "OWNER MAILING ADDRESS"),
+                Map.entry("tenantName", "TENANT COMPLETE NAME"),
+                Map.entry("tenantIdentity", "TENANT-ID-20086"),
+                Map.entry("tenantPhone", "+60123456789"),
+                Map.entry("leaseStart", "2026-08-07"),
+                Map.entry("handoverDate", "2026-08-07"),
+                Map.entry("electricityMeter", "TNB-8821"),
+                Map.entry("waterMeter", "WATER-3366")));
+
+        String qaOutput = System.getProperty("lease.data.qa.output", "").trim();
+        if (!qaOutput.isBlank()) {
+            Path output = Path.of(qaOutput);
+            Files.createDirectories(output.getParent());
+            Files.write(output, result);
+        }
+
+        try (PdfReader reader = new PdfReader(new ByteArrayInputStream(result))) {
+            PdfTextExtractor extractor = new PdfTextExtractor(reader);
+            String firstSchedule = extractor.getTextFromPage(13, true);
+            String meters = extractor.getTextFromPage(18, true);
+            String checkIn = extractor.getTextFromPage(19, true);
+            assertTrue(firstSchedule.contains("OWNER MAILING ADDRESS"));
+            assertTrue(meters.contains("TNB-8821"));
+            assertTrue(meters.contains("WATER-3366"));
+            assertTrue(checkIn.contains("TENANT COMPLETE NAME"));
+            assertTrue(checkIn.contains("TENANT-ID-20086"));
+            assertTrue(checkIn.contains("+60123456789"));
+            assertTrue(checkIn.contains("7 August 2026"));
+        }
+    }
+
     private Path temporaryPhoto(Color color) throws Exception {
         BufferedImage image = new BufferedImage(80, 60, BufferedImage.TYPE_INT_RGB);
         for (int x = 0; x < image.getWidth(); x++) {
@@ -133,5 +340,20 @@ class TenancyAgreementPdfServiceTest {
         PdfDictionary resources = reader.getPageN(page).getAsDict(PdfName.RESOURCES);
         PdfDictionary objects = resources == null ? null : resources.getAsDict(PdfName.XOBJECT);
         return objects == null ? 0 : objects.size();
+    }
+
+    private void addItems(List<TenancyAgreementPdfService.InventoryItem> items, String category,
+            String prefix, int count) {
+        for (int number = 1; number <= count; number++) {
+            items.add(new TenancyAgreementPdfService.InventoryItem(category,
+                    prefix + "-" + number + " / Bilingual inventory item", "1"));
+        }
+    }
+
+    private void assertTogether(String page15, String page16, String page17, String first, String last) {
+        assertTrue((page15.contains(first) && page15.contains(last))
+                || (page16.contains(first) && page16.contains(last))
+                || (page17.contains(first) && page17.contains(last)),
+                () -> first + " and " + last + " should stay on one inventory page");
     }
 }

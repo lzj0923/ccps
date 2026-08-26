@@ -63,6 +63,11 @@ public class AdminPropertyHandoverReportService {
         requireProperty(ownerId,ownerUnitId); return mapper.list(ownerUnitId).stream().map(this::response).toList();
     }
 
+    @Transactional(readOnly=true)
+    public List<AdminPropertyHandoverReportResponse> listForOwnerUser(Long userId,Long ownerUnitId){
+        requirePropertyForUser(userId,ownerUnitId); return mapper.list(ownerUnitId).stream().map(this::response).toList();
+    }
+
     @Transactional
     public AdminPropertyHandoverReportResponse create(Long actorId,Long ownerId,Long ownerUnitId,String title,
             LocalDate reportDate,LocalDate trackingStartDate,LocalDate trackingEndDate,String remarks,
@@ -118,6 +123,15 @@ public class AdminPropertyHandoverReportService {
     @Transactional(readOnly=true)
     public Download download(Long ownerId,Long ownerUnitId,Long reportId){
         requireProperty(ownerId,ownerUnitId);ReportRow row=requireReport(ownerUnitId,reportId);
+        return download(ownerUnitId,row);
+    }
+
+    @Transactional(readOnly=true)
+    public Download downloadForOwnerUser(Long userId,Long ownerUnitId,Long reportId){
+        requirePropertyForUser(userId,ownerUnitId);return download(ownerUnitId,requireReport(ownerUnitId,reportId));
+    }
+
+    private Download download(Long ownerUnitId,ReportRow row){
         if(row.getContentJson()!=null&&!row.getContentJson().isBlank()){
             byte[] bytes=pdfService.create(toPdfReport(ownerUnitId,row));
             return new Download(null,bytes,downloadName(row),"application/pdf",bytes.length);
@@ -203,6 +217,7 @@ public class AdminPropertyHandoverReportService {
     private void validate(String title,LocalDate reportDate,LocalDate start,LocalDate end,String remarks){if(title==null||title.isBlank()||title.trim().length()>160)throw bad("Handover report title is required and must not exceed 160 characters");if(reportDate==null)throw bad("Report date is required");if(start!=null&&end!=null&&end.isBefore(start))throw bad("Tracking end date must not be before start date");if(remarks!=null&&remarks.length()>1000)throw bad("Handover report remarks must not exceed 1000 characters");}
     private void validateContent(String contentJson){if(contentJson!=null&&contentJson.length()>200000)throw bad("Handover report content is too large");if(contentJson!=null&&!contentJson.isBlank())content(contentJson);}
     private void requireProperty(Long ownerId,Long ownerUnitId){if(mapper.ownsProperty(ownerId,ownerUnitId)!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Property not found");}
+    private void requirePropertyForUser(Long userId,Long ownerUnitId){if(mapper.ownsPropertyForUser(userId,ownerUnitId)!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Property not found");}
     private ReportRow requireReport(Long ownerUnitId,Long reportId){ReportRow row=mapper.find(ownerUnitId,reportId);if(row==null)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Handover report not found");return row;}
     private Path resolve(String storageKey){Path path=root.resolve(storageKey).normalize();if(!path.startsWith(root))throw bad("Invalid handover attachment path");return path;}
     private String safeName(String value){String normalized=value==null?"attachment":value.replace('\\','/');int index=normalized.lastIndexOf('/');return(index>=0?normalized.substring(index+1):normalized).replaceAll("[\\r\\n]","_");}

@@ -84,6 +84,7 @@ import {
   Send, ShieldCheck, UploadCloud, X
 } from '@lucide/vue';
 import { submitPaymentProof } from '../services/propertyApi';
+import { formatDateTime } from '../utils/dateFormat';
 
 const fileSize = size => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 const todayText = () => {
@@ -172,7 +173,7 @@ export default {
         }, this.files.map(file => file.raw));
         this.submitted = true;
         this.receiptNo = result.receiptNo;
-        this.submittedAt = new Date(result.submittedAt).toLocaleString('zh-CN', { hour12: false });
+        this.submittedAt = formatDateTime(result.submittedAt);
         this.page.showToast(`付款凭证已提交：${result.receiptNo}`);
       } catch (error) {
         this.formError = error.message || '付款凭证提交失败，请稍后再试';

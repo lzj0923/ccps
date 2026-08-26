@@ -10,6 +10,7 @@
         <a class="plain-link" :href="documentUrl" target="_blank" rel="noopener">{{ $t('legacy.t_f98d29666a90') }}</a>
         <section v-if="signature.canSign" class="sign-form">
           <label>{{ $t('legacy.t_a6c87526ef43') }}<input :value="signature.signerName" readonly aria-readonly="true"></label>
+          <label v-if="isWitness">護照／身分證號碼<input v-model.trim="form.identityNo" maxlength="120" autocomplete="off" placeholder="請輸入見證人的護照或身分證號碼"><small>姓名、證件號碼與親筆簽名會填入合約的見證人欄位。</small></label>
           <label>{{ $t('legacy.t_6e45895e5b53') }}<div class="code-row"><input v-model.trim="form.verificationCode" inputmode="numeric" maxlength="6" :placeholder="$t('legacy.t_da6babae7e20')"><button type="button" :disabled="resending" @click="resend">{{ resending ? $t('legacy.t_45c36a4dc86c') : $t('legacy.t_1f85ee70c9df') }}</button></div></label>
           <label>{{ $t('legacy.t_568929af7d59') }} <svg :key="signatureRenderKey" ref="signaturePad" class="signature-canvas" viewBox="0 0 560 150" :preserveAspectRatio="signatureSurface.preserveAspectRatio" role="img" :aria-label="$t('legacy.t_deed2713a928')" @pointerdown="startDraw" @pointermove="draw" @pointerup="stopDraw" @pointerleave="stopDraw" @pointercancel="stopDraw"><path ref="signatureInk" :d="signaturePath" fill="none" stroke="#133e70" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <button type="button" class="clear" @click="clear">{{ $t('legacy.t_b2c81aaf0562') }}</button>
@@ -28,10 +29,11 @@
 <script>
 import { API_BASE_URL, fetchPublicSignature, resendPublicSignatureCode, signPublicSignature } from '../services/propertyApi';
 import { appendSignaturePoint, nextSignatureRenderKey, signatureSurface, snapshotSignature, startSignatureStroke } from '../utils/signatureCanvas';
+import { formatDateTime } from '../utils/dateFormat';
 export default {
   name: 'SignaturePage',
-  data() { return { token: '', signature: null, loading: true, error: '', resending: false, submitting: false, formError: '', drawing: false, drew: false, signatureDataUrl: '', signaturePath: '', signatureCanvas: null, signatureRenderKey: 0, signatureSurface, form: { verificationCode: '', consent: false } }; },
-  computed: { documentUrl() { return this.signature?.status === 'signed' ? this.signedDocumentUrl : `${API_BASE_URL}/public/signatures/${encodeURIComponent(this.token)}/document`; }, signedDocumentUrl() { return `${API_BASE_URL}/public/signatures/${encodeURIComponent(this.token)}/signed-document`; } },
+  data() { return { token: '', signature: null, loading: true, error: '', resending: false, submitting: false, formError: '', drawing: false, drew: false, signatureDataUrl: '', signaturePath: '', signatureCanvas: null, signatureRenderKey: 0, signatureSurface, form: { verificationCode: '', identityNo: '', consent: false } }; },
+  computed: { isWitness() { const role = this.signature?.signerRole; return (this.signature?.documentKind === 'property_management_agreement_draft' && role === 'customer_service') || (this.signature?.documentKind === 'lease_contract' && ['owner_witness', 'tenant_witness'].includes(role)); }, documentUrl() { return this.signature?.status === 'signed' ? this.signedDocumentUrl : `${API_BASE_URL}/public/signatures/${encodeURIComponent(this.token)}/document`; }, signedDocumentUrl() { return `${API_BASE_URL}/public/signatures/${encodeURIComponent(this.token)}/signed-document`; } },
   async mounted() { this.token = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).at(-1) || ''); await this.load(); this.signatureCanvas = document.createElement('canvas'); this.signatureCanvas.width = 560; this.signatureCanvas.height = 150; },
   methods: {
     async load() { this.loading = true; this.error = ''; try { this.signature = await fetchPublicSignature(this.token); } catch (error) { this.error = error.message || '無法載入簽署連結'; } finally { this.loading = false; } },
@@ -42,9 +44,9 @@ export default {
     stopDraw() { if (!this.drawing) return; this.drawing = false; this.signatureDataUrl = snapshotSignature(this.signatureCanvas); this.drew = Boolean(this.signatureDataUrl); this.signatureRenderKey = nextSignatureRenderKey(this.signatureRenderKey); },
     clear() { if (this.signatureCanvas) this.signatureCanvas.getContext('2d').clearRect(0, 0, this.signatureCanvas.width, this.signatureCanvas.height); this.signatureDataUrl = ''; this.signaturePath = ''; this.signatureRenderKey = nextSignatureRenderKey(this.signatureRenderKey); this.drew = false; },
     async resend() { this.resending = true; this.formError = ''; try { await resendPublicSignatureCode(this.token); this.formError = '新的驗證碼已寄出，請查看電郵。'; } catch (error) { this.formError = error.message || '驗證碼寄送失敗'; } finally { this.resending = false; } },
-    async submit() { this.formError = ''; const signatureDataUrl = this.signatureDataUrl || snapshotSignature(this.signatureCanvas); if (!this.drew || !signatureDataUrl) { this.formError = '請先寫下親筆簽名。'; return; } if (!this.form.consent) { this.formError = '請勾選同意後再簽署。'; return; } this.submitting = true; try { this.signature = await signPublicSignature(this.token, { ...this.form, signerName: this.signature.signerName, signatureDataUrl }); } catch (error) { this.formError = error.message || '簽署失敗'; } finally { this.submitting = false; } },
+    async submit() { this.formError = ''; const signatureDataUrl = this.signatureDataUrl || snapshotSignature(this.signatureCanvas); if (this.isWitness && !this.form.identityNo) { this.formError = '請輸入見證人的護照或身分證號碼。'; return; } if (!this.drew || !signatureDataUrl) { this.formError = '請先寫下親筆簽名。'; return; } if (!this.form.consent) { this.formError = '請勾選同意後再簽署。'; return; } this.submitting = true; try { this.signature = await signPublicSignature(this.token, { ...this.form, signerName: this.signature.signerName, signatureDataUrl }); } catch (error) { this.formError = error.message || '簽署失敗'; } finally { this.submitting = false; } },
     statusLabel(value) { return ({ pending: '待簽署', signed: '已簽署', expired: '已到期', cancelled: '已取消', rejected: '已拒絕' })[value] || value; },
-    formatDate(value) { return value ? String(value).replace('T', ' ') : '—'; }
+    formatDate(value) { return formatDateTime(value); }
   }
 };
 </script>

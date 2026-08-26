@@ -7,11 +7,14 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.nio.file.StandardOpenOption;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,21 +23,39 @@ import org.springframework.web.server.ResponseStatusException;
 import com.ccps.backend.dto.AdminFinanceReviewResponse;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceReviewRow;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceAllocationNoteContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceSummaryRow;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceSourceLink;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ProofFile;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReopenRecordContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.RentCreditAllocationReopenContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.RentPaymentReopenContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReviewActionContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.TenantChargeReviewContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveRefundContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveRefundReopenContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveTopupReopenContext;
 
 @Service
 public class AdminFinanceReviewService {
     private final AdminFinanceReviewMapper mapper;
+    private final ReserveTopupService reserveTopupService;
     private final Path proofStorageRoot;
 
+    @Autowired
+    public AdminFinanceReviewService(AdminFinanceReviewMapper mapper,
+            ReserveTopupService reserveTopupService,
+            @Value("${ccps.storage.payment-proofs:uploads/payment-proofs}") String proofStorageRoot) {
+        this.mapper = mapper;
+        this.reserveTopupService = reserveTopupService;
+        this.proofStorageRoot = Path.of(proofStorageRoot).toAbsolutePath().normalize();
+    }
+
+    /** Kept for isolated unit tests that do not exercise reserve top-ups. */
     public AdminFinanceReviewService(AdminFinanceReviewMapper mapper,
             @Value("${ccps.storage.payment-proofs:uploads/payment-proofs}") String proofStorageRoot) {
         this.mapper = mapper;
+        this.reserveTopupService = null;
         this.proofStorageRoot = Path.of(proofStorageRoot).toAbsolutePath().normalize();
     }
 
@@ -54,23 +75,39 @@ public class AdminFinanceReviewService {
         String confirmationStatus = normalizeConfirmationStatus(status);
         String syncStatus = normalizeSyncStatus(status);
         boolean reserve = "reserve".equals(reviewType);
-        boolean expense = "expense".equals(reviewType);
+        boolean expense = "expense".equals(reviewType) || "cashflow_maintenance".equals(reviewType);
+        boolean tenantCharge = "tenant_charge".equals(reviewType);
+        boolean settlement = "reserve_refund".equals(reviewType) || "tenant_deposit".equals(reviewType);
         long totalRows = zero(reserve
                 ? mapper.countReservePage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus, startDate, endDate)
-                : expense ? mapper.countExpensePage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus, startDate, endDate)
+                : settlement ? mapper.countSettlementPage(reviewType, normalize(keyword), normalize(projectName), confirmationStatus, syncStatus, startDate, endDate)
+                : tenantCharge ? mapper.countTenantChargePage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus, startDate, endDate)
+                : expense ? mapper.countExpensePage(reviewType, normalize(keyword), normalize(projectName), confirmationStatus, syncStatus, startDate, endDate)
                 : mapper.countPage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus, startDate, endDate));
         int totalPages = Math.max(1, (int) Math.ceil((double) totalRows / pageSize));
         int page = Math.max(1, Math.min(requestedPage, totalPages));
         List<FinanceReviewRow> sourceRows = reserve
                 ? mapper.findReservePage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus,
                         startDate, endDate, pageSize, (page - 1) * pageSize)
-                : expense ? mapper.findExpensePage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus,
+                : settlement ? mapper.findSettlementPage(reviewType, normalize(keyword), normalize(projectName), confirmationStatus, syncStatus,
+                        startDate, endDate, pageSize, (page - 1) * pageSize)
+                : tenantCharge ? mapper.findTenantChargePage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus,
+                        startDate, endDate, pageSize, (page - 1) * pageSize)
+                : expense ? mapper.findExpensePage(reviewType, normalize(keyword), normalize(projectName), confirmationStatus, syncStatus,
                         startDate, endDate, pageSize, (page - 1) * pageSize)
                 : mapper.findPage(normalize(keyword), normalize(projectName), confirmationStatus, syncStatus,
                         startDate, endDate, pageSize, (page - 1) * pageSize);
+        Map<Long, FinanceSourceLink> sourceLinks = new HashMap<>();
+        if (!sourceRows.isEmpty()) {
+            mapper.findSourceLinks(sourceRows.stream().map(FinanceReviewRow::getId).toList())
+                    .forEach(link -> sourceLinks.putIfAbsent(link.getFinanceRecordId(), link));
+        }
         List<AdminFinanceReviewResponse.Item> rows = sourceRows
-                .stream().map(this::toItem).toList();
-        FinanceSummaryRow source = reserve ? mapper.findReserveSummary() : expense ? mapper.findExpenseSummary() : mapper.findSummary();
+                .stream().map(row -> toItem(row, sourceLinks.get(row.getId()))).toList();
+        FinanceSummaryRow source = reserve ? mapper.findReserveSummary()
+                : settlement ? mapper.findSettlementSummary(reviewType)
+                : tenantCharge ? mapper.findTenantChargeSummary()
+                : expense ? mapper.findExpenseSummary(reviewType) : mapper.findSummary();
         AdminFinanceReviewResponse.Summary summary = new AdminFinanceReviewResponse.Summary(
                 source == null ? 0 : zero(source.getPendingCount()),
                 source == null ? 0 : zero(source.getConfirmedCount()),
@@ -90,31 +127,77 @@ public class AdminFinanceReviewService {
     @Transactional(readOnly = true)
     public List<String> findProjects(String reviewType) {
         return "reserve".equals(reviewType) ? mapper.findReserveProjects()
-                : "expense".equals(reviewType) ? mapper.findExpenseProjects() : mapper.findProjects();
+                : ("reserve_refund".equals(reviewType) || "tenant_deposit".equals(reviewType)) ? mapper.findSettlementProjects(reviewType)
+                : "tenant_charge".equals(reviewType) ? mapper.findTenantChargeProjects()
+                : ("expense".equals(reviewType) || "cashflow_maintenance".equals(reviewType))
+                        ? mapper.findExpenseProjects(reviewType) : mapper.findProjects();
     }
 
     @Transactional
-    public void confirm(Long reviewerId, Long financeRecordId, String note) {
-        confirmOne(reviewerId, financeRecordId, requiredNote(note));
+    public void confirm(Long reviewerId, Long financeRecordId, LocalDate transactionDate,
+            LocalDate receiptDate, String note) {
+        confirmOne(reviewerId, financeRecordId, requiredDate(transactionDate), optionalPastDate(receiptDate), requiredNote(note));
     }
 
     @Transactional
-    public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, String note) {
-        confirmBatch(reviewerId, financeRecordIds, note, null);
+    public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, LocalDate transactionDate,
+            LocalDate receiptDate, String note) {
+        confirmBatch(reviewerId, financeRecordIds, transactionDate, receiptDate, note, null);
     }
 
     @Transactional
-    public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, String note, String referenceNo) {
+    public void confirmBatch(Long reviewerId, List<Long> financeRecordIds, LocalDate transactionDate,
+            LocalDate receiptDate, String note, String referenceNo) {
         List<Long> uniqueIds = new LinkedHashSet<>(financeRecordIds).stream().toList();
         if (uniqueIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one payment");
         String reference = normalize(referenceNo);
         String reviewNote = normalize(note) == null ? "批量確認收款" : note.trim();
         if (reference != null) reviewNote = "批量编号：" + reference + "；" + reviewNote;
-        for (Long financeRecordId : uniqueIds) confirmOne(reviewerId, financeRecordId, reviewNote);
+        LocalDate confirmedDate = requiredDate(transactionDate);
+        LocalDate receivedDate = optionalPastDate(receiptDate);
+        for (Long financeRecordId : uniqueIds) confirmOne(reviewerId, financeRecordId, confirmedDate, receivedDate, reviewNote);
     }
 
-    private void confirmOne(Long reviewerId, Long financeRecordId, String note) {
-        if ("reserve_refund".equals(mapper.lockRecordType(financeRecordId))) {
+    @Transactional
+    public void updateAllocationNote(Long actorId,Long financeRecordId,String value,boolean reuseEnabled) {
+        FinanceAllocationNoteContext context=mapper.lockAllocationNoteContext(financeRecordId);
+        if(context==null) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Finance record was not found");
+        String note=normalize(value);
+        if(note!=null&&note.length()>500) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Allocation note is too long");
+        if(mapper.updateAllocationNote(financeRecordId,note)!=1) throw new ResponseStatusException(HttpStatus.CONFLICT,"Allocation note could not be updated");
+        mapper.updateLinkedCashflowAllocationNote(financeRecordId,note);
+        if(reuseEnabled&&note!=null) mapper.upsertAllocationNoteDefault(context.getUnitId(),context.getRecordType(),note,actorId);
+        else if(reuseEnabled) mapper.deleteAllocationNoteDefault(context.getUnitId(),context.getRecordType());
+        mapper.insertAllocationNoteAudit(actorId,financeRecordId,note,reuseEnabled);
+    }
+
+    private void confirmOne(Long reviewerId, Long financeRecordId, LocalDate transactionDate,
+            LocalDate receiptDate, String note) {
+        String recordType = mapper.lockRecordType(financeRecordId);
+        if (recordType == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Finance record was not found");
+        if (mapper.setFinanceConfirmedDate(financeRecordId, transactionDate, receiptDate) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Finance record has already been reviewed");
+        }
+        mapper.syncCashflowDate(financeRecordId, transactionDate);
+        mapper.syncTenantDepositDate(financeRecordId, transactionDate);
+        if ("reserve_topup".equals(recordType)) {
+            if (reserveTopupService == null) throw new IllegalStateException("Reserve top-up confirmation adapter is unavailable");
+            reserveTopupService.reviewFromFinance(reviewerId, financeRecordId, true, transactionDate, note);
+            return;
+        }
+        if ("tenant_charge".equals(recordType)) {
+            TenantChargeReviewContext charge = mapper.lockTenantChargeReview(financeRecordId);
+            if (charge == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant charge has already been reviewed");
+            }
+            if (mapper.confirmTenantCharge(financeRecordId, reviewerId) != 1
+                    || mapper.increaseTenantChargeInvoice(charge.getInvoiceId(), charge.getAmount()) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant charge could not be confirmed");
+            }
+            mapper.insertAudit(reviewerId, financeRecordId, "confirm_tenant_charge", "confirmed", note);
+            return;
+        }
+        if ("reserve_refund".equals(recordType)) {
             ReserveRefundContext refund = mapper.lockReserveRefund(financeRecordId);
             if (refund == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund was not found");
             BigDecimal balanceAfter = refund.getCurrentBalance().subtract(refund.getAmount());
@@ -130,7 +213,7 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_reserve_refund", "confirmed", note);
             return;
         }
-        if ("property_expense".equals(mapper.lockRecordType(financeRecordId))) {
+        if ("property_expense".equals(recordType)) {
             if (mapper.countDirectPaymentBlockedByTerminatedMandate(financeRecordId) > 0) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "业主已解约，该代付款已撤出，不能确认出款");
@@ -141,7 +224,14 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_property_expense", "confirmed", note);
             return;
         }
-        if ("security_deposit".equals(mapper.lockRecordType(financeRecordId))) {
+        if ("cashflow".equals(recordType)) {
+            if (mapper.confirmCashflow(financeRecordId, reviewerId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cashflow has already been reviewed");
+            }
+            mapper.insertAudit(reviewerId, financeRecordId, "confirm_cashflow", "confirmed", note);
+            return;
+        }
+        if ("security_deposit".equals(recordType)) {
             if (mapper.confirmSecurityDeposit(financeRecordId, reviewerId) != 1
                     || mapper.confirmSecurityDepositEntry(financeRecordId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit has already been reviewed");
@@ -150,7 +240,7 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_security_deposit", "confirmed", note);
             return;
         }
-        if ("security_deposit_forfeiture".equals(mapper.lockRecordType(financeRecordId))) {
+        if ("security_deposit_forfeiture".equals(recordType)) {
             if (mapper.confirmSecurityDepositForfeiture(financeRecordId, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit forfeiture has already been reviewed");
             }
@@ -187,7 +277,21 @@ public class AdminFinanceReviewService {
     @Transactional
     public void reject(Long reviewerId, Long financeRecordId, String note) {
         String reviewNote = requiredNote(note);
-        if ("reserve_refund".equals(mapper.lockRecordType(financeRecordId))) {
+        String recordType = mapper.lockRecordType(financeRecordId);
+        if (recordType == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Finance record was not found");
+        if ("reserve_topup".equals(recordType)) {
+            if (reserveTopupService == null) throw new IllegalStateException("Reserve top-up confirmation adapter is unavailable");
+            reserveTopupService.reviewFromFinance(reviewerId, financeRecordId, false, null, reviewNote);
+            return;
+        }
+        if ("tenant_charge".equals(recordType)) {
+            if (mapper.rejectTenantCharge(financeRecordId, reviewerId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant charge has already been reviewed");
+            }
+            mapper.insertAudit(reviewerId, financeRecordId, "reject_tenant_charge", "rejected", reviewNote);
+            return;
+        }
+        if ("reserve_refund".equals(recordType)) {
             if (mapper.rejectReserveRefund(financeRecordId, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund has already been reviewed");
             }
@@ -195,14 +299,26 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "reject_reserve_refund", "rejected", reviewNote);
             return;
         }
-        if ("property_expense".equals(mapper.lockRecordType(financeRecordId))) {
+        if ("property_expense".equals(recordType)) {
             if (mapper.rejectExpense(financeRecordId, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Expense has already been reviewed");
+            }
+            Long workOrderId = mapper.findMaintenanceWorkOrderId(financeRecordId);
+            if (workOrderId != null && mapper.resetMaintenanceAfterFinanceRejection(workOrderId) == 1) {
+                mapper.insertMaintenanceRejectionHistory(workOrderId, reviewerId,
+                        "财务退回：请处理维修工单后再次提交确认。" + reviewNote);
             }
             mapper.insertAudit(reviewerId, financeRecordId, "reject_property_expense", "rejected", reviewNote);
             return;
         }
-        if ("security_deposit".equals(mapper.lockRecordType(financeRecordId))) {
+        if ("cashflow".equals(recordType)) {
+            if (mapper.rejectCashflow(financeRecordId, reviewerId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cashflow has already been reviewed");
+            }
+            mapper.insertAudit(reviewerId, financeRecordId, "reject_cashflow", "rejected", reviewNote);
+            return;
+        }
+        if ("security_deposit".equals(recordType)) {
             if (mapper.rejectSecurityDeposit(financeRecordId, reviewerId) != 1
                     || mapper.rejectSecurityDepositEntry(financeRecordId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit has already been reviewed");
@@ -210,7 +326,7 @@ public class AdminFinanceReviewService {
             mapper.insertAudit(reviewerId, financeRecordId, "reject_security_deposit", "rejected", reviewNote);
             return;
         }
-        if ("security_deposit_forfeiture".equals(mapper.lockRecordType(financeRecordId))) {
+        if ("security_deposit_forfeiture".equals(recordType)) {
             if (mapper.rejectSecurityDepositForfeiture(financeRecordId, reviewerId) != 1) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit forfeiture has already been reviewed");
             }
@@ -249,6 +365,15 @@ public class AdminFinanceReviewService {
 
         switch (record.getRecordType()) {
             case "property_payment" -> reopenPropertyPayment(financeRecordId, reopenNote);
+            case "rent_payment" -> {
+                reopenRentPayment(financeRecordId);
+                if (mapper.voidReopenedRentPayment(financeRecordId) != 1) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Rent payment could not be reopened");
+                }
+                mapper.insertRentReopenAudit(reviewerId, financeRecordId, reopenNote);
+                return;
+            }
+            case "reserve_topup" -> reopenReserveTopup(financeRecordId, reopenNote);
             case "security_deposit" -> {
                 if (mapper.reopenSecurityDepositEntry(financeRecordId) != 1) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Security deposit entry could not be reopened");
@@ -258,6 +383,13 @@ public class AdminFinanceReviewService {
             case "security_deposit_forfeiture" -> mapper.updateSecurityDepositForfeitureLedger(financeRecordId, "posted", "pending");
             case "reserve_refund" -> reopenReserveRefund(reviewerId, financeRecordId, reopenNote);
             case "property_expense" -> { /* No balance is posted until payment, so only the review state is reset. */ }
+            case "tenant_charge" -> {
+                TenantChargeReviewContext charge = mapper.lockConfirmedTenantCharge(financeRecordId);
+                if (charge == null || mapper.reverseTenantChargeInvoice(charge.getInvoiceId(), charge.getAmount()) != 1) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Tenant charge cannot be reopened after the invoice has been paid");
+                }
+            }
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "This finance record type does not support reopening");
         }
@@ -266,6 +398,61 @@ public class AdminFinanceReviewService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Finance record could not be returned to pending");
         }
         mapper.insertReopenAudit(reviewerId, financeRecordId, reopenNote);
+    }
+
+    @Transactional
+    public void reopenBatch(Long reviewerId, List<Long> financeRecordIds, String note) {
+        if (financeRecordIds == null || financeRecordIds.isEmpty() || financeRecordIds.size() > 100
+                || financeRecordIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Select between 1 and 100 valid finance records");
+        }
+        String reopenNote = requiredNote(note);
+        for (Long financeRecordId : new java.util.LinkedHashSet<>(financeRecordIds)) {
+            reopen(reviewerId, financeRecordId, reopenNote);
+        }
+    }
+
+    private void reopenReserveTopup(Long financeRecordId, String note) {
+        ReserveTopupReopenContext topup = mapper.lockReserveTopupReopen(financeRecordId);
+        if (topup == null || zero(topup.getAmount()).signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Confirmed reserve top-up transaction was not found");
+        }
+        if (mapper.reverseReserveTopupBalance(topup.getReserveAccountId(), topup.getAmount()) != 1
+                || mapper.deleteReserveTopupTransaction(financeRecordId) < 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve top-up balance could not be reversed");
+        }
+        mapper.shiftLaterReserveBalances(topup.getReserveAccountId(), topup.getTransactionId(), topup.getAmount());
+        mapper.reopenReserveTopupDocuments(financeRecordId, note);
+    }
+
+    private void reopenRentPayment(Long financeRecordId) {
+        RentPaymentReopenContext rent = mapper.lockRentPaymentReopen(financeRecordId);
+        if (rent == null || zero(rent.getAmount()).signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Confirmed rent payment was not found");
+        }
+        BigDecimal creditAmount = zero(rent.getCreditAmount());
+        BigDecimal currentInvoiceAmount = zero(rent.getAmount()).subtract(creditAmount);
+        if (currentInvoiceAmount.signum() > 0
+                && mapper.reverseRentInvoicePayment(rent.getRentInvoiceId(), currentInvoiceAmount) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Current rent invoice could not be reversed");
+        }
+        List<RentCreditAllocationReopenContext> allocations = mapper.lockRentCreditAllocations(financeRecordId);
+        for (RentCreditAllocationReopenContext allocation : allocations) {
+            if (zero(allocation.getAmount()).signum() > 0
+                    && mapper.reverseRentInvoicePayment(allocation.getRentInvoiceId(), allocation.getAmount()) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Prepaid rent allocation could not be reversed");
+            }
+        }
+        if (rent.getRentCreditId() != null && rent.getRentCreditId() > 0) {
+            mapper.deleteRentCreditAllocations(financeRecordId);
+            if (mapper.deleteRentCredit(financeRecordId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Prepaid rent balance could not be removed");
+            }
+        }
+        if ("security_deposit".equals(rent.getPaymentMethod())) {
+            mapper.cancelRentDepositDeduction(financeRecordId);
+        }
     }
 
     private void reopenPropertyPayment(Long financeRecordId, String note) {
@@ -386,162 +573,42 @@ public class AdminFinanceReviewService {
         }
     }
 
-    /**
-     * Prints the finance document in the same A4 invoice/receipt structure as
-     * the supplied reference: centred company header, customer box, document
-     * metadata on the right, seven-column item table, total line and notes.
-     */
+    /** Prints every finance invoice/receipt through the shared reference layout. */
     private void writePrintableFinanceDocument(java.io.OutputStream output, FinanceReviewRow row, String documentType) throws Exception {
-        com.lowagie.text.Document document = new com.lowagie.text.Document(com.lowagie.text.PageSize.A4, 30, 30, 24, 28);
-        com.lowagie.text.pdf.PdfWriter.getInstance(document, output);
-        document.open();
-        com.lowagie.text.pdf.BaseFont base = com.lowagie.text.pdf.BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", com.lowagie.text.pdf.BaseFont.NOT_EMBEDDED);
-        com.lowagie.text.Font companyFont = new com.lowagie.text.Font(base, 13, com.lowagie.text.Font.BOLD);
-        com.lowagie.text.Font titleFont = new com.lowagie.text.Font(base, 14, com.lowagie.text.Font.BOLD);
-        com.lowagie.text.Font bold = new com.lowagie.text.Font(base, 8, com.lowagie.text.Font.BOLD);
-        com.lowagie.text.Font body = new com.lowagie.text.Font(base, 8);
-        com.lowagie.text.Font small = new com.lowagie.text.Font(base, 7);
-
-        com.lowagie.text.Paragraph company = new com.lowagie.text.Paragraph("HH CONSULTANTS (MM2H) SDN BHD  (202301030304 (1542427-K))", companyFont);
-        company.setAlignment(com.lowagie.text.Element.ALIGN_CENTER);
-        document.add(company);
-        com.lowagie.text.Paragraph registration = new com.lowagie.text.Paragraph("SO-32-05, MENARA 1, KL ECO CITY, NO.3, JALAN BANGSAR,", small);
-        registration.setAlignment(com.lowagie.text.Element.ALIGN_CENTER);
-        document.add(registration);
-        com.lowagie.text.Paragraph contact = new com.lowagie.text.Paragraph("59200 KUALA LUMPUR    (License No.: MM2H814)    Tel: 03-6415 1485    Email: hay@hmm2h.com", small);
-        contact.setAlignment(com.lowagie.text.Element.ALIGN_CENTER);
-        document.add(contact);
-        document.add(financeRule());
-
-        com.lowagie.text.pdf.PdfPTable partyAndMeta = new com.lowagie.text.pdf.PdfPTable(2);
-        partyAndMeta.setWidthPercentage(100);
-        partyAndMeta.setWidths(new float[] { 55f, 45f });
-        com.lowagie.text.pdf.PdfPCell partyCell = new com.lowagie.text.pdf.PdfPCell();
-        partyCell.setPadding(7); partyCell.setBorder(com.lowagie.text.Rectangle.BOX);
-        partyCell.addElement(new com.lowagie.text.Paragraph("BIZCARE MANAGEMENT SDN BHD", bold));
-        partyCell.addElement(new com.lowagie.text.Paragraph("SO-32-05, MENARA 1, KL ECO CITY", body));
-        partyCell.addElement(new com.lowagie.text.Paragraph("NO. 3, JALAN BANGSAR", body));
-        partyCell.addElement(new com.lowagie.text.Paragraph("59200 KUALA LUMPUR", body));
-        partyCell.addElement(new com.lowagie.text.Paragraph(text(row.getPayerName()), body));
-        partyCell.addElement(new com.lowagie.text.Paragraph(text(row.getProjectName()) + " / " + text(row.getUnitNo()), body));
-        partyCell.addElement(new com.lowagie.text.Paragraph("Attn: ______________________________", small));
-        partyCell.addElement(new com.lowagie.text.Paragraph("TEL: __________________   FAX: __________________", small));
-        partyAndMeta.addCell(partyCell);
-
-        com.lowagie.text.pdf.PdfPCell metaCell = new com.lowagie.text.pdf.PdfPCell();
-        metaCell.setPadding(4); metaCell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
-        String documentNo = ("invoice".equals(documentType) ? "IV-" : "OR-") + text(row.getTransactionNo());
-        com.lowagie.text.Paragraph documentTitle = new com.lowagie.text.Paragraph(
-                ("invoice".equals(documentType) ? "INVOICE / 發票" : "OFFICIAL RECEIPT / 收據") + "  :  " + documentNo, titleFont);
-        documentTitle.setAlignment(com.lowagie.text.Element.ALIGN_RIGHT);
-        metaCell.addElement(documentTitle);
-        metaCell.addElement(new com.lowagie.text.Paragraph("Your Ref.       : __________________", body));
-        metaCell.addElement(new com.lowagie.text.Paragraph("Our D/O No     : " + text(row.getTransactionNo()), body));
-        metaCell.addElement(new com.lowagie.text.Paragraph("Terms           : N/A", body));
-        metaCell.addElement(new com.lowagie.text.Paragraph("Date            : " + dateText(row.getTransactionDate()), body));
-        metaCell.addElement(new com.lowagie.text.Paragraph("Page            : 1 of 1", body));
-        partyAndMeta.addCell(metaCell);
-        document.add(partyAndMeta);
-        document.add(financeRule());
-
-        com.lowagie.text.pdf.PdfPTable items = new com.lowagie.text.pdf.PdfPTable(7);
-        items.setWidthPercentage(100);
-        items.setWidths(new float[] { .45f, 1.05f, 3.3f, .55f, 1.0f, .8f, 1.15f });
-        String[] headers = { "No", "Item Code", "Description", "Qty", "Price/Unit", "Discount", "Amount" };
-        for (String header : headers) invoiceCell(items, header, bold, true, com.lowagie.text.Element.ALIGN_CENTER);
-        invoiceCell(items, "1", body, false, com.lowagie.text.Element.ALIGN_CENTER);
-        invoiceCell(items, text(row.getRecordType()), body, false, com.lowagie.text.Element.ALIGN_LEFT);
-        invoiceCell(items, text(row.getMilestone()), body, false, com.lowagie.text.Element.ALIGN_LEFT);
-        invoiceCell(items, "1", body, false, com.lowagie.text.Element.ALIGN_CENTER);
-        invoiceCell(items, money(row.getAmount()), body, false, com.lowagie.text.Element.ALIGN_RIGHT);
-        invoiceCell(items, "", body, false, com.lowagie.text.Element.ALIGN_RIGHT);
-        invoiceCell(items, money(row.getAmount()), body, false, com.lowagie.text.Element.ALIGN_RIGHT);
-        document.add(items);
-        document.add(new com.lowagie.text.Paragraph(" ", body));
-        document.add(financeRule());
-
-        com.lowagie.text.pdf.PdfPTable total = new com.lowagie.text.pdf.PdfPTable(2);
-        total.setWidthPercentage(100); total.setWidths(new float[] { 5.3f, 1.2f });
-        invoiceCell(total, "Malaysian Ringgit : " + money(row.getAmount()) + " ONLY", bold, false, com.lowagie.text.Element.ALIGN_LEFT);
-        invoiceCell(total, text(row.getCurrency()) + " " + money(row.getAmount()), bold, true, com.lowagie.text.Element.ALIGN_RIGHT);
-        document.add(total);
-        document.add(new com.lowagie.text.Paragraph(" ", body));
-        document.add(new com.lowagie.text.Paragraph("Notes :", bold));
-        document.add(new com.lowagie.text.Paragraph("1. All cheques should be crossed and made payable to:", small));
-        document.add(new com.lowagie.text.Paragraph("   CCPS PROPERTY MANAGEMENT SDN. BHD.", small));
-        document.add(new com.lowagie.text.Paragraph("2. All payments shall be remitted to the following bank account:", small));
-        document.add(new com.lowagie.text.Paragraph("   Account Holder: CCPS PROPERTY MANAGEMENT SDN. BHD.", small));
-        document.add(new com.lowagie.text.Paragraph("   Bank: ____________________    Account No.: ____________________", small));
-        document.add(new com.lowagie.text.Paragraph("This is a computer generated document and no signature is required.", small));
-        document.close();
-    }
-
-    private com.lowagie.text.pdf.PdfPTable financeRule() {
-        com.lowagie.text.pdf.PdfPTable rule = new com.lowagie.text.pdf.PdfPTable(1);
-        rule.setWidthPercentage(100);
-        com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell();
-        cell.setBorder(com.lowagie.text.Rectangle.TOP); cell.setBorderWidthTop(0.8f); cell.setPadding(0); cell.setFixedHeight(4f);
-        rule.addCell(cell);
-        return rule;
-    }
-
-    private void invoiceCell(com.lowagie.text.pdf.PdfPTable table, String value, com.lowagie.text.Font font, boolean boxed, int alignment) {
-        com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell(new com.lowagie.text.Phrase(value == null ? "" : value, font));
-        cell.setHorizontalAlignment(alignment); cell.setVerticalAlignment(com.lowagie.text.Element.ALIGN_MIDDLE); cell.setPadding(4);
-        cell.setBorder(boxed ? com.lowagie.text.Rectangle.BOX : com.lowagie.text.Rectangle.NO_BORDER);
-        table.addCell(cell);
-    }
-
-    private void writeFinanceDocument(java.io.OutputStream output, FinanceReviewRow row, String documentType) throws Exception {
-        com.lowagie.text.Document document = new com.lowagie.text.Document();
-        com.lowagie.text.pdf.PdfWriter.getInstance(document, output);
-        document.open();
-        com.lowagie.text.pdf.BaseFont base = com.lowagie.text.pdf.BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", com.lowagie.text.pdf.BaseFont.NOT_EMBEDDED);
-        com.lowagie.text.Font title = new com.lowagie.text.Font(base, 15, com.lowagie.text.Font.BOLD);
-        com.lowagie.text.Font body = new com.lowagie.text.Font(base, 9);
-        com.lowagie.text.Font bold = new com.lowagie.text.Font(base, 9, com.lowagie.text.Font.BOLD);
-        com.lowagie.text.Paragraph company = new com.lowagie.text.Paragraph("CCPS PROPERTY MANAGEMENT SDN. BHD.", bold);
-        company.setAlignment(com.lowagie.text.Element.ALIGN_CENTER); document.add(company);
-        com.lowagie.text.Paragraph address = new com.lowagie.text.Paragraph("Property Management · Kuala Lumpur · Malaysia", body);
-        address.setAlignment(com.lowagie.text.Element.ALIGN_CENTER); document.add(address);
-        document.add(new com.lowagie.text.Paragraph(" ", body));
-        String heading = "invoice".equals(documentType) ? "INVOICE / 發票" : "OFFICIAL RECEIPT / 收據";
-        com.lowagie.text.Paragraph documentHeading = new com.lowagie.text.Paragraph(heading + "  :  " + text(row.getTransactionNo()), title);
-        documentHeading.setAlignment(com.lowagie.text.Element.ALIGN_RIGHT); document.add(documentHeading);
-        document.add(new com.lowagie.text.Paragraph(" ", body));
-        com.lowagie.text.pdf.PdfPTable party = new com.lowagie.text.pdf.PdfPTable(2);
-        party.setWidthPercentage(100); party.setWidths(new float[] { 1.2f, 2.8f });
-        financeCell(party, "付款人 / Payer", row.getPayerName(), body);
-        financeCell(party, "物業 / Property", text(row.getProjectName()) + " / " + text(row.getUnitNo()), body);
-        financeCell(party, "交易日期 / Date", dateText(row.getTransactionDate()), body);
-        financeCell(party, "付款方式 / Payment", paymentMethodText(row.getPaymentMethod()), body);
-        financeCell(party, "付款參考 / Reference", row.getBankReference(), body);
-        financeCell(party, "狀態 / Status", row.getConfirmationStatus(), body);
-        document.add(party);
-        document.add(new com.lowagie.text.Paragraph(" ", body));
-        com.lowagie.text.pdf.PdfPTable items = new com.lowagie.text.pdf.PdfPTable(5);
-        items.setWidthPercentage(100); items.setWidths(new float[] { .5f, 1.2f, 3.5f, .8f, 1.2f });
-        String[] headers = { "No", "Item Code", "Description", "Qty", "Amount" };
-        for (String header : headers) financeCell(items, header, "", bold);
-        financeCell(items, "1", text(row.getRecordType()), text(row.getMilestone()), "1", money(row.getAmount()), body);
-        document.add(items);
-        document.add(new com.lowagie.text.Paragraph("\n", body));
-        com.lowagie.text.pdf.PdfPTable total = new com.lowagie.text.pdf.PdfPTable(2);
-        total.setWidthPercentage(100); total.setWidths(new float[] { 3.5f, 1.2f });
-        financeCell(total, "Total (" + text(row.getCurrency()) + ")", money(row.getAmount()), bold);
-        document.add(total);
-        document.add(new com.lowagie.text.Paragraph(" ", body));
-        document.add(new com.lowagie.text.Paragraph("This is a computer generated document and no signature is required.", body));
-        document.close();
-    }
-
-    private void financeCell(com.lowagie.text.pdf.PdfPTable table, String label, String value, com.lowagie.text.Font font) {
-        com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell(new com.lowagie.text.Phrase(text(label) + (value == null || value.isBlank() ? "" : "  " + text(value)), font));
-        cell.setPadding(5); table.addCell(cell);
-    }
-
-    private void financeCell(com.lowagie.text.pdf.PdfPTable table, String no, String code, String description, String qty, String amount, com.lowagie.text.Font font) {
-        for (String value : new String[] { no, code, description, qty, amount }) financeCell(table, "", value, font);
+        boolean invoice = "invoice".equals(documentType);
+        String documentNo = (invoice ? "IV-" : "OR-") + text(row.getTransactionNo());
+        FinanceDocumentPdfRenderer.write(output, new FinanceDocumentPdfRenderer.Data(
+                invoice,
+                "HH CONSULTANTS (MM2H) SDN BHD",
+                "202301030304 (1542427-K)",
+                List.of(
+                        "SO-32-05, MENARA 1, KL ECO CITY, NO.3, JALAN BANGSAR,",
+                        "59200 KUALA LUMPUR    (License No.: MM2H814)    Tel: 03-6415 1485    Email: hay@hmm2h.com"),
+                List.of(
+                        "BIZCARE MANAGEMENT SDN BHD",
+                        "SO-32-05, MENARA 1, KL ECO CITY",
+                        "NO. 3, JALAN BANGSAR",
+                        "59200 KUALA LUMPUR",
+                        text(row.getPayerName()),
+                        text(row.getProjectName()) + " / " + text(row.getUnitNo())),
+                documentNo,
+                row.getTransactionDate(),
+                text(row.getMilestone()),
+                List.of(
+                        new FinanceDocumentPdfRenderer.Detail("Transaction No.", text(row.getTransactionNo())),
+                        new FinanceDocumentPdfRenderer.Detail("Item Code", text(row.getRecordType())),
+                        new FinanceDocumentPdfRenderer.Detail("Property", text(row.getProjectName()) + " / " + text(row.getUnitNo())),
+                        new FinanceDocumentPdfRenderer.Detail("Payment Method", paymentMethodText(row.getPaymentMethod())),
+                        new FinanceDocumentPdfRenderer.Detail("Payment Reference", text(row.getBankReference())),
+                        new FinanceDocumentPdfRenderer.Detail("Status", text(row.getConfirmationStatus()))),
+                zero(row.getAmount()),
+                row.getCurrency(),
+                List.of(
+                        "Notes:",
+                        "1. All cheques should be crossed and made payable to: CCPS PROPERTY MANAGEMENT SDN. BHD.",
+                        "2. All payments shall be remitted to the following bank account:",
+                        "Account Holder: CCPS PROPERTY MANAGEMENT SDN. BHD.",
+                        "Bank: ____________________    Account No.: ____________________")));
     }
 
     private ReviewActionContext requirePendingReview(Long financeRecordId) {
@@ -553,12 +620,14 @@ public class AdminFinanceReviewService {
         return context;
     }
 
-    private AdminFinanceReviewResponse.Item toItem(FinanceReviewRow row) {
+    private AdminFinanceReviewResponse.Item toItem(FinanceReviewRow row, FinanceSourceLink source) {
         return new AdminFinanceReviewResponse.Item(
-                row.getId(), row.getTransactionNo(), row.getRecordType(), row.getProjectName(), row.getUnitNo(),
+                row.getId(), row.getTransactionNo(), row.getRecordType(),
+                source == null ? null : source.getSourceType(), source == null ? null : source.getSourceId(),
+                row.getProjectName(), row.getUnitNo(),
                 row.getPayerName(), zero(row.getAmount()), row.getCurrency(), row.getTransactionDate(),
                 row.getPaymentMethod(), row.getPaymentStatus(), row.getConfirmationStatus(), row.getSyncStatus(),
-                row.getReceiptId(), row.getReceiptNo(), row.getBankReference(), row.getSubmissionNote(), row.getReviewNote(),
+                row.getReceiptId(), row.getReceiptNo(), row.getBankReference(), row.getSubmissionNote(), row.getReviewNote(), row.getAllocationNote(),
                 row.getProofDocumentId(), row.getProofName(), row.getProofMimeType(), row.getProofSize(),
                 row.getInstallmentId(), row.getInstallmentNo(), row.getMilestone(), row.getDueDate(),
                 zero(row.getInstallmentAmount()), zero(row.getInstallmentPaid()), zero(row.getAllocatedAmount()),
@@ -588,6 +657,21 @@ public class AdminFinanceReviewService {
         return note;
     }
 
+    private LocalDate requiredDate(LocalDate value) {
+        if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Finance confirmation date is required");
+        if (value.isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Finance confirmation date cannot be in the future");
+        }
+        return value;
+    }
+
+    private LocalDate optionalPastDate(LocalDate value) {
+        if (value != null && value.isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receipt date cannot be in the future");
+        }
+        return value;
+    }
+
     private String safeFileName(String value) {
         String name = value == null ? "payment-proof" : value.replace('\\', '/');
         name = name.substring(name.lastIndexOf('/') + 1).replaceAll("[\\r\\n\\t]", "_");
@@ -595,8 +679,6 @@ public class AdminFinanceReviewService {
     }
 
     private String text(String value) { return value == null || value.isBlank() ? "—" : value; }
-    private String dateText(java.time.LocalDate value) { return value == null ? "—" : value.toString(); }
-    private String money(BigDecimal value) { return zero(value).setScale(2).toPlainString(); }
     private String paymentMethodText(String value) {
         return switch (value == null ? "" : value) {
             case "bank_transfer" -> "Bank Transfer";

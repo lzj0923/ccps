@@ -1,6 +1,6 @@
 <template>
   <aside v-if="currentModule.shell === 'admin-shell'" class="sidebar">
-    <div class="brand"><div class="crest" aria-label="CCPS">CC</div><div class="brand-copy"><strong>{{ $t('legacy.t_c6a41f9e64a4') }}</strong><span>{{ $t('login.adminConsole') }}</span></div></div>
+    <div class="brand"><div class="crest" :aria-label="$t('ui.brandName')">{{ $t('ui.brandMark') }}</div><div class="brand-copy"><strong>{{ $t('legacy.t_c6a41f9e64a4') }}</strong><span>{{ $t('login.adminConsole') }}</span></div></div>
     <nav class="nav" :aria-label="$t('login.adminConsole')">
       <div class="nav-primary-items">
         <button v-for="module in adminPrimaryModules" :key="module.id" type="button" :title="moduleLabel(module)" :class="{ active: module.id === currentId }" @click="selectModule(module.id)">
@@ -29,13 +29,14 @@
 <script>
 import '../admin-icons.css';
 import pageBridge from '../pageBridge';
-import { Bell, Building2, ChartColumnIncreasing, ChevronDown, DatabaseBackup, FileText, Gauge, History, House, MapPinned, ReceiptText, UsersRound, WalletCards, Wrench } from '@lucide/vue';
+import { ArchiveRestore, Bell, Building2, ChartColumnIncreasing, ChevronDown, DatabaseBackup, FileText, Gauge, History, House, MapPinned, ReceiptText, ShieldCheck, UsersRound, WalletCards, Wrench } from '@lucide/vue';
 const sidebarIcons = {
   adminSmartDashboard: MapPinned,
   adminDashboard: Gauge,
   adminProjects: Building2,
   adminOwners: House,
   adminProperties: Building2,
+  adminOffMarketProperties: ArchiveRestore,
   adminProcess: ChartColumnIncreasing,
   adminRentalSigning: FileText,
   adminDeposits: WalletCards,
@@ -47,6 +48,7 @@ const sidebarIcons = {
   adminReserve: WalletCards,
   adminAlerts: Bell,
   adminReports: ChartColumnIncreasing,
+  adminAccounts: ShieldCheck,
   adminAudit: History,
   adminSystemBackup: DatabaseBackup
 };

@@ -66,12 +66,17 @@ public interface OwnerDashboardMapper {
               pay.next_due_date,
               lease_info.tenant_name,
               COALESCE(lease_info.monthly_rent, 0) AS monthly_rent,
+              COALESCE(lease_info.tenant_deposit_amount, 0) AS tenant_deposit_amount,
               lease_info.lease_end_date,
               COALESCE(rent_info.current_month_rent_due, 0) AS current_month_rent_due,
               COALESCE(rent_info.current_month_rent_paid, 0) AS current_month_rent_paid,
               COALESCE(rent_info.current_month_rent_outstanding, 0) AS current_month_rent_outstanding,
               COALESCE(ra.minimum_balance, 0) AS reserve_minimum_balance,
-              COALESCE(ra.current_balance, 0) AS reserve_balance,
+              COALESCE(ra.current_balance, 0) + COALESCE((SELECT SUM(rp.allocated_amount)
+                FROM rent_payments rp JOIN finance_records rfr ON rfr.id=rp.finance_record_id
+                WHERE rfr.owner_id=o.id AND rfr.unit_id=u.id AND rfr.record_type='rent_payment'
+                  AND rfr.payment_status='paid' AND rfr.confirmation_status='confirmed'
+                  AND rfr.transaction_date<=CURRENT_DATE),0) AS reserve_balance,
               COALESCE(cashflow.monthly_income, 0) AS monthly_income,
               COALESCE(cashflow.monthly_expense, 0) AS monthly_expense,
               COALESCE(maintenance.pending_maintenance_count, 0) AS pending_maintenance_count,
@@ -116,6 +121,7 @@ public interface OwnerDashboardMapper {
               SELECT l.unit_id,
                      MAX(t.full_name) AS tenant_name,
                      MAX(l.monthly_rent) AS monthly_rent,
+                     COALESCE(SUM(l.deposit_amount), 0) AS tenant_deposit_amount,
                      MAX(l.end_date) AS lease_end_date
               FROM leases l
               JOIN tenants t ON t.id = l.tenant_id
@@ -144,6 +150,7 @@ public interface OwnerDashboardMapper {
               WHERE ce.occurred_on >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
                 AND ce.occurred_on < DATE_ADD(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 1 MONTH)
                 AND fr.payment_status <> 'voided'
+                AND fr.confirmation_status = 'confirmed'
               GROUP BY ce.unit_id
             ) cashflow ON cashflow.unit_id = ou.unit_id
             LEFT JOIN (
@@ -178,7 +185,12 @@ public interface OwnerDashboardMapper {
     BigDecimal findMonthlyRentIncome(@Param("userId") Long userId);
 
     @Select("""
-            SELECT COALESCE(SUM(ra.current_balance), 0)
+            SELECT COALESCE(SUM(ra.current_balance), 0) + COALESCE((SELECT SUM(rp.allocated_amount)
+              FROM rent_payments rp JOIN finance_records fr ON fr.id=rp.finance_record_id
+              JOIN owners ro ON ro.id=fr.owner_id
+              WHERE ro.user_id=#{userId} AND fr.record_type='rent_payment'
+                AND fr.payment_status='paid' AND fr.confirmation_status='confirmed'
+                AND fr.transaction_date<=CURRENT_DATE),0)
             FROM reserve_accounts ra
             JOIN owner_units ou ON ou.id = ra.owner_unit_id AND ou.status = 'active' AND ou.asset_stage = 'OPERATING'
             JOIN owners o ON o.id = ou.owner_id

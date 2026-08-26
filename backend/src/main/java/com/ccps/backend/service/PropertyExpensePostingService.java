@@ -28,6 +28,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class PropertyExpensePostingService {
+    private static final List<Integer> DEFAULT_ASSESSMENT_TAX_MONTHS = List.of(2, 8);
+
     private final PropertyExpensePostingMapper mapper;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -54,6 +56,18 @@ public class PropertyExpensePostingService {
                 YearMonth.from(occurredOn).toString()),actorId,occurredOn);
     }
 
+    /**
+     * Automatically calculates the owner's management fee for one billing month.
+     * A positive percentage takes precedence when rent exists; vacant months use the fixed fallback amount.
+     */
+    @Transactional
+    public void syncMandateFee(Long mandateId,Long actorId,LocalDate billingMonth) {
+        if (mandateId==null||billingMonth==null) return;
+        LocalDate periodStart=billingMonth.withDayOfMonth(1);
+        MandateFeeRow row=mapper.findMandateFee(mandateId,periodStart,periodStart.withDayOfMonth(periodStart.lengthOfMonth()));
+        syncCalculatedMandateFee(row,actorId,periodStart);
+    }
+
     @Scheduled(cron="${ccps.property-expenses.cron:0 20 0 * * *}")
     @Transactional
     public void postDueExpenses() {
@@ -76,10 +90,24 @@ public class PropertyExpensePostingService {
                 // One malformed legacy profile must not stop the remaining properties.
             }
         }
-        List<MandateFeeRow> mandateFees=mapper.findActiveMandateFees(today);
+        LocalDate billingMonth=today.withDayOfMonth(1);
+        List<MandateFeeRow> mandateFees=mapper.findActiveMandateFees(today,billingMonth);
         if (mandateFees!=null) for (MandateFeeRow row : mandateFees) {
-            syncMandateFee(row.getOwnerUnitId(),row.getMandateId(),row.getManagementFee(),null,today);
+            syncCalculatedMandateFee(row,null,billingMonth);
         }
+    }
+
+    private void syncCalculatedMandateFee(MandateFeeRow row,Long actorId,LocalDate billingMonth) {
+        if (row==null) return;
+        BigDecimal percent=money(row.getCommissionPercent());
+        BigDecimal rentBase=money(row.getRentBase());
+        BigDecimal amount;
+        if (percent.signum()>0 && rentBase.signum()>0) {
+            amount=rentBase.multiply(percent).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP);
+        } else {
+            amount=money(row.getManagementFee());
+        }
+        syncMandateFee(row.getOwnerUnitId(),row.getMandateId(),amount,actorId,billingMonth);
     }
 
     private void post(Long ownerUnitId,Charge charge,Long actorId,LocalDate occurredOn) {
@@ -107,10 +135,6 @@ public class PropertyExpensePostingService {
     private List<Charge> charges(Map<String,Object> profile,LocalDate today) {
         List<Charge> result=new ArrayList<>();
         List<Integer> allMonths=allMonths();
-        if (enabled(profile.get("rentalServiceEnabled"))) {
-            addConfigured(result,"management-service","租管服務費",money(profile.get("managementFeeAmount")),"management",
-                    profile.getOrDefault("managementFeeBillingMode","months"),profile.get("managementFeeBillingMonths"),allMonths,today);
-        }
         Object legacyManagementMonths=profile.containsKey("managementFeeBillingMonths")
                 ? profile.get("managementFeeBillingMonths") : profile.get("managementFeeMonths");
         addConfigured(result,"building-management","大樓管理費",money(profile.get("buildingManagementFee")),"management",
@@ -134,7 +158,7 @@ public class PropertyExpensePostingService {
                 List.of(month(profile.get("landTaxMonth"),today)),today);
         addConfigured(result,"assessment-tax","門牌稅",money(profile.get("assessmentTaxFee")),"tax",
                 profile.getOrDefault("assessmentTaxBillingMode","months"),profile.get("assessmentTaxBillingMonths"),
-                List.of(month(profile.get("assessmentTaxMonth"),today)),today);
+                DEFAULT_ASSESSMENT_TAX_MONTHS,today);
         return result;
     }
 
@@ -155,7 +179,6 @@ public class PropertyExpensePostingService {
     private BigDecimal money(Object value){try{return new BigDecimal(String.valueOf(value==null?0:value)).setScale(2,RoundingMode.HALF_UP);}catch(Exception e){return BigDecimal.ZERO;}}
     private int month(Object value,LocalDate today){try{return Math.max(1,Math.min(12,Integer.parseInt(String.valueOf(value))));}catch(Exception e){return today.getMonthValue();}}
     private List<Integer> months(Object value){List<Integer> result=new ArrayList<>();if(value instanceof List<?> list)for(Object item:list)try{result.add(Integer.parseInt(String.valueOf(item)));}catch(Exception ignored){}return result;}
-    private boolean enabled(Object value){return value instanceof Boolean b?b:Boolean.parseBoolean(String.valueOf(value));}
     private String text(Object value){String s=value==null?null:String.valueOf(value).trim();return s==null||s.isBlank()?null:s;}
     private record Charge(String key,String name,BigDecimal amount,String category,String period){}
 }

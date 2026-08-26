@@ -27,10 +27,12 @@ import com.ccps.backend.dto.AdminMaintenanceCompleteRequest;
 import com.ccps.backend.dto.AdminExpenseCreateRequest;
 import com.ccps.backend.dto.AdminMaintenanceCreateRequest;
 import com.ccps.backend.dto.AdminMaintenanceHandlingResponse;
+import com.ccps.backend.dto.AdminMaintenanceResubmitRequest;
 import com.ccps.backend.dto.AdminMaintenanceOptionsResponse;
 import com.ccps.backend.dto.AdminPropertyMaintenanceResponse;
 import com.ccps.backend.dto.AdminPropertyMaintenanceUpdateRequest;
 import com.ccps.backend.dto.AdminRecordCreateResponse;
+import com.ccps.backend.dto.AdminRecycleBinResponse;
 import com.ccps.backend.dto.OwnerExpenseMaintenanceResponse;
 import com.ccps.backend.service.AdminMaintenanceService;
 import com.ccps.backend.service.MaintenanceAttachmentService;
@@ -84,9 +86,8 @@ public class AdminExpenseMaintenanceController {
     }
 
     @DeleteMapping("/records/{cashflowId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteExpense(@PathVariable Long cashflowId, HttpServletRequest request) {
-        adminMaintenanceService.deleteExpense(AuthInterceptor.userId(request), cashflowId);
+    public Long deleteExpense(@PathVariable Long cashflowId, HttpServletRequest request) {
+        return adminMaintenanceService.deleteExpense(AuthInterceptor.userId(request), cashflowId);
     }
 
     @PostMapping("/maintenance")
@@ -102,9 +103,25 @@ public class AdminExpenseMaintenanceController {
     }
 
     @DeleteMapping("/maintenance/{workOrderId}")
+    public Long deleteMaintenance(@PathVariable Long workOrderId, HttpServletRequest request) {
+        return adminMaintenanceService.deleteMaintenance(AuthInterceptor.userId(request), workOrderId);
+    }
+
+    @GetMapping("/recycle-bin")
+    public AdminRecycleBinResponse recycleBin() {
+        return adminMaintenanceService.recycleBin();
+    }
+
+    @PostMapping("/recycle-bin/{recycleBinId}/restore")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteMaintenance(@PathVariable Long workOrderId, HttpServletRequest request) {
-        adminMaintenanceService.deleteMaintenance(AuthInterceptor.userId(request), workOrderId);
+    public void restoreRecycleBin(@PathVariable Long recycleBinId, HttpServletRequest request) {
+        adminMaintenanceService.restoreRecycleBin(AuthInterceptor.userId(request), recycleBinId);
+    }
+
+    @DeleteMapping("/recycle-bin/{recycleBinId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void purgeRecycleBinItem(@PathVariable Long recycleBinId, HttpServletRequest request) {
+        adminMaintenanceService.purgeRecycleBinItem(AuthInterceptor.userId(request), recycleBinId);
     }
 
     @GetMapping("/maintenance/{workOrderId}")
@@ -142,5 +159,12 @@ public class AdminExpenseMaintenanceController {
     public MaintenanceDetailResponse complete(@PathVariable Long workOrderId,
             @Valid @RequestBody AdminMaintenanceCompleteRequest body, HttpServletRequest request) {
         return adminMaintenanceService.complete(AuthInterceptor.userId(request), workOrderId, body);
+    }
+
+    @PostMapping("/maintenance/{workOrderId}/resubmit-finance")
+    public MaintenanceDetailResponse resubmitFinance(@PathVariable Long workOrderId,
+            @RequestBody(required = false) AdminMaintenanceResubmitRequest body,
+            HttpServletRequest request) {
+        return adminMaintenanceService.resubmitFinance(AuthInterceptor.userId(request), workOrderId, body);
     }
 }

@@ -39,6 +39,7 @@
 <script>
 import { Archive, ArchiveX, CircleCheck, Database, DatabaseBackup, Download, FileArchive, FolderArchive, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, TriangleAlert, Upload } from '@lucide/vue';
 import { createAdminSystemBackup, downloadAdminSystemBackup, fetchAdminSystemBackups, restoreAdminSystemBackup } from '../services/propertyApi';
+import { formatDateTime } from '../utils/dateFormat';
 
 export default {
   components: { Archive, ArchiveX, CircleCheck, Database, DatabaseBackup, Download, FileArchive, FolderArchive, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, TriangleAlert, Upload },
@@ -52,7 +53,7 @@ export default {
     selectFile(event) { this.selectedFile = event.target.files?.[0] || null; this.notice = null; },
     async restoreBackup() { if (!this.canRestore) return; this.restoring = true; this.notice = null; try { const result = await restoreAdminSystemBackup(this.selectedFile, this.confirmation); this.showNotice('success', this.$t('backup.restoreSuccess', { file: result.safetyBackupFileName })); this.selectedFile = null; this.confirmation = ''; await this.loadBackups(); } catch (error) { this.showNotice('error', `${this.$t('backup.restoreFailed')}：${error.message}`); } finally { this.restoring = false; } },
     saveBlob(result, fallbackName) { const disposition = result.contentDisposition || ''; const utf = disposition.match(/filename\*=UTF-8''([^;]+)/i); const plain = disposition.match(/filename="?([^";]+)"?/i); let name = fallbackName; try { name = decodeURIComponent(utf?.[1] || plain?.[1] || fallbackName); } catch { name = fallbackName; } const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = name; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url); },
-    formatDate(value) { if (!value) return '—'; return new Intl.DateTimeFormat(this.$i18n.locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)); },
+    formatDate(value) { return formatDateTime(value); },
     formatSize(value) { const bytes = Number(value || 0); if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`; if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`; return `${(bytes / 1024 ** 3).toFixed(2)} GB`; },
     showNotice(type, message) { this.notice = { type, message }; }
   }

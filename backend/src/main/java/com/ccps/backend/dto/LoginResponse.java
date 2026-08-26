@@ -9,5 +9,6 @@ public record LoginResponse(
         String displayName,
         String status,
         String role,
-        List<String> roles) {
+        List<String> roles,
+        List<String> permissions) {
 }

@@ -25,7 +25,10 @@ public record MaintenanceDetailResponse(
         String paymentMethod,
         LocalDate paymentDate,
         List<StatusEvent> history,
-        List<Attachment> attachments) {
+        List<Attachment> attachments,
+        String payerName,
+        String bankName,
+        String paymentAccountNo) {
 
     public record StatusEvent(Long id, String status, LocalDateTime occurredAt, String note) {
     }

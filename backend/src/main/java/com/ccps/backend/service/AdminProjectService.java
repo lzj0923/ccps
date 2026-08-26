@@ -44,6 +44,12 @@ public class AdminProjectService {
                 new AdminProjectManagementResponse.Page(totalRows, page, pageSize, totalPages));
     }
 
+    @Transactional(readOnly = true)
+    public boolean isProjectCodeAvailable(String projectCode) {
+        String normalized = normalize(projectCode);
+        return normalized != null && mapper.countProjectCode(normalized.toUpperCase(), null) == 0;
+    }
+
     @Transactional
     public AdminProjectManagementResponse.Project create(AdminProjectCreateRequest request) {
         ProjectWrite write = toWrite(null, request);

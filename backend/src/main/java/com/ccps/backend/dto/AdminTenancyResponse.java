@@ -12,7 +12,8 @@ public record AdminTenancyResponse(Summary summary, List<Item> rows, Page page) 
 
     public record Item(Long tenantId, String tenantName, String identityNo, String phone, String email,
             String tenantStatus, Long leaseId, String leaseNo, Long projectId, String projectName,
-            Long unitId, String unitNo, LocalDate leaseStart, LocalDate leaseEnd,
+            Long unitId, String unitNo, Long rentalSpaceId, String rentalSpaceName, String rentalSpaceType,
+            LocalDate leaseStart, LocalDate leaseEnd,
             BigDecimal monthlyRent, BigDecimal depositAmount, Integer paymentDay, String rentCalculationMethod, String leaseStatus,
             Long contractDocumentId, String contractDocumentName, String contractDocumentMimeType,
             Long contractDocumentSize, Long invoiceId, LocalDate billingMonth, LocalDate dueDate,

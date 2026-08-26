@@ -39,6 +39,7 @@
 
 <script>
 import { fetchAdminAudit, fetchAdminAuditOptions } from '../services/propertyApi';
+import { formatDateTime as displayDateTime } from '../utils/dateFormat';
 const fieldLabels = { vendorCode: '服務商編號', name: '名稱', contactName: '聯絡人', phone: '電話', email: 'Email', status: '狀態', leaseCode: '租約編號', startDate: '租期開始', endDate: '租期結束', monthlyRent: '月租', tenantName: '租客', unitNo: '單位', amount: '金額', paymentDate: '收款日期' };
 const actionLabels = {
   admin_direct_reserve_topup: '新增預備金充值', complete_electronic_signature: '完成電子簽署', complete_handover: '完成交屋報告', complete_maintenance: '完成維修訂單',
@@ -58,7 +59,7 @@ export default {
   methods: {
     actionLabel(action) { return actionLabels[action] || (action ? `其他操作：${String(action).replaceAll('_', ' ')}` : '系統操作'); },
     entityLabel(type) { return entityLabels[type] || type || '—'; },
-    formatDateTime(value) { if (!value) return '—'; return String(value).replace('T', ' ').slice(0, 16); },
+    formatDateTime(value) { return displayDateTime(value); },
     snapshotFields(raw) { if (!raw) return []; try { const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; if (!parsed || typeof parsed !== 'object') return [{ key: 'raw', label: '內容', value: String(raw) }]; return Object.entries(parsed).filter(([, value]) => value !== null && value !== undefined && value !== '').map(([key, value]) => ({ key, label: fieldLabels[key] || key, value: this.valueLabel(key, value) })); } catch { return [{ key: 'raw', label: '內容', value: String(raw) }]; } },
     valueLabel(key, value) { if (key === 'status') return value === 'active' ? '啟用' : value === 'inactive' ? '停用' : String(value); return String(value); },
     async loadOptions() { try { this.options = await fetchAdminAuditOptions(); } catch { this.options = { actors: [], actions: [] }; } },

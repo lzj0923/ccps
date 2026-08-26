@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,6 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminFinanceBatchConfirmRequest;
+import com.ccps.backend.dto.AdminFinanceBatchReopenRequest;
+import com.ccps.backend.dto.AdminFinanceAllocationNoteRequest;
+import com.ccps.backend.dto.AdminFinanceConfirmRequest;
 import com.ccps.backend.dto.AdminFinanceDecisionRequest;
 import com.ccps.backend.dto.AdminFinanceReviewResponse;
 import com.ccps.backend.service.AdminFinanceReviewService;
@@ -56,9 +60,10 @@ public class AdminFinanceReviewController {
 
     @PostMapping("/reviews/{financeRecordId}/confirm")
     public ResponseEntity<Void> confirm(@PathVariable Long financeRecordId,
-            @Valid @RequestBody AdminFinanceDecisionRequest request,
+            @Valid @RequestBody AdminFinanceConfirmRequest request,
             HttpServletRequest httpRequest) {
-        service.confirm(AuthInterceptor.userId(httpRequest), financeRecordId, request.note());
+        service.confirm(AuthInterceptor.userId(httpRequest), financeRecordId, request.transactionDate(),
+                request.receiptDate(), request.note());
         return ResponseEntity.noContent().build();
     }
 
@@ -78,10 +83,27 @@ public class AdminFinanceReviewController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/reviews/{financeRecordId}/allocation-note")
+    public ResponseEntity<Void> updateAllocationNote(@PathVariable Long financeRecordId,
+            @Valid @RequestBody AdminFinanceAllocationNoteRequest request,
+            HttpServletRequest httpRequest) {
+        service.updateAllocationNote(AuthInterceptor.userId(httpRequest), financeRecordId,
+                request.note(), Boolean.TRUE.equals(request.reuseEnabled()));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/reviews/batch-confirm")
     public ResponseEntity<Void> confirmBatch(@Valid @RequestBody AdminFinanceBatchConfirmRequest request,
             HttpServletRequest httpRequest) {
-        service.confirmBatch(AuthInterceptor.userId(httpRequest), request.ids(), request.note(), request.referenceNo());
+        service.confirmBatch(AuthInterceptor.userId(httpRequest), request.ids(), request.transactionDate(),
+                request.receiptDate(), request.note(), request.referenceNo());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/reviews/batch-reopen")
+    public ResponseEntity<Void> reopenBatch(@Valid @RequestBody AdminFinanceBatchReopenRequest request,
+            HttpServletRequest httpRequest) {
+        service.reopenBatch(AuthInterceptor.userId(httpRequest), request.ids(), request.note());
         return ResponseEntity.noContent().build();
     }
 

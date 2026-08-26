@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminLeasePaymentResponse;
@@ -24,6 +26,6 @@ import jakarta.validation.Valid;
 public class AdminLeasePaymentController {
     private final AdminLeasePaymentService service;public AdminLeasePaymentController(AdminLeasePaymentService service){this.service=service;}
     @GetMapping public List<AdminLeasePaymentResponse> list(@PathVariable Long leaseId){return service.list(leaseId);}
-    @PutMapping("/{paymentId}") public AdminLeasePaymentResponse update(@PathVariable Long leaseId,@PathVariable Long paymentId,@Valid @RequestBody AdminLeasePaymentUpdateRequest body,HttpServletRequest request){return service.update(AuthInterceptor.userId(request),leaseId,paymentId,body);}
-    @DeleteMapping("/{paymentId}") public ResponseEntity<Void> delete(@PathVariable Long leaseId,@PathVariable Long paymentId,HttpServletRequest request){service.delete(AuthInterceptor.userId(request),leaseId,paymentId);return ResponseEntity.noContent().build();}
+    @PutMapping("/{paymentId}") public AdminLeasePaymentResponse update(@PathVariable Long leaseId,@PathVariable Long paymentId,@Valid @RequestBody AdminLeasePaymentUpdateRequest body,HttpServletRequest request){throw new ResponseStatusException(HttpStatus.GONE,"已确认租金须在财务确认模块退回后才能修改");}
+    @DeleteMapping("/{paymentId}") public ResponseEntity<Void> delete(@PathVariable Long leaseId,@PathVariable Long paymentId,HttpServletRequest request){throw new ResponseStatusException(HttpStatus.GONE,"已确认租金须在财务确认模块退回后才能作废");}
 }

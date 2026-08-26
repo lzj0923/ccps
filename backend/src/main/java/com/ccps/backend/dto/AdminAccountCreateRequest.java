@@ -12,5 +12,6 @@ public record AdminAccountCreateRequest(
         @Email @Size(max = 190) String email,
         @Size(max = 40) String phone,
         @NotBlank @Pattern(regexp = "ADMIN|OWNER") String accountType,
+        @Pattern(regexp = "SUPER_ADMIN|FINANCE|BUSINESS|CUSTOMER_SERVICE|ADMINISTRATION") String staffRole,
         @NotBlank @Pattern(regexp = "active|inactive") String status) {
 }

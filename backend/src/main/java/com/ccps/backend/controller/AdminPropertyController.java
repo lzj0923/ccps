@@ -1,6 +1,9 @@
 package com.ccps.backend.controller;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,4 +29,11 @@ public class AdminPropertyController {
             @RequestParam(required = false) String rentalStatus) {
         return service.findProperties(page, pageSize, keyword, projectName, rentalStatus);
     }
+
+    @DeleteMapping("/{unitId}")
+    public ResponseEntity<Void> deleteProperty(@PathVariable Long unitId) {
+        service.deleteProperty(unitId);
+        return ResponseEntity.noContent().build();
+    }
+
 }

@@ -142,7 +142,7 @@ SELECT
   CASE
     WHEN ri.amount_paid >= ri.amount_due THEN 'paid'
     WHEN ri.amount_paid > 0 THEN 'partial'
-    WHEN CURRENT_DATE > GREATEST(ri.due_date, DATE_ADD(l.start_date, INTERVAL 7 DAY)) THEN 'overdue'
+    WHEN CURRENT_DATE > ri.due_date THEN 'overdue'
     ELSE 'unpaid'
   END AS calculated_status
 FROM rent_invoices ri

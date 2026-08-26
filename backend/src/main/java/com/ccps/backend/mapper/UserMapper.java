@@ -19,4 +19,14 @@ public interface UserMapper extends BaseMapper<User> {
             ORDER BY UPPER(r.code)
             """)
     List<String> findRoleCodes(@Param("userId") Long userId);
+
+    @Select("""
+            SELECT DISTINCT UPPER(p.code)
+            FROM user_roles ur
+            JOIN role_permissions rp ON rp.role_id = ur.role_id
+            JOIN permissions p ON p.id = rp.permission_id
+            WHERE ur.user_id = #{userId}
+            ORDER BY UPPER(p.code)
+            """)
+    List<String> findPermissionCodes(@Param("userId") Long userId);
 }
