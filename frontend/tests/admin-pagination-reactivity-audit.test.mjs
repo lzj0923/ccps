@@ -27,6 +27,7 @@ function paginationStateNames(source) {
 }
 
 function hasReactiveDeclaration(source, name) {
+  source = source.replace(/\r\n/g, '\n');
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const optionsApiState = new RegExp(`\\b${escaped}\\s*:\\s*`).test(
     source.match(/data\(\)\s*\{[\s\S]*?\n\s*\},\n\s*(?:computed|watch|methods)\s*:/)?.[0] || '',

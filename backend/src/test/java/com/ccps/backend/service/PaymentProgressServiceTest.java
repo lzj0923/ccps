@@ -41,6 +41,8 @@ class PaymentProgressServiceTest {
         InstallmentRow current = installment(2L, 2, "Foundation", "2026-07-20", "120000.00", "0.00");
         current.setConfirmationStatus("rejected");
         current.setRejectionReason("付款憑證無法辨識");
+        paid.setProofDocumentIds("101,102");
+        current.setProofDocumentIds("201");
         InstallmentRow future = installment(3L, 3, "Structure", "2026-10-20", "240000.00", "0.00");
 
         when(mapper.findHeader(42L, 5L)).thenReturn(header);
@@ -59,6 +61,9 @@ class PaymentProgressServiceTest {
         assertThat(result.installments()).extracting(PaymentProgressResponse.Installment::status)
                 .containsExactly("paid", "current", "pending");
         assertThat(result.installments().get(1).rejectionReason()).isEqualTo("付款憑證無法辨識");
+        assertThat(result.installments().get(0).proofDocumentIds()).containsExactly(101L, 102L);
+        assertThat(result.installments().get(1).proofDocumentIds()).containsExactly(201L);
+        assertThat(result.installments().get(2).proofDocumentIds()).isEmpty();
     }
 
     @Test

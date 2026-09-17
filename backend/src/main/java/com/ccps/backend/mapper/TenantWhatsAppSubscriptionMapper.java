@@ -3,10 +3,10 @@ package com.ccps.backend.mapper;
 import java.time.LocalDateTime;
 
 import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface TenantWhatsAppSubscriptionMapper {
@@ -30,12 +30,35 @@ public interface TenantWhatsAppSubscriptionMapper {
     int enable(@Param("tenantId") Long tenantId, @Param("destination") String destination,
                @Param("source") String source);
 
-    @Update("""
-            UPDATE tenant_whatsapp_subscriptions
-            SET enabled = 0, opted_out_at = NOW()
-            WHERE tenant_id = #{tenantId}
+    @Insert("""
+            INSERT INTO tenant_whatsapp_subscriptions
+              (tenant_id, destination, enabled, opted_out_at)
+            VALUES (#{tenantId}, '', 0, NOW())
+            ON DUPLICATE KEY UPDATE enabled = 0, opted_out_at = NOW()
             """)
     int disable(@Param("tenantId") Long tenantId);
+
+    @Delete("DELETE FROM tenant_whatsapp_subscriptions WHERE tenant_id = #{tenantId}")
+    int deleteForTenant(@Param("tenantId") Long tenantId);
+
+    @Insert("""
+            INSERT INTO tenant_whatsapp_subscriptions
+              (tenant_id, destination, enabled, opted_in_at, opt_in_source)
+            VALUES (#{tenantId}, #{destination}, #{enabled},
+                    CASE WHEN #{enabled} THEN NOW() ELSE NULL END, #{source})
+            ON DUPLICATE KEY UPDATE
+              destination = CASE WHEN opted_out_at IS NULL OR #{resubscribe} THEN VALUES(destination) ELSE destination END,
+              enabled = CASE WHEN opted_out_at IS NULL OR #{resubscribe} THEN VALUES(enabled) ELSE 0 END,
+              opt_in_source = CASE WHEN (opted_out_at IS NULL AND opted_in_at IS NULL) OR #{resubscribe}
+                                   THEN VALUES(opt_in_source) ELSE opt_in_source END,
+              opted_in_at = CASE WHEN #{resubscribe} AND VALUES(enabled) = 1 THEN NOW()
+                                 WHEN opted_out_at IS NULL AND VALUES(enabled) = 1
+                                 THEN COALESCE(opted_in_at, NOW()) ELSE opted_in_at END,
+              opted_out_at = CASE WHEN #{resubscribe} THEN NULL ELSE opted_out_at END
+            """)
+    int synchronizeFromTerms(@Param("tenantId") Long tenantId, @Param("destination") String destination,
+                             @Param("enabled") boolean enabled, @Param("source") String source,
+                             @Param("resubscribe") boolean resubscribe);
 
     @Insert("""
             INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, after_data)

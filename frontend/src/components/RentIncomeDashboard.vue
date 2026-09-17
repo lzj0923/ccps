@@ -4,7 +4,7 @@
       <article v-for="card in summaryCards" :key="card.label" class="rent-kpi-card">
         <div class="rent-kpi-icon" v-html="icons[card.icon]"></div>
         <div class="rent-kpi-copy">
-          <span>{{ card.label }}</span>
+          <span>{{ $lt(card.label) }}</span>
           <strong>{{ card.value }}</strong>
           <small :class="card.trend === 'down' ? 'negative' : 'positive'">
             {{ card.comparison }} <b>{{ card.delta }}</b>
@@ -23,7 +23,7 @@
           </label>
           <label>
             <span>{{ $t('legacy.t_51d806399a4e') }}</span>
-            <select v-model.number="draftFilters.month"><option v-for="month in months" :key="month.value" :value="month.value">{{ month.label }}</option></select>
+            <select v-model.number="draftFilters.month"><option v-for="month in months" :key="month.value" :value="month.value">{{ $lt(month.label) }}</option></select>
           </label>
           <label>
             <span>{{ $t('legacy.t_c668c7a28f7c') }}</span>
@@ -31,7 +31,7 @@
           </label>
           <label>
             <span>{{ $t('legacy.t_2f0a2b15f977') }}</span>
-            <select v-model="draftFilters.status"><option v-for="status in statuses" :key="status.value || 'all'" :value="status.value">{{ status.label }}</option></select>
+            <select v-model="draftFilters.status"><option v-for="status in statuses" :key="status.value || 'all'" :value="status.value">{{ $lt(status.label) }}</option></select>
           </label>
           <div class="rent-filter-actions">
             <button class="rent-query-button" type="submit" :disabled="loading">{{ loading ? $t('legacy.t_850f6f41e95c') : $t('legacy.t_505ba2176546') }}</button>
@@ -64,7 +64,7 @@
                   <td :class="Number(row.paid.replaceAll(',', '')) ? 'amount-paid' : 'amount-empty'">{{ row.paid }}</td>
                   <td>{{ row.unpaid }}</td>
                   <td>{{ displayDate(row.receivedDate) }}</td>
-                  <td><span class="rent-status" :class="statusClass(row.status)"><i></i>{{ row.status }}</span></td>
+                  <td><span class="rent-status" :class="statusClass(row.status)"><i></i>{{ $lt(row.status) }}</span></td>
                   <td>
                     <span v-if="row.confirmed" class="rent-confirmed"><b>✓</b> {{ $t('legacy.t_224aedbad3be') }}</span>
                     <button v-else-if="row.canConfirm" class="rent-confirm-button" :disabled="confirmingInvoiceId === row.invoiceId" @click="confirmReceipt(row)">
@@ -74,7 +74,7 @@
                   </td>
                 </tr>
                 <tr v-if="loading"><td colspan="9" class="rent-empty">{{ $t('legacy.t_9bec1adfa822') }}</td></tr>
-                <tr v-else-if="error"><td colspan="9" class="rent-empty">{{ error }}</td></tr>
+                <tr v-else-if="error"><td colspan="9" class="rent-empty">{{ $lt(error) }}</td></tr>
                 <tr v-else-if="!pagedRows.length"><td colspan="9" class="rent-empty">{{ $t('legacy.t_56d1f153126d') }}</td></tr>
               </tbody>
             </table>
@@ -108,7 +108,7 @@
           <div class="rent-recent-list">
             <article v-for="item in recentReceipts" :key="`${item.unit}-${item.date}`">
               <i>✓</i>
-              <div><strong>{{ item.project }} · {{ item.unit }}</strong><small>{{ item.tenant }} · {{ item.date }}</small></div>
+<div><strong>{{ item.project }} · {{ item.unit }}</strong><small>{{ item.tenant }} · {{ displayDate(item.date) }}</small></div>
               <b>{{ $t('legacy.t_5e7b60c626a4') }} {{ item.amount }}</b>
             </article>
             <div v-if="!loading && !recentReceipts.length" class="rent-empty">{{ $t('legacy.t_c60ddccb7ffe') }}</div>
@@ -242,7 +242,7 @@ export default {
           confirmation: confirmationLabels[row.confirmationStatus] || '-',
           photoPosition: `${8 + ((Number(row.invoiceId) || index) * 17) % 80}% center`
         }));
-        if (showResult) this.showToast(`已查詢 ${this.rows.length} 筆租金記錄`);
+        if (showResult) this.showToast(this.$ltf`已查詢 ${this.rows.length} 筆租金記錄`);
       } catch (error) {
         this.summary = emptySummary();
         this.trendRows = [];
@@ -268,14 +268,14 @@ export default {
     },
     async confirmReceipt(row) {
       if (this.confirmingInvoiceId !== null) return;
-      const accepted = window.confirm(`確認 ${row.project} · ${row.unit} 已到賬 RM ${row.paid}？`);
+      const accepted = window.confirm(this.$ltf`確認 ${row.project} · ${row.unit} 已到賬 RM ${row.paid}？`);
       if (!accepted) return;
       this.confirmingInvoiceId = row.invoiceId;
       try {
         await confirmOwnerRentReceipt(row.invoiceId);
         await this.loadRentIncome();
         if (typeof this.page.loadOwnerDashboard === 'function') await this.page.loadOwnerDashboard();
-        this.showToast(`${row.unit} 租金已確認到賬`);
+        this.showToast(this.$ltf`${row.unit} 租金已確認到賬`);
       } catch (error) {
         this.showToast(error.message || '確認到賬失敗');
       } finally {

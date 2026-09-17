@@ -58,8 +58,10 @@ public class PortalSessionService {
             return Optional.empty();
         }
 
-        sessions(normalizedPortal).put(token, session.refresh());
-        return Optional.of(session.user());
+        // Atomic refresh cannot reinsert a session revoked during a password change.
+        PortalSession refreshed = sessions(normalizedPortal).computeIfPresent(token,
+                (key, current) -> current.expiresAt().isBefore(Instant.now()) ? null : current.refresh());
+        return refreshed == null ? Optional.empty() : Optional.of(refreshed.user());
     }
 
     public void logout(String portal, HttpServletRequest request, HttpServletResponse response) {
@@ -73,6 +75,10 @@ public class PortalSessionService {
     public void logoutAll(HttpServletRequest request, HttpServletResponse response) {
         logout(ADMIN_PORTAL, request, response);
         logout(OWNER_PORTAL, request, response);
+    }
+
+    public void revokeOwnerSessions(Long userId) {
+        ownerSessions.entrySet().removeIf(entry -> userId.equals(entry.getValue().user().id()));
     }
 
     private void expireCookie(String name, HttpServletRequest request, HttpServletResponse response) {

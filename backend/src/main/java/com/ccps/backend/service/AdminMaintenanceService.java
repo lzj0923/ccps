@@ -60,6 +60,11 @@ public class AdminMaintenanceService {
     }
 
     @Transactional(readOnly = true)
+    public List<AdminMaintenanceOptionsResponse.UnitOption> monthlyUnitOptions() {
+        return mapper.findMonthlyUnitOptions();
+    }
+
+    @Transactional(readOnly = true)
     public List<AdminPropertyMaintenanceResponse> listForProperty(Long ownerId, Long ownerUnitId) {
         PropertyContext property = propertyContext(ownerId, ownerUnitId);
         return mapper.findPropertyMaintenance(property.getUnitId());

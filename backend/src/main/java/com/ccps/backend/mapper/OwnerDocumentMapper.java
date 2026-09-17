@@ -9,12 +9,30 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface OwnerDocumentMapper {
+    // Some archive modules own their document relation directly, without document_links.
+    String ARCHIVE_RELATIONS = """
+            SELECT document_id, owner_unit_id FROM property_photos
+            UNION SELECT document_id, owner_unit_id FROM property_attachments WHERE enabled = 1
+            UNION SELECT document_id, owner_unit_id FROM property_handover_reports WHERE document_id IS NOT NULL
+            """;
+    String ARCHIVE_ACCESS = """
+            EXISTS (
+              SELECT 1 FROM (
+            """ + ARCHIVE_RELATIONS + """
+              ) archive_scope
+              JOIN owner_units archive_ou ON archive_ou.id = archive_scope.owner_unit_id
+              JOIN owners archive_owner ON archive_owner.id = archive_ou.owner_id
+              WHERE archive_scope.document_id = d.id AND archive_owner.user_id = #{userId}
+                AND archive_owner.status = 'active' AND archive_ou.status = 'active'
+            )
+            """;
+
 
     @Select("""
             SELECT DISTINCT d.id, d.document_no, d.original_name, d.document_type, d.status,
                    d.mime_type, d.file_size, d.storage_key, d.expires_at, d.created_at, d.updated_at,
                    uploader.display_name AS uploader_name,
-                   p.name AS project_name, p.city, u.unit_no,
+                   p.name AS project_name, p.city, u.unit_no, archive_owner_unit.id AS owner_unit_id,
                    CASE
                      WHEN EXISTS (SELECT 1 FROM document_links ctx WHERE ctx.document_id = d.id
                                   AND ctx.entity_type IN ('lease', 'lease_period')) THEN 'lease'
@@ -56,9 +74,13 @@ public interface OwnerDocumentMapper {
               ON mandate_link.document_id = d.id AND mandate_link.entity_type = 'rental_mandate'
             LEFT JOIN rental_mandates mandate ON mandate.id = mandate_link.entity_id
             LEFT JOIN owner_units mandate_owner_unit ON mandate_owner_unit.id = mandate.owner_unit_id
+            LEFT JOIN (
+            """ + ARCHIVE_RELATIONS + """
+            ) archive_link ON archive_link.document_id = d.id
+            LEFT JOIN owner_units archive_owner_unit ON archive_owner_unit.id = archive_link.owner_unit_id
             LEFT JOIN units u ON u.id = COALESCE(unit_link.entity_id, work_order.unit_id, finance_record.unit_id,
                                                    cashflow_entry.unit_id, lease.unit_id, lease_for_period.unit_id,
-                                                   mandate_owner_unit.unit_id)
+                                                   mandate_owner_unit.unit_id, archive_owner_unit.unit_id)
             LEFT JOIN projects p ON p.id = u.project_id
             WHERE COALESCE(d.status, '') NOT IN ('superseded', 'voided')
                AND NOT EXISTS (
@@ -69,6 +91,8 @@ public interface OwnerDocumentMapper {
                       AND signed_document.status NOT IN ('superseded', 'voided')
                )
                AND (d.uploaded_by = #{userId}
+               OR
+            """ + ARCHIVE_ACCESS + """
                OR EXISTS (
                     SELECT 1
                     FROM document_links dl
@@ -138,6 +162,8 @@ public interface OwnerDocumentMapper {
               )
               AND (
                 d.uploaded_by = #{userId}
+                OR
+            """ + ARCHIVE_ACCESS + """
                 OR EXISTS (
                   SELECT 1 FROM document_links dl
                   WHERE dl.document_id = d.id
@@ -184,7 +210,41 @@ public interface OwnerDocumentMapper {
             """)
     DocumentFile findDocumentFile(@Param("userId") Long userId, @Param("documentId") Long documentId);
 
+
+    @Select("""
+            SELECT pcr.id, pcr.contract_no AS document_no, pcr.original_name,
+                   pcr.contract_type AS document_type, pcr.status, pcr.mime_type, pcr.file_size,
+                   pcr.storage_key, pcr.valid_to AS expires_at, pcr.created_at, pcr.updated_at,
+                   uploader.display_name AS uploader_name, p.name AS project_name, p.city, u.unit_no,
+                   ou.id AS owner_unit_id, 'property_contract' AS source
+            FROM property_contract_records pcr
+            JOIN owner_units ou ON ou.id = pcr.owner_unit_id AND ou.status = 'active'
+            JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
+            JOIN units u ON u.id = ou.unit_id
+            JOIN projects p ON p.id = u.project_id
+            LEFT JOIN users uploader ON uploader.id = pcr.created_by
+            WHERE o.user_id = #{userId} AND pcr.status IN ('signed', 'expired', 'terminated')
+              AND pcr.storage_key IS NOT NULL AND pcr.storage_key <> ''
+            ORDER BY pcr.created_at DESC, pcr.id DESC
+            """)
+    List<DocumentRow> findContractDocuments(@Param("userId") Long userId);
+
+    @Select("""
+            SELECT pcr.id, pcr.original_name, pcr.storage_key, pcr.mime_type, pcr.file_size
+            FROM property_contract_records pcr
+            JOIN owner_units ou ON ou.id = pcr.owner_unit_id AND ou.status = 'active'
+            JOIN owners o ON o.id = ou.owner_id AND o.status = 'active'
+            WHERE o.user_id = #{userId} AND pcr.id = #{documentId}
+              AND pcr.status IN ('signed', 'expired', 'terminated')
+              AND pcr.storage_key IS NOT NULL AND pcr.storage_key <> ''
+            """)
+    DocumentFile findContractFile(@Param("userId") Long userId, @Param("documentId") Long documentId);
+
     class DocumentRow {
+        private String source = "document";
+        private Long ownerUnitId;
+        public String getSource() { return source; } public void setSource(String v) { source = v; }
+        public Long getOwnerUnitId() { return ownerUnitId; } public void setOwnerUnitId(Long v) { ownerUnitId = v; }
         private Long id; private String documentNo; private String originalName; private String documentType;
         private String status; private String mimeType; private Long fileSize; private String storageKey;
         private java.time.LocalDate expiresAt; private LocalDateTime createdAt; private LocalDateTime updatedAt;

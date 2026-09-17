@@ -35,7 +35,7 @@ import jakarta.servlet.http.HttpServletRequest;
 @RequestMapping("/api/admin/owners/{ownerId}/properties/{ownerUnitId}/income-expenses")
 public class AdminPropertyCashflowController {
     private final AdminPropertyCashflowService service;public AdminPropertyCashflowController(AdminPropertyCashflowService service){this.service=service;}
-    @GetMapping public List<AdminPropertyCashflowResponse> list(@PathVariable Long ownerId,@PathVariable Long ownerUnitId){return service.list(ownerId,ownerUnitId);}
+    @GetMapping public List<AdminPropertyCashflowResponse> list(@PathVariable Long ownerId,@PathVariable Long ownerUnitId,@RequestParam(required=false) String month){return service.list(ownerId,ownerUnitId,month);}
     @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     public AdminPropertyCashflowResponse create(@PathVariable Long ownerId,@PathVariable Long ownerUnitId,@RequestParam String direction,@RequestParam String category,@RequestParam String description,@RequestParam BigDecimal amount,@RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate occurredOn,@RequestParam String paymentMethod,@RequestParam String confirmationStatus,@RequestParam(value="allocationNote",required=false)String allocationNote,@RequestParam(value="reuseAllocationNote",defaultValue="false")boolean reuseAllocationNote,@RequestPart(value="file",required=false)MultipartFile file,HttpServletRequest request){return service.create(AuthInterceptor.userId(request),ownerId,ownerUnitId,direction,category,description,amount,occurredOn,paymentMethod,confirmationStatus,allocationNote,reuseAllocationNote,file);}
     @PutMapping(value="/{cashflowId}",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -35,6 +35,8 @@ public record OwnerDocumentResponse(
             String projectName,
             String city,
             String unitNo,
-            boolean downloadable) {
+            boolean downloadable,
+            String source,
+            Long ownerUnitId) {
     }
 }

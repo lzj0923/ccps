@@ -43,7 +43,7 @@ class WhatsAppNotificationServiceTest {
     @Test
     void sendsApprovedTemplateAndStoresProviderMessageId() {
         WhatsAppDeliveryRow delivery = delivery();
-        when(mapper.claim(5L)).thenReturn(1);
+        when(mapper.claim(5L, delivery.getDestination())).thenReturn(1);
         doAnswer(invocation -> {
             NewAttempt attempt = invocation.getArgument(3);
             attempt.setId(9L);
@@ -75,7 +75,7 @@ class WhatsAppNotificationServiceTest {
         delivery.setUnitNo("B-08");
         delivery.setLeaseNo("L-2026-008");
         delivery.setDueDate(LocalDate.parse("2026-09-25"));
-        when(mapper.claim(6L)).thenReturn(1);
+        when(mapper.claim(6L, delivery.getDestination())).thenReturn(1);
         doAnswer(invocation -> {
             NewAttempt attempt = invocation.getArgument(3);
             attempt.setId(10L);
@@ -109,5 +109,15 @@ class WhatsAppNotificationServiceTest {
         row.setOutstandingAmount(new BigDecimal("800"));
         row.setOverdueDays(14);
         return row;
+    }
+
+    @Test
+    void doesNotSendWhenConsentOrPhoneChangesBeforeClaim() {
+        WhatsAppDeliveryRow row = delivery();
+        when(mapper.claim(row.getDeliveryId(), row.getDestination())).thenReturn(0);
+        service.deliver(row);
+        org.mockito.Mockito.verifyNoInteractions(graphClient);
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never())
+                .insertAttempt(any(), any(), any(), any());
     }
 }

@@ -2,6 +2,7 @@ package com.ccps.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -24,6 +25,42 @@ import com.lowagie.text.pdf.parser.PdfTextExtractor;
 
 class TenancyAgreementPdfServiceTest {
     @Test
+    void rejectsGenerationWhenContractFieldsWouldBeLeftBlank() {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.validateRequiredFields(Map.of(
+                        "caseNo", "LS-1", "landlordName", "Owner", "tenantName", "Tenant")));
+
+        assertTrue(error.getMessage().contains("租客通讯地址"));
+        assertTrue(error.getMessage().contains("水电押金"));
+        assertTrue(error.getMessage().contains("租约关联"));
+        assertTrue(error.getMessage().contains("交接清单"));
+        assertTrue(error.getMessage().contains("房产照片"));
+    }
+
+    @Test
+    void acceptsAnyNonBlankSupplementValuesBeforeGeneratingTheLease() {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        Map<String, String> values = new java.util.HashMap<>();
+        values.put("leaseId", "1"); values.put("caseNo", "LS-1"); values.put("agreementDate", "2026-08-01");
+        values.put("landlordName", "Owner"); values.put("landlordIdentity", "OWNER-1");
+        values.put("landlordAddress", "1"); values.put("tenantName", "Tenant");
+        values.put("tenantIdentity", "TENANT-1"); values.put("tenantPhone", "+60123456789");
+        values.put("tenantEmail", "tenant@example.com"); values.put("tenantAddress", "1");
+        values.put("propertyAddress", "Unit 1, Example Residence"); values.put("leaseStart", "2026-08-01");
+        values.put("leaseEnd", "2027-07-31"); values.put("monthlyRent", "1000");
+        values.put("paymentDay", "5"); values.put("paymentMode", "Bank Transfer");
+        values.put("advanceRental", "1000"); values.put("securityDeposit", "2000");
+        values.put("utilityDeposit", "500"); values.put("renewalOption", "One year");
+        values.put("specialConditions", "None"); values.put("electricityMeter", "E-100");
+        values.put("waterMeter", "W-100"); values.put("bankName", "Maybank");
+        values.put("bankAccount", "1"); values.put("bankBranch", "1");
+        values.put("handoverChecklistIds", "11"); values.put("photoIds", "21");
+
+        service.validateRequiredFields(values);
+    }
+
+    @Test
     void defaultsMissingInventoryQuantityToOneWithoutChangingEnteredQuantity() {
         assertEquals("1", TenancyAgreementPdfService.displayInventoryQuantity(null));
         assertEquals("1", TenancyAgreementPdfService.displayInventoryQuantity("   "));
@@ -32,7 +69,7 @@ class TenancyAgreementPdfServiceTest {
     }
 
     @Test
-    void generatesTheOriginalTwentyTwoPageAgreementWithNewLeaseValues() throws Exception {
+    void generatesTheNineteenPageAgreementWithoutEmptyPropertyPhotoPages() throws Exception {
         TenancyAgreementPdfService service = new TenancyAgreementPdfService();
         byte[] result = service.generate(Map.ofEntries(
                 Map.entry("caseNo", "LS-TEST-001"),
@@ -58,7 +95,7 @@ class TenancyAgreementPdfServiceTest {
                 Map.entry("specialConditions", "No pets.")));
 
         PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
-        assertEquals(22, reader.getNumberOfPages());
+        assertEquals(19, reader.getNumberOfPages());
         String text = "";
         PdfTextExtractor extractor = new PdfTextExtractor(reader);
         for (int page = 1; page <= reader.getNumberOfPages(); page++) {
@@ -108,7 +145,7 @@ class TenancyAgreementPdfServiceTest {
     }
 
     @Test
-    void replacesTheThirteenTemplatePhotosWithPropertyPhotos() throws Exception {
+    void addsOnePhotoPageForUpToSixPropertyPhotos() throws Exception {
         Path first = temporaryPhoto(Color.RED);
         Path second = temporaryPhoto(Color.BLUE);
         TenancyAgreementPdfService service = new TenancyAgreementPdfService();
@@ -118,16 +155,36 @@ class TenancyAgreementPdfServiceTest {
                 new TenancyAgreementPdfService.PropertyPhotoAsset(second, "image/jpeg", 1, false)));
 
         PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
-        assertEquals(22, reader.getNumberOfPages());
+        assertEquals(20, reader.getNumberOfPages());
         int page20Images = imageObjectCount(reader, 20);
-        int page21Images = imageObjectCount(reader, 21);
-        int page22Images = imageObjectCount(reader, 22);
-        assertTrue(page20Images >= 8, "two replacement images should be added to page 20");
-        assertTrue(page21Images >= 6, "page 21 should retain its page resources");
-        assertTrue(page22Images >= 1, "page 22 should retain its page resources");
+        assertTrue(page20Images >= 2, "both property photos should be present on the generated photo page");
         reader.close();
         Files.deleteIfExists(first);
         Files.deleteIfExists(second);
+    }
+
+    @Test
+    void calculatesPhotoPagesFromTheActualPhotoCountAtSixPerPage() throws Exception {
+        Path photo = temporaryPhoto(Color.GREEN);
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        int[][] cases = { { 1, 20 }, { 6, 20 }, { 7, 21 }, { 12, 21 }, { 13, 22 }, { 19, 23 } };
+
+        for (int[] testCase : cases) {
+            var asset = new TenancyAgreementPdfService.PropertyPhotoAsset(photo, "image/jpeg", 0, true);
+            byte[] result = service.generate(Map.of("leaseId", "42"),
+                    java.util.Collections.nCopies(testCase[0], asset));
+            String qaOutput = System.getProperty("lease.photo.qa.output", "").trim();
+            if (testCase[0] == 7 && !qaOutput.isBlank()) {
+                Path output = Path.of(qaOutput);
+                Files.createDirectories(output.getParent());
+                Files.write(output, result);
+            }
+            try (PdfReader reader = new PdfReader(new ByteArrayInputStream(result))) {
+                assertEquals(testCase[1], reader.getNumberOfPages(),
+                        testCase[0] + " photos should produce " + (testCase[1] - 19) + " photo pages");
+            }
+        }
+        Files.deleteIfExists(photo);
     }
 
     @Test
@@ -145,9 +202,14 @@ class TenancyAgreementPdfServiceTest {
         String page15Content = new String(reader.getPageContent(15), StandardCharsets.ISO_8859_1);
         assertTrue(inventoryText.contains("Custom Sofa"));
         assertTrue(inventoryText.contains("Custom Key"));
+        assertTrue(inventoryText.split("No additional handover items", -1).length == 3);
         assertTrue(page15Content.contains("60 42 485 618 re"), "inventory body must be covered before redraw");
-        assertTrue(page15Content.contains("Custom Sofa"));
-        assertTrue(page15Content.contains("Custom Key"));
+        String qaOutput = System.getProperty("lease.inventory.qa.output", "").trim();
+        if (!qaOutput.isBlank()) {
+            Path output = Path.of(qaOutput);
+            Files.createDirectories(output.getParent());
+            Files.write(output, result);
+        }
         reader.close();
     }
 
@@ -174,8 +236,8 @@ class TenancyAgreementPdfServiceTest {
         String page10Content = new String(reader.getPageContent(10), StandardCharsets.ISO_8859_1);
         String page11Content = new String(reader.getPageContent(11), StandardCharsets.ISO_8859_1);
 
-        assertTrue(page10Content.contains("Special Conditions shall prevail"));
-        assertTrue(!page11Content.contains("Special Conditions shall prevail"));
+        assertTrue(page10Content.contains("108 140 Tm"));
+        assertTrue(!page11Content.contains("108 140 Tm"));
         assertTogether(page15, page16, page17, "KITCHEN-1", "KITCHEN-14");
         assertTogether(page15, page16, page17, "BATHROOM-1", "BATHROOM-9");
         reader.close();
@@ -275,14 +337,24 @@ class TenancyAgreementPdfServiceTest {
     @Test
     void keepsTheReferenceInventoryWhenThePropertyHasNoMaintainedChecklist() throws Exception {
         TenancyAgreementPdfService service = new TenancyAgreementPdfService();
+        byte[] result = service.generate(Map.of(), List.of(), null);
+
+        PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
+        String page15Content = new String(reader.getPageContent(15), StandardCharsets.ISO_8859_1);
+        assertTrue(!page15Content.contains("60 42 485 618 re"));
+        assertTrue(reader.getPageN(15).getAsDict(PdfName.RESOURCES).getAsDict(PdfName.XOBJECT).size() > 0);
+        reader.close();
+    }
+
+    @Test
+    void neverClearsTheReferenceInventoryWhenTheCallerPassesAnEmptyChecklist() throws Exception {
+        TenancyAgreementPdfService service = new TenancyAgreementPdfService();
         byte[] result = service.generate(Map.of(), List.of(), List.of());
 
         PdfReader reader = new PdfReader(new ByteArrayInputStream(result));
-        PdfTextExtractor extractor = new PdfTextExtractor(reader);
-        String inventory = extractor.getTextFromPage(15, true)
-                + extractor.getTextFromPage(16, true)
-                + extractor.getTextFromPage(17, true);
-        assertTrue(inventory.contains("Pendant Lamp"));
+        String page15Content = new String(reader.getPageContent(15), StandardCharsets.ISO_8859_1);
+        assertTrue(!page15Content.contains("60 42 485 618 re"));
+        assertTrue(reader.getPageN(15).getAsDict(PdfName.RESOURCES).getAsDict(PdfName.XOBJECT).size() > 0);
         reader.close();
     }
 

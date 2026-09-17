@@ -123,9 +123,9 @@ public interface AdminTenancyMapper {
             "       l.start_date AS lease_start, l.end_date AS lease_end, l.monthly_rent, l.deposit_amount, l.payment_day, l.rent_calculation_method,",
             "       l.status AS lease_status, l.contract_document_id, contract_doc.original_name AS contract_document_name,",
             "       contract_doc.mime_type AS contract_document_mime_type, contract_doc.file_size AS contract_document_size,",
-            "       CASE WHEN (SELECT COUNT(DISTINCT signed_request.signer_role) FROM electronic_signature_requests signed_request WHERE COALESCE(signed_request.root_document_id,signed_request.source_document_id) = l.contract_document_id AND signed_request.entity_type = 'lease' AND signed_request.entity_id = l.id AND signed_request.status = 'signed') >= 2 THEN TRUE ELSE FALSE END AS contract_signed,",
+            "       CASE WHEN (SELECT COUNT(DISTINCT signed_request.signer_role) FROM electronic_signature_requests signed_request WHERE COALESCE(signed_request.root_document_id,signed_request.source_document_id) = l.contract_document_id AND signed_request.entity_type = 'lease' AND signed_request.entity_id = l.id AND signed_request.status = 'signed') >= GREATEST(2, (SELECT COUNT(*) FROM electronic_signature_participants expected_signer WHERE expected_signer.root_document_id = l.contract_document_id AND expected_signer.document_kind = 'lease_contract')) THEN TRUE ELSE FALSE END AS contract_signed,",
             "       CASE WHEN l.contract_document_id IS NULL THEN 'missing'",
-            "            WHEN (SELECT COUNT(DISTINCT signed_request.signer_role) FROM electronic_signature_requests signed_request WHERE COALESCE(signed_request.root_document_id,signed_request.source_document_id) = l.contract_document_id AND signed_request.entity_type = 'lease' AND signed_request.entity_id = l.id AND signed_request.status = 'signed') >= 2 THEN 'signed'",
+            "            WHEN (SELECT COUNT(DISTINCT signed_request.signer_role) FROM electronic_signature_requests signed_request WHERE COALESCE(signed_request.root_document_id,signed_request.source_document_id) = l.contract_document_id AND signed_request.entity_type = 'lease' AND signed_request.entity_id = l.id AND signed_request.status = 'signed') >= GREATEST(2, (SELECT COUNT(*) FROM electronic_signature_participants expected_signer WHERE expected_signer.root_document_id = l.contract_document_id AND expected_signer.document_kind = 'lease_contract')) THEN 'signed'",
             "            WHEN EXISTS (SELECT 1 FROM electronic_signature_requests pending_request WHERE pending_request.source_document_id = l.contract_document_id AND pending_request.entity_type = 'lease' AND pending_request.entity_id = l.id AND pending_request.status = 'pending') THEN 'pending'",
             "            ELSE 'uploaded' END AS contract_status,",
             "       ri.id AS invoice_id, ri.billing_month, ri.due_date,",
@@ -322,25 +322,6 @@ public interface AdminTenancyMapper {
     @Select("SELECT DISTINCT p.name FROM finance_records fr JOIN units u ON u.id = fr.unit_id JOIN projects p ON p.id = u.project_id WHERE fr.record_type = 'rent_payment' ORDER BY p.name")
     List<String> findRentFinanceProjects();
 
-    @Select("""
-            SELECT pr.receipt_no, fr.transaction_no, t.full_name AS tenant_name, p.name AS project_name,
-                   u.unit_no, l.lease_no, ri.billing_month, ri.amount_due AS invoice_amount,
-                   ri.amount_paid AS invoice_paid, fr.amount, fr.currency, fr.transaction_date,
-                   fr.payment_method, pr.payer_name, pr.bank_reference, pr.submission_note,
-                   fr.confirmed_at
-            FROM finance_records fr
-            JOIN payment_receipts pr ON pr.finance_record_id = fr.id
-            JOIN rent_payments rp ON rp.finance_record_id = fr.id
-            JOIN rent_invoices ri ON ri.id = rp.rent_invoice_id
-            JOIN leases l ON l.id = ri.lease_id
-            JOIN tenants t ON t.id = l.tenant_id
-            JOIN units u ON u.id = l.unit_id
-            JOIN projects p ON p.id = u.project_id
-            WHERE fr.id = #{financeRecordId} AND fr.record_type = 'rent_payment'
-            LIMIT 1
-            """)
-    RentReceiptRow findRentReceipt(@Param("financeRecordId") Long financeRecordId);
-
     @Select({
             "<script>",
             "SELECT ri.id AS invoice_id,l.id AS lease_id,l.lease_no,t.full_name AS tenant_name,p.name AS project_name,u.unit_no,",
@@ -362,6 +343,7 @@ public interface AdminTenancyMapper {
             "<if test=\"status == 'overdue'\">AND CURRENT_DATE &gt; ri.due_date</if>",
             "<if test=\"startDate != null\">AND ri.due_date&gt;=#{startDate}</if>",
             "<if test=\"endDate != null\">AND ri.due_date&lt;=#{endDate}</if>",
+            "<if test=\"invoiceId != null\">AND ri.id=#{invoiceId}</if>",
             "</where>",
             "ORDER BY (CURRENT_DATE &gt; ri.due_date) DESC,(ri.amount_paid&gt;0) DESC,ri.due_date,ri.id LIMIT #{limit} OFFSET #{offset}",
             "</script>"
@@ -369,6 +351,7 @@ public interface AdminTenancyMapper {
     List<RentCollectionRow> findRentCollections(@Param("keyword") String keyword,
             @Param("projectName") String projectName, @Param("status") String status,
             @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate,
+            @Param("invoiceId") Long invoiceId,
             @Param("limit") int limit, @Param("offset") int offset);
 
     @Select({"<script>","SELECT COUNT(*)",RENT_COLLECTION_FROM,"<where>",
@@ -379,10 +362,11 @@ public interface AdminTenancyMapper {
             "<if test=\"status == 'partial'\">AND ri.amount_paid&gt;0 AND ri.amount_paid&lt;ri.amount_due</if>",
             "<if test=\"status == 'overdue'\">AND CURRENT_DATE &gt; ri.due_date</if>",
             "<if test=\"startDate != null\">AND ri.due_date&gt;=#{startDate}</if>",
-            "<if test=\"endDate != null\">AND ri.due_date&lt;=#{endDate}</if>","</where>","</script>"})
+            "<if test=\"endDate != null\">AND ri.due_date&lt;=#{endDate}</if>",
+            "<if test=\"invoiceId != null\">AND ri.id=#{invoiceId}</if>","</where>","</script>"})
     Long countRentCollections(@Param("keyword") String keyword, @Param("projectName") String projectName,
             @Param("status") String status, @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate);
+            @Param("endDate") LocalDate endDate, @Param("invoiceId") Long invoiceId);
 
     @Select("""
             SELECT COUNT(*) AS outstanding_count,
@@ -510,6 +494,16 @@ public interface AdminTenancyMapper {
     DepositAccountRow findDepositAccount(@Param("leaseId") Long leaseId);
 
     @Select("""
+            SELECT sde.finance_record_id,fr.transaction_no,sde.amount,fr.transaction_date AS bill_date,
+                   sde.status AS entry_status,fr.confirmation_status,fr.payment_status
+              FROM security_deposit_entries sde
+              JOIN finance_records fr ON fr.id=sde.finance_record_id
+             WHERE sde.lease_id=#{leaseId}
+             ORDER BY (sde.status='pending') DESC,fr.transaction_date DESC,sde.id DESC
+            """)
+    List<com.ccps.backend.dto.AdminDepositAccountDetailResponse.Bill> findDepositBills(@Param("leaseId") Long leaseId);
+
+    @Select("""
             SELECT tdt.id,tdt.lease_id,l.lease_no,tdt.tenant_id,tdt.unit_id,p.name AS project_name,u.unit_no,
                    tdt.finance_record_id,tdt.transaction_type,tdt.direction,tdt.amount,
                    (SELECT COALESCE(SUM(CASE WHEN prior.direction='credit' THEN prior.amount ELSE -prior.amount END),0)
@@ -566,6 +560,30 @@ public interface AdminTenancyMapper {
             @Param("leaseId") Long leaseId,@Param("transactionType") String transactionType,
             @Param("direction") String direction,@Param("amount") BigDecimal amount,
             @Param("financeRecordId") Long financeRecordId,@Param("description") String description);
+
+    @Update({
+            "<script>",
+            "UPDATE tenant_deposit_transactions",
+            "SET status='cancelled'",
+            "WHERE lease_id=#{leaseId} AND status='posted' AND finance_record_id IS NULL",
+            "  AND transaction_type IN ('adjustment_credit','adjustment_debit','tenant_advance','tenant_repayment')",
+            "  AND id IN",
+            "<foreach collection='transactionIds' item='transactionId' open='(' separator=',' close=')'>#{transactionId}</foreach>",
+            "</script>"
+    })
+    int cancelTenantDepositTransactions(@Param("leaseId") Long leaseId,
+            @Param("transactionIds") List<Long> transactionIds);
+
+    @Insert("""
+            INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data)
+            VALUES (#{actorId},'delete_tenant_deposit_transaction','tenant_deposit_transaction',#{transactionId},
+              JSON_OBJECT('leaseId',#{leaseId},'transactionType',#{transactionType},'direction',#{direction},
+                          'amount',#{amount},'status','posted'),
+              JSON_OBJECT('status','cancelled'))
+            """)
+    int insertTenantDepositDeleteAudit(@Param("actorId") Long actorId,@Param("transactionId") Long transactionId,
+            @Param("leaseId") Long leaseId,@Param("transactionType") String transactionType,
+            @Param("direction") String direction,@Param("amount") BigDecimal amount);
 
     @Insert("""
             INSERT INTO finance_records
@@ -831,7 +849,7 @@ public interface AdminTenancyMapper {
                    COALESCE((SELECT SUM(GREATEST(ri.amount_due-ri.amount_paid,0)) FROM rent_invoices ri WHERE ri.lease_id=l.id),0) AS unpaid_rent,
                    (SELECT COUNT(*) FROM maintenance_work_orders m WHERE m.lease_id=l.id AND m.status NOT IN ('completed','cancelled')) AS pending_maintenance_count,
                    CASE WHEN l.contract_document_id IS NULL THEN 'not_generated'
-                        WHEN (SELECT COUNT(DISTINCT sr.signer_role) FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND COALESCE(sr.root_document_id,sr.source_document_id)=l.contract_document_id AND sr.status='signed') >= 2 THEN 'signed'
+                        WHEN (SELECT COUNT(DISTINCT sr.signer_role) FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND COALESCE(sr.root_document_id,sr.source_document_id)=l.contract_document_id AND sr.status='signed') >= GREATEST(2, (SELECT COUNT(*) FROM electronic_signature_participants expected_signer WHERE expected_signer.root_document_id=l.contract_document_id AND expected_signer.document_kind='lease_contract')) THEN 'signed'
                         WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.status='pending') THEN 'pending_signature'
                         ELSE 'ready_to_sign' END AS signature_status,
                    CASE WHEN l.status = 'expired' THEN 'completed'
@@ -862,6 +880,9 @@ public interface AdminTenancyMapper {
 
     @Update("UPDATE tenants SET full_name=#{fullName},identity_no=#{identityNo},phone=#{phone},email=#{email},status=#{status} WHERE id=#{id}")
     int updateTenant(NewTenant tenant);
+
+    @Update("UPDATE tenants SET status=#{status} WHERE id=#{tenantId}")
+    int updateTenantStatus(@Param("tenantId") Long tenantId, @Param("status") String status);
 
     @Insert("""
             INSERT INTO tenants (full_name, identity_no, phone, email, status)
@@ -1137,7 +1158,7 @@ public interface AdminTenancyMapper {
             FROM lease_periods lp
             LEFT JOIN documents d ON d.id=lp.contract_document_id
             WHERE lp.lease_id=#{leaseId}
-              AND lp.start_date&lt;=LAST_DAY(#{billingMonth}) AND lp.end_date&gt;=#{billingMonth}
+              AND lp.start_date<=LAST_DAY(#{billingMonth}) AND lp.end_date>=#{billingMonth}
             ORDER BY lp.period_no DESC LIMIT 1
             """)
     LeasePeriodRow findLeasePeriodForBillingMonth(@Param("leaseId") Long leaseId,
@@ -1205,11 +1226,11 @@ public interface AdminTenancyMapper {
                      ELSE lp.monthly_rent END, 0, 'unpaid'
             FROM leases l
             JOIN lease_periods lp ON lp.id=(SELECT lp2.id FROM lease_periods lp2
-              WHERE lp2.lease_id=l.id AND lp2.start_date&lt;=LAST_DAY(#{billingMonth})
-                AND lp2.end_date&gt;=#{billingMonth} ORDER BY lp2.period_no DESC LIMIT 1)
+              WHERE lp2.lease_id=l.id AND lp2.start_date<=LAST_DAY(#{billingMonth})
+                AND lp2.end_date>=#{billingMonth} ORDER BY lp2.period_no DESC LIMIT 1)
             WHERE l.status = 'active'
-              AND l.start_date &lt;= LAST_DAY(#{billingMonth})
-              AND l.end_date &gt;= #{billingMonth}
+              AND l.start_date <= LAST_DAY(#{billingMonth})
+              AND l.end_date >= #{billingMonth}
             """)
     int generateMonthlyInvoices(@Param("billingMonth") LocalDate billingMonth);
 
@@ -1275,7 +1296,7 @@ public interface AdminTenancyMapper {
     @Select("""
             SELECT d.id,d.original_name,d.storage_key,d.mime_type,d.file_size,'lease' AS storage_area
             FROM lease_periods lp JOIN documents d ON d.id=lp.contract_document_id
-            WHERE lp.lease_id=#{leaseId} AND lp.id=#{periodId} AND d.status&lt;&gt;'superseded'
+            WHERE lp.lease_id=#{leaseId} AND lp.id=#{periodId} AND d.status<>'superseded'
             LIMIT 1
             """)
     ContractFile findLeasePeriodContractFile(@Param("leaseId") Long leaseId,@Param("periodId") Long periodId);
@@ -1304,7 +1325,7 @@ public interface AdminTenancyMapper {
               AND sr.entity_type = 'lease' AND sr.entity_id = l.id AND sr.status = 'signed'
               AND (SELECT COUNT(DISTINCT completed.signer_role) FROM electronic_signature_requests completed
                    WHERE COALESCE(completed.root_document_id,completed.source_document_id)=d.id
-                     AND completed.entity_type='lease' AND completed.entity_id=l.id AND completed.status='signed') >= 2
+                     AND completed.entity_type='lease' AND completed.entity_id=l.id AND completed.status='signed') >= GREATEST(2, (SELECT COUNT(*) FROM electronic_signature_participants expected_signer WHERE expected_signer.root_document_id=d.id AND expected_signer.document_kind='lease_contract'))
             LEFT JOIN documents signed ON signed.id = sr.signed_document_id
               AND signed.status NOT IN ('voided', 'superseded')
             WHERE l.id = #{leaseId} AND d.document_type = 'lease'
@@ -1510,16 +1531,6 @@ public interface AdminTenancyMapper {
         public BigDecimal getAmountPaid(){return amountPaid;} public void setAmountPaid(BigDecimal v){amountPaid=v;} public BigDecimal getOutstandingAmount(){return outstandingAmount;} public void setOutstandingAmount(BigDecimal v){outstandingAmount=v;}
         public BigDecimal getLatestPaymentAmount(){return latestPaymentAmount;} public void setLatestPaymentAmount(BigDecimal v){latestPaymentAmount=v;}
         public BigDecimal getMonthlyRent(){return monthlyRent;} public void setMonthlyRent(BigDecimal v){monthlyRent=v;} public LocalDate getLeaseStartDate(){return leaseStartDate;} public void setLeaseStartDate(LocalDate v){leaseStartDate=v;} public LocalDate getLeaseEndDate(){return leaseEndDate;} public void setLeaseEndDate(LocalDate v){leaseEndDate=v;} public String getRentCalculationMethod(){return rentCalculationMethod;} public void setRentCalculationMethod(String v){rentCalculationMethod=v;}
-    }
-    class RentReceiptRow {
-        private String receiptNo, transactionNo, tenantName, projectName, unitNo, leaseNo, currency, paymentMethod, payerName, bankReference, submissionNote;
-        private LocalDate billingMonth, transactionDate; private LocalDateTime confirmedAt;
-        private BigDecimal invoiceAmount, invoicePaid, amount;
-        public String getReceiptNo(){return receiptNo;} public void setReceiptNo(String v){receiptNo=v;} public String getTransactionNo(){return transactionNo;} public void setTransactionNo(String v){transactionNo=v;}
-        public String getTenantName(){return tenantName;} public void setTenantName(String v){tenantName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;} public String getUnitNo(){return unitNo;} public void setUnitNo(String v){unitNo=v;} public String getLeaseNo(){return leaseNo;} public void setLeaseNo(String v){leaseNo=v;}
-        public LocalDate getBillingMonth(){return billingMonth;} public void setBillingMonth(LocalDate v){billingMonth=v;} public LocalDate getTransactionDate(){return transactionDate;} public void setTransactionDate(LocalDate v){transactionDate=v;} public LocalDateTime getConfirmedAt(){return confirmedAt;} public void setConfirmedAt(LocalDateTime v){confirmedAt=v;}
-        public BigDecimal getInvoiceAmount(){return invoiceAmount;} public void setInvoiceAmount(BigDecimal v){invoiceAmount=v;} public BigDecimal getInvoicePaid(){return invoicePaid;} public void setInvoicePaid(BigDecimal v){invoicePaid=v;} public BigDecimal getAmount(){return amount;} public void setAmount(BigDecimal v){amount=v;}
-        public String getCurrency(){return currency;} public void setCurrency(String v){currency=v;} public String getPaymentMethod(){return paymentMethod;} public void setPaymentMethod(String v){paymentMethod=v;} public String getPayerName(){return payerName;} public void setPayerName(String v){payerName=v;} public String getBankReference(){return bankReference;} public void setBankReference(String v){bankReference=v;} public String getSubmissionNote(){return submissionNote;} public void setSubmissionNote(String v){submissionNote=v;}
     }
     class RentCollectionSummaryRow {
         private Long outstandingCount,unpaidCount,partialCount,overdueCount; private BigDecimal outstandingAmount,monthReceived;

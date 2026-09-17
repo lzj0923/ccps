@@ -4,16 +4,16 @@
       <article v-for="card in summaryCards" :key="card.label" class="reserve-summary-card">
         <div class="reserve-summary-icon" v-html="icons[card.icon]"></div>
         <div class="reserve-summary-copy">
-          <span>{{ card.label }} <i v-if="card.info">{{ $t('legacy.t_042dc4512fa3') }}</i></span>
+          <span>{{ $lt(card.label) }} <i v-if="card.info">{{ $t('legacy.t_042dc4512fa3') }}</i></span>
           <strong :class="card.tone">{{ card.value }}</strong>
-          <small v-if="card.badge" class="reserve-balance-badge" :class="{ low: summary.lowBalanceCount }"><b></b>{{ card.badge }}</small>
-          <small v-else>{{ card.note }}</small>
+          <small v-if="card.badge" class="reserve-balance-badge" :class="{ low: summary.lowBalanceCount }"><b></b>{{ $lt(card.badge) }}</small>
+          <small v-else>{{ $lt(card.note) }}</small>
         </div>
         <b class="reserve-card-arrow">›</b>
       </article>
     </div>
 
-    <div v-if="errorMessage" class="reserve-api-message">{{ errorMessage }}</div>
+    <div v-if="errorMessage" class="reserve-api-message">{{ $lt(errorMessage) }}</div>
     <div class="reserve-layout">
       <main class="reserve-main-column">
         <section class="reserve-warning-banner" :class="{ sufficient: !summary.lowBalanceCount }">
@@ -29,8 +29,8 @@
         <section class="reserve-account-strip">
           <article v-for="account in accounts" :key="account.id" :class="{ low: account.balanceStatus === 'low' }">
             <div><strong>{{ account.projectName }}</strong><small>{{ account.unitNo }}</small></div>
-            <div><span>业主账单余额</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.currentBalance) }}</b><small>按入账日期</small></div>
-            <div><span>会计余额</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.accountingBalance) }}</b><small>按收款日期</small></div>
+            <div><span>{{ $t('legacy.t_d8a9444716a3') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.currentBalance) }}</b><small>{{ $t('legacy.t_1b374662a41f') }}</small></div>
+            <div><span>{{ $t('legacy.t_4e5885f13d62') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.accountingBalance) }}</b><small>{{ $t('legacy.t_e0beeaf302fa') }}</small></div>
             <div><span>{{ $t('legacy.t_c7e82f3b6404') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(account.minimumBalance) }}</b></div>
             <em>{{ account.balanceStatus === 'low' ? $t('legacy.t_8533f5f6638b') : $t('legacy.t_bb8cb07eec1c') }}</em>
           </article>
@@ -42,7 +42,7 @@
             <div>
               <select v-model="draftFilters.projectId" :aria-label="$t('legacy.t_598a81bde0d4')"><option value="">{{ $t('legacy.t_9d65de4d5c85') }}</option><option v-for="property in properties" :key="property.id" :value="String(property.id)">{{ property.name }}</option></select>
               <div class="reserve-date-fields"><input v-model="draftFilters.startDate" type="date" :aria-label="$t('legacy.t_dca01748b387')"><span>{{ $t('legacy.t_43401e739ef4') }}</span><input v-model="draftFilters.endDate" type="date" :aria-label="$t('legacy.t_1bdd372b56ce')"></div>
-              <select v-model="draftFilters.type" :aria-label="$t('legacy.t_ba735143bbd2')"><option value="">{{ $t('legacy.t_e60f5834f6e8') }}</option><option value="topup">{{ $t('legacy.t_fa03c4625313') }}</option><option value="debit">{{ $t('legacy.t_9942375f2604') }}</option><option value="adjustment">{{ $t('legacy.t_91c52ab89104') }}</option></select>
+              <select v-model="draftFilters.type" :aria-label="$t('legacy.t_ba735143bbd2')"><option value="">{{ $t('legacy.t_e60f5834f6e8') }}</option><option value="topup">{{ $t('legacy.t_fa03c4625313') }}</option><option value="debit">{{ $t('legacy.t_9942375f2604') }}</option><option value="adjustment">{{ $t('legacy.t_91c52ab89104') }}</option><option value="transfer_in">{{ $t('legacy.t_0ccaac91ae82') }}</option><option value="transfer_out">{{ $t('legacy.t_b7fd1c02a7ca') }}</option><option value="transfer_reverse_in">{{ $t('legacy.t_7e1e15885686') }}</option><option value="transfer_reverse_out">{{ $t('legacy.t_f8cc6c312e20') }}</option></select>
               <button type="button" :disabled="loading" @click="applyFilters">{{ loading ? $t('legacy.t_850f6f41e95c') : $t('legacy.t_505ba2176546') }}</button>
               <button type="button" @click="exportDetailsCsv"><span v-html="icons.download"></span>{{ $t('legacy.t_1e3fc8309205') }}</button>
             </div>
@@ -53,11 +53,11 @@
               <tbody>
                 <tr v-for="record in pagedRecords" :key="`${record.id}-${record.status}`">
                   <td>{{ formatDateTime(record.occurredAt) }}</td>
-                  <td><span class="reserve-type-icon" :class="direction(record.transactionType)" v-html="icons[typeIcon(record.transactionType)]"></span>{{ typeLabel(record.transactionType) }}<small>{{ record.projectName }} · {{ record.unitNo }}</small></td>
+                  <td><span class="reserve-type-icon" :class="direction(record.transactionType)" v-html="icons[typeIcon(record.transactionType)]"></span>{{ $lt(typeLabel(record.transactionType)) }}<small>{{ record.projectName }} · {{ record.unitNo }}</small></td>
                   <td :title="record.description">{{ record.description }}</td>
                   <td :class="direction(record.transactionType) === 'in' ? 'reserve-money-in' : 'reserve-money-out'">{{ direction(record.transactionType) === 'in' ? '+' : '-' }} {{ $t('legacy.t_5e7b60c626a4') }} {{ money(record.amount) }}</td>
                   <td>{{ record.status === 'pending' ? '—' : `RM ${money(record.balanceAfter)}` }}</td>
-                  <td><span class="reserve-transaction-status" :class="record.status">{{ statusLabel(record.status) }}</span></td>
+                  <td><span class="reserve-transaction-status" :class="record.status">{{ $lt(statusLabel(record.status)) }}</span></td>
                   <td><strong>{{ record.confirmationStatus === 'confirmed' ? formatDateTime(record.occurredAt) : statusLabel(record.confirmationStatus) }}</strong><small v-if="record.attachmentCount">{{ $t('legacy.t_7279a9c87573') }} {{ record.attachmentCount }} {{ $t('legacy.t_e6e6501b229c') }}</small><small v-else>{{ record.confirmationStatus === 'confirmed' ? $t('legacy.t_ce94edf456b9') : $t('legacy.t_7888cad33170') }}</small></td>
                 </tr>
                 <tr v-if="loading"><td colspan="7" class="reserve-empty">{{ $t('legacy.t_f1cc1a3941d6') }}</td></tr>
@@ -89,7 +89,7 @@
           <div class="reserve-document-list">
             <article v-for="document in documents" :key="document.id">
               <i :class="document.mimeType === 'application/pdf' ? 'red' : 'green'" v-html="icons.file"></i>
-              <div><strong>{{ document.name }}</strong><small>{{ documentStatusLabel(document.status) }} · {{ formatSize(document.size) }}</small></div>
+              <div><strong>{{ document.name }}</strong><small>{{ $lt(documentStatusLabel(document.status)) }} · {{ formatSize(document.size) }}</small></div>
               <button type="button" @click="viewDocument(document)">{{ $t('legacy.t_9b4ffb6eff0f') }}</button><button type="button" :aria-label="$t('legacy.t_33e3f60d0c5b')" @click="downloadDocument(document)" v-html="icons.download"></button>
             </article>
             <p v-if="!documents.length" class="reserve-side-empty">{{ $t('legacy.t_94e19936f1fe') }}</p>
@@ -113,7 +113,7 @@
             <label class="wide"><span>{{ $t('legacy.t_3ae9ab7d020d') }}</span><textarea v-model.trim="topupForm.note" maxlength="200" rows="2"></textarea></label>
             <label class="wide reserve-topup-files"><span>{{ $t('legacy.t_3df90a318c8f') }}</span><input type="file" accept="image/jpeg,image/png,application/pdf" multiple required @change="selectTopupFiles"><small v-if="topupFiles.length">{{ $t('legacy.t_aeec0b67da9d') }} {{ topupFiles.length }} {{ $t('legacy.t_d6d14543f900') }}{{ topupFiles.map(file => file.name).join('、') }}</small></label>
           </div>
-          <p v-if="topupError" class="reserve-topup-error">{{ topupError }}</p>
+          <p v-if="topupError" class="reserve-topup-error">{{ $lt(topupError) }}</p>
           <footer><button type="button" @click="closeTopup">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary" type="submit" :disabled="submitting">{{ submitting ? $t('legacy.t_17e519c5a6bd') : $t('legacy.t_b090888b14f3') }}</button></footer>
         </form>
       </section>
@@ -177,7 +177,7 @@ export default {
   watch: { pageSize() { this.currentPage = 1; } },
   mounted() { this.loadData(); },
   methods: {
-    async loadData(notify = false) { this.loading = true; this.errorMessage = ''; try { this.response = await fetchOwnerReserve(this.filters); if (notify) this.showToast(`已查詢 ${this.transactions.length} 條預備金記錄`); } catch (error) { this.errorMessage = error.message || '預備金數據讀取失敗'; } finally { this.loading = false; } },
+    async loadData(notify = false) { this.loading = true; this.errorMessage = ''; try { this.response = await fetchOwnerReserve(this.filters); if (notify) this.showToast(this.$ltf`已查詢 ${this.transactions.length} 條預備金記錄`); } catch (error) { this.errorMessage = error.message || '預備金數據讀取失敗'; } finally { this.loading = false; } },
     async applyFilters() { this.filters = { ...this.draftFilters }; this.currentPage = 1; await this.loadData(true); },
     openTopup() { if (!this.accounts.length) { this.showToast('目前沒有可充值的預備金賬戶'); return; } this.topupForm = { ...defaultTopup(), reserveAccountId: String(this.accounts.find(item => item.balanceStatus === 'low')?.id || this.accounts[0].id) }; this.topupFiles = []; this.topupError = ''; this.topupVisible = true; },
     closeTopup() { if (!this.submitting) this.topupVisible = false; },
@@ -186,8 +186,8 @@ export default {
     async viewDocument(document) { try { const { blob } = await fetchReserveDocument(document.id); const url = URL.createObjectURL(blob); window.open(url, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (error) { this.showToast(error.message || '文件預覽失敗'); } },
     async downloadDocument(document) { try { const { blob } = await fetchReserveDocument(document.id, true); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = document.name; link.click(); URL.revokeObjectURL(url); } catch (error) { this.showToast(error.message || '文件下載失敗'); } },
     money(value) { return Number(value || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
-    direction(type) { return type === 'debit' ? 'out' : 'in'; }, typeIcon(type) { return type === 'debit' ? 'arrowDown' : type === 'adjustment' ? 'adjust' : 'arrowUp'; },
-    typeLabel(type) { return { topup: '充值', debit: '扣款', adjustment: '人工調整' }[type] || type; },
+    direction(type) { return ['debit','transfer_out','transfer_reverse_out'].includes(type) ? 'out' : 'in'; }, typeIcon(type) { return this.direction(type) === 'out' ? 'arrowDown' : type === 'adjustment' ? 'adjust' : 'arrowUp'; },
+    typeLabel(type) { return { topup: '充值', debit: '扣款', adjustment: '人工調整', transfer_in: '内部调拨转入', transfer_out: '内部调拨转出', transfer_reverse_in: '调拨冲正转入', transfer_reverse_out: '调拨冲正转出' }[type] || type; },
     statusLabel(status) { return { confirmed: '已確認', pending: '待審核', rejected: '已拒絕', active: '可用' }[status] || status || '-'; },
     documentStatusLabel(status) { return { pending_review: '待審核', active: '已確認', rejected: '已拒絕' }[status] || status; },
     formatDateTime(value) { return displayDateTime(value, '-'); },

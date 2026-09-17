@@ -18,6 +18,7 @@ import com.ccps.backend.dto.AdminOwnerResponse;
 import com.ccps.backend.dto.AdminOwnerSummaryResponse;
 import com.ccps.backend.dto.AdminOwnerCreateRequest;
 import com.ccps.backend.dto.AdminOwnerUpdateRequest;
+import com.ccps.backend.dto.AdminOwnerStaffOption;
 import com.ccps.backend.dto.AdminProjectOption;
 import com.ccps.backend.dto.AdminPropertyCreateRequest;
 import com.ccps.backend.dto.AdminOwnerResponse.Property;
@@ -46,6 +47,11 @@ public class AdminOwnerController {
     @GetMapping("/summary")
     public AdminOwnerSummaryResponse findSummary() {
         return service.findSummary();
+    }
+
+    @GetMapping("/staff-options")
+    public List<AdminOwnerStaffOption> findStaffOptions() {
+        return service.findStaffOptions();
     }
 
     @GetMapping("/{ownerId}")

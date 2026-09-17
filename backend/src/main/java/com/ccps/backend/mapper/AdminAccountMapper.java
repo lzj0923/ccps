@@ -14,6 +14,8 @@ public interface AdminAccountMapper {
 
     @Select("""
             SELECT u.id, u.username, u.email, u.display_name AS displayName, u.phone,
+                   sp.employee_no AS employeeNo,sp.department,sp.job_title AS jobTitle,
+                   sp.hire_date AS hireDate,sp.leave_date AS leaveDate,sp.employment_status AS employmentStatus,
                    u.account_type AS accountType, u.status, o.id AS ownerId,
                    (SELECT UPPER(r.code) FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                     WHERE ur.user_id = u.id AND UPPER(r.code) IN
@@ -21,12 +23,15 @@ public interface AdminAccountMapper {
                     ORDER BY r.id LIMIT 1) AS staffRole
             FROM users u
             LEFT JOIN owners o ON o.user_id = u.id
+            LEFT JOIN staff_profiles sp ON sp.user_id=u.id
             ORDER BY u.account_type, u.display_name, u.id
             """)
     List<AccountRow> findAll();
 
     @Select("""
             SELECT u.id, u.username, u.email, u.display_name AS displayName, u.phone,
+                   sp.employee_no AS employeeNo,sp.department,sp.job_title AS jobTitle,
+                   sp.hire_date AS hireDate,sp.leave_date AS leaveDate,sp.employment_status AS employmentStatus,
                    u.account_type AS accountType, u.status, o.id AS ownerId,
                    (SELECT UPPER(r.code) FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                     WHERE ur.user_id = u.id AND UPPER(r.code) IN
@@ -34,6 +39,7 @@ public interface AdminAccountMapper {
                     ORDER BY r.id LIMIT 1) AS staffRole
             FROM users u
             LEFT JOIN owners o ON o.user_id = u.id
+            LEFT JOIN staff_profiles sp ON sp.user_id=u.id
             WHERE u.id = #{id}
             """)
     AccountRow findById(@Param("id") Long id);
@@ -43,6 +49,9 @@ public interface AdminAccountMapper {
 
     @Select("SELECT COUNT(*) FROM users WHERE email = #{email} AND id <> COALESCE(#{id}, 0)")
     int countEmail(@Param("email") String email, @Param("id") Long id);
+
+    @Select("SELECT COUNT(*) FROM staff_profiles WHERE employee_no=#{employeeNo} AND user_id<>COALESCE(#{userId},0)")
+    int countEmployeeNo(@Param("employeeNo") String employeeNo, @Param("userId") Long userId);
 
     @Select("SELECT password_hash FROM users WHERE id = #{id}")
     String findPasswordHash(@Param("id") Long id);
@@ -70,6 +79,34 @@ public interface AdminAccountMapper {
             """)
     int update(AccountRecord account);
 
+    @Insert("""
+            INSERT INTO staff_profiles
+              (user_id,employee_no,department,job_title,hire_date,leave_date,employment_status)
+            VALUES (#{userId},#{employeeNo},#{department},#{jobTitle},#{hireDate},#{leaveDate},#{employmentStatus})
+            """)
+    int insertStaffProfile(@Param("userId") Long userId, @Param("employeeNo") String employeeNo,
+            @Param("department") String department, @Param("jobTitle") String jobTitle,
+            @Param("hireDate") java.time.LocalDate hireDate, @Param("leaveDate") java.time.LocalDate leaveDate,
+            @Param("employmentStatus") String employmentStatus);
+
+    @Update("""
+            UPDATE staff_profiles SET employee_no=#{employeeNo},department=#{department},job_title=#{jobTitle},
+              hire_date=#{hireDate},leave_date=#{leaveDate},employment_status=#{employmentStatus}
+            WHERE user_id=#{userId}
+            """)
+    int updateStaffProfile(@Param("userId") Long userId, @Param("employeeNo") String employeeNo,
+            @Param("department") String department, @Param("jobTitle") String jobTitle,
+            @Param("hireDate") java.time.LocalDate hireDate, @Param("leaveDate") java.time.LocalDate leaveDate,
+            @Param("employmentStatus") String employmentStatus);
+
+    @Insert("""
+            INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,before_data,after_data)
+            VALUES (#{actorId},'update_staff_profile','user',#{userId},JSON_OBJECT(),
+                    JSON_OBJECT('employeeNo',#{employeeNo},'employmentStatus',#{employmentStatus}))
+            """)
+    int insertStaffProfileAudit(@Param("actorId") Long actorId, @Param("userId") Long userId,
+            @Param("employeeNo") String employeeNo, @Param("employmentStatus") String employmentStatus);
+
     @Update("UPDATE users SET status = 'inactive' WHERE id = #{id}")
     int deactivate(@Param("id") Long id);
 
@@ -95,6 +132,12 @@ public interface AdminAccountMapper {
         private String accountType;
         private String staffRole;
         private String status;
+        private String employeeNo;
+        private String department;
+        private String jobTitle;
+        private java.time.LocalDate hireDate;
+        private java.time.LocalDate leaveDate;
+        private String employmentStatus;
         private Long ownerId;
 
         public Long getId() { return id; }
@@ -115,6 +158,18 @@ public interface AdminAccountMapper {
         public void setStatus(String status) { this.status = status; }
         public Long getOwnerId() { return ownerId; }
         public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
+        public String getEmployeeNo() { return employeeNo; }
+        public void setEmployeeNo(String employeeNo) { this.employeeNo = employeeNo; }
+        public String getDepartment() { return department; }
+        public void setDepartment(String department) { this.department = department; }
+        public String getJobTitle() { return jobTitle; }
+        public void setJobTitle(String jobTitle) { this.jobTitle = jobTitle; }
+        public java.time.LocalDate getHireDate() { return hireDate; }
+        public void setHireDate(java.time.LocalDate hireDate) { this.hireDate = hireDate; }
+        public java.time.LocalDate getLeaveDate() { return leaveDate; }
+        public void setLeaveDate(java.time.LocalDate leaveDate) { this.leaveDate = leaveDate; }
+        public String getEmploymentStatus() { return employmentStatus; }
+        public void setEmploymentStatus(String employmentStatus) { this.employmentStatus = employmentStatus; }
     }
 
     class AccountRecord extends AccountRow {

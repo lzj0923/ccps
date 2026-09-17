@@ -33,7 +33,7 @@ public final class AdminRoutePermissionPolicy {
             return Set.of(AdminPermissionCodes.FINANCE_MANAGE);
         }
         if (isOperationsMutation(path)) {
-            return Set.of(AdminPermissionCodes.OPERATIONS_MANAGE, AdminPermissionCodes.BUSINESS_MANAGE);
+            return Set.of(AdminPermissionCodes.OPERATIONS_MANAGE);
         }
         return Set.of(AdminPermissionCodes.BUSINESS_MANAGE);
     }
@@ -51,10 +51,8 @@ public final class AdminRoutePermissionPolicy {
                 || path.contains("/important-messages")
                 || path.contains("/maintenance-records")
                 || path.contains("/repair-reports")
-                || path.contains("/operations/")
                 || path.contains("/rent-payments/") && path.endsWith("/proof")
-                || path.contains("/rent-invoices/") && path.endsWith("/reminders")
-                || path.startsWith("/api/admin/e-signatures");
+                || path.contains("/rent-invoices/") && path.endsWith("/reminders");
     }
 
     private static boolean startsWithAny(String path, String... prefixes) {

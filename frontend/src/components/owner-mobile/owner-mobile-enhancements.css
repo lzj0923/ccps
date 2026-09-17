@@ -1,0 +1,72 @@
+/* Hallmark · genre: editorial · macrostructure: Ecosystem Index · theme: CCPS Estate
+ * design-system: project-resources/documentation/design.md · designed-as-app
+ * audience: Malaysian property owners · task: property records and evidence · enrichment: none
+ */
+html.capacitor-native .owner-app-v2:not([data-detail="root"]) .owner-app-bar { min-height:0; padding:var(--space-native-2xs) 0; border:0; box-shadow:none; background:transparent; }
+html.capacitor-native .owner-app-v2:not([data-detail="root"]) .owner-app-heading > span { display:none; }
+html.capacitor-native .owner-app-v2:not([data-detail="root"]) .owner-app-heading h1 { font-size:var(--text-native-heading); }
+html.capacitor-native .owner-app-v2:not([data-detail="root"]) .owner-property-switch { padding:var(--space-native-xs); box-shadow:none; }
+html.capacitor-native .owner-app-v2:not([data-detail="root"]) .owner-stat-hero { min-height:0; padding:var(--space-native-sm); box-shadow:none; }
+html.capacitor-native .owner-app-v2[data-detail="cashflow"] .owner-stat-hero h2 { display:none; }
+html.capacitor-native .owner-app-v2 .owner-app-field { display:grid; min-width:0; gap:var(--space-native-2xs); }
+html.capacitor-native .owner-app-v2 .owner-app-field > span { color:var(--color-native-muted); font-size:var(--text-native-label); }
+html.capacitor-native .owner-app-v2 .owner-app-field :is(input,select) { box-sizing:border-box; min-width:0; width:100%; height:2.75rem; border:1px solid var(--color-native-rule); border-radius:var(--radius-native-control); padding:0 var(--space-native-xs); background:var(--color-native-paper); color:var(--color-native-ink); font:inherit; font-size:var(--text-native-caption); }
+html.capacitor-native .owner-app-v2 .owner-filter-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--space-native-xs); }
+html.capacitor-native .owner-app-v2 .owner-detail-tabs { display:flex; flex-wrap:wrap; gap:var(--space-native-2xs); padding-block:var(--space-native-2xs); border-bottom:1px solid var(--color-native-rule); }
+html.capacitor-native .owner-app-v2 .owner-detail-tabs button { flex:1 1 auto; min-height:2.75rem; padding:var(--space-native-2xs) var(--space-native-xs); border:0; border-radius:var(--radius-native-control); background:var(--color-native-paper); color:var(--color-native-muted); font-size:var(--text-native-label); }
+html.capacitor-native .owner-app-v2 .owner-detail-tabs button[aria-pressed="true"] { background:var(--color-native-accent); color:var(--color-native-on-accent); }
+html.capacitor-native .owner-app-v2 .owner-bar-chart { height:12rem; }
+html.capacitor-native .owner-app-v2 .owner-bar-chart > div { display:grid; grid-template-rows:minmax(0,1fr) auto; height:100%; }
+html.capacitor-native .owner-app-v2 .owner-bar-chart i { min-height:0; }
+html.capacitor-native .owner-app-v2 .owner-chart-legend { display:flex; justify-content:center; gap:var(--space-native-sm); color:var(--color-native-muted); font-size:var(--text-native-label); }
+html.capacitor-native .owner-app-v2 .owner-chart-legend span::before { display:inline-block; width:.5rem; height:.5rem; margin-inline-end:.375rem; background:var(--color-native-rental-accent); content:''; }
+html.capacitor-native .owner-app-v2 .owner-chart-legend .expense::before { background:var(--color-native-warm); }
+html.capacitor-native .owner-app-v2 .owner-advanced-filters { border-block:1px solid var(--color-native-rule); }
+html.capacitor-native .owner-app-v2 .owner-advanced-filters summary { min-height:2.75rem; padding-block:var(--space-native-xs); cursor:pointer; color:var(--color-native-accent); font-size:var(--text-native-caption); }
+html.capacitor-native .owner-app-v2 .owner-advanced-filters .owner-filter-grid { padding-bottom:var(--space-native-sm); }
+html.capacitor-native .owner-app-v2 :is(.owner-filter-actions,.owner-linked-files) { display:flex; flex-wrap:wrap; gap:var(--space-native-xs); }
+html.capacitor-native .owner-app-v2 :is(.owner-filter-actions,.owner-linked-files) button { display:flex; align-items:center; justify-content:center; gap:var(--space-native-2xs); min-height:2.75rem; padding-inline:var(--space-native-xs); border:1px solid var(--color-native-rule); border-radius:var(--radius-native-control); background:var(--color-native-paper); color:var(--color-native-accent); font-size:var(--text-native-label); }
+html.capacitor-native .owner-app-v2 .owner-filter-actions button { flex:1; }
+html.capacitor-native .owner-app-v2 .owner-selection-summary { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-native-xs); padding:var(--space-native-xs); background:var(--color-native-accent-faint); color:var(--color-native-ink); font-size:var(--text-native-caption); }
+html.capacitor-native .owner-app-v2 .owner-selection-summary small { flex-basis:100%; color:var(--color-native-muted); }
+html.capacitor-native .owner-app-v2 .owner-context-note { margin:0; color:var(--color-native-muted); font-size:var(--text-native-label); line-height:1.6; }
+html.capacitor-native .owner-app-v2 .owner-month-categories { display:grid; gap:var(--space-native-xs); padding:var(--space-native-sm); margin:0; background:var(--color-native-canvas); font-size:var(--text-native-caption); }
+html.capacitor-native .owner-app-v2 .owner-month-categories > div { display:flex; justify-content:space-between; gap:var(--space-native-xs); }
+html.capacitor-native .owner-app-v2 .owner-month-categories dd { margin:0; font-variant-numeric:tabular-nums; text-align:end; }
+html.capacitor-native .owner-app-v2 .owner-transaction-evidence { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-native-2xs); border-top:1px solid var(--color-native-rule); padding-top:var(--space-native-2xs); color:var(--color-native-muted); font-size:var(--text-native-label); }
+html.capacitor-native .owner-app-v2 .owner-transaction-evidence > span { display:flex; flex-wrap:wrap; gap:var(--space-native-2xs); }
+html.capacitor-native .owner-app-v2 .owner-transaction-evidence > div { display:flex; flex-wrap:wrap; gap:var(--space-native-2xs); }
+html.capacitor-native .owner-app-v2 .owner-transaction-evidence button { display:flex; align-items:center; gap:var(--space-native-2xs); min-height:2.75rem; padding-inline:var(--space-native-xs); border:0; border-radius:var(--radius-native-control); background:var(--color-native-accent-faint); color:var(--color-native-accent); }
+html.capacitor-native .owner-app-v2 .owner-photo-gallery { display:grid; gap:var(--space-native-xs); padding-block:var(--space-native-sm); border-top:1px solid var(--color-native-rule); }
+html.capacitor-native .owner-app-v2 .owner-photo-gallery h2 { margin:0; font-size:var(--text-native-heading); font-family:var(--font-native-display); }
+html.capacitor-native .owner-app-v2 .owner-photo-gallery > p { margin:0; font-size:var(--text-native-label); color:var(--color-native-muted); line-height:1.6; }
+html.capacitor-native .owner-app-v2 .owner-photo-thumbnails { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-native-xs); }
+html.capacitor-native .owner-app-v2 .owner-photo-thumbnails article { min-width:0; }
+html.capacitor-native .owner-app-v2 .owner-photo-open { display:grid; width:100%; min-width:0; gap:var(--space-native-2xs); padding:0 0 var(--space-native-xs); border:1px solid var(--color-native-rule); border-radius:var(--radius-native-card); overflow:clip; text-align:start; background:var(--color-native-paper); color:var(--color-native-ink); }
+html.capacitor-native .owner-app-v2 .owner-photo-open img { width:100%; height:auto; aspect-ratio:4/3; object-fit:cover; }
+html.capacitor-native .owner-app-v2 .owner-photo-open > :is(strong,small) { display:block; overflow:hidden; padding-inline:var(--space-native-xs); text-overflow:ellipsis; white-space:nowrap; font-size:var(--text-native-label); }
+html.capacitor-native .owner-app-v2 .owner-photo-open > small { color:var(--color-native-muted); font-size:var(--text-native-badge); }
+html.capacitor-native .owner-app-v2 .owner-photo-placeholder { display:grid; place-content:center; justify-items:center; gap:var(--space-native-2xs); aspect-ratio:4/3; background:var(--color-native-surface); color:var(--color-native-muted); }
+html.capacitor-native .owner-app-v2 .owner-photo-placeholder small { font-size:var(--text-native-badge); white-space:normal; }
+html.capacitor-native .owner-app-v2 .owner-unread-toggle { display:flex; align-items:center; gap:var(--space-native-xs); min-height:2.75rem; color:var(--color-native-muted); font-size:var(--text-native-caption); }
+html.capacitor-native .owner-app-v2 .owner-unread-toggle input { width:1.125rem; height:1.125rem; accent-color:var(--color-native-accent); }
+html.capacitor-native .owner-app-v2 .owner-notice-dialog { width:calc(100% - 2rem); max-width:34rem; max-height:80dvh; padding:var(--space-native-sm); border:1px solid var(--color-native-rule); border-radius:var(--radius-native-card); background:var(--color-native-paper); color:var(--color-native-ink); }
+html.capacitor-native .owner-app-v2 .owner-notice-dialog header { display:flex; align-items:center; justify-content:space-between; gap:var(--space-native-xs); }
+html.capacitor-native .owner-app-v2 .owner-notice-dialog h2 { overflow-wrap:anywhere; font-size:var(--text-native-heading); }
+html.capacitor-native .owner-app-v2 .owner-notice-dialog p { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.8; }
+html.capacitor-native .owner-app-v2 .owner-notice-dialog button { display:inline-flex; align-items:center; min-height:2.75rem; padding-inline:var(--space-native-sm); border:1px solid var(--color-native-rule); border-radius:var(--radius-native-control); background:var(--color-native-accent-faint); color:var(--color-native-accent); }
+html.capacitor-native .owner-app-v2 :is(button,select,input,summary,[role="button"]):focus-visible { outline:2px solid var(--color-native-focus); outline-offset:2px; }
+@media (min-width: 24rem) { html.capacitor-native .owner-app-v2 .owner-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.owner-app-v2 .owner-self-service { margin: 16px 0; padding: 18px; border: 1px solid #deded5; border-radius: 16px; background: #fff; }
+.owner-app-v2 .owner-self-service h2 { margin: 0 0 8px; font-size: 17px; }
+.owner-app-v2 .owner-self-service p { font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.owner-app-v2 .owner-self-service fieldset { border: 0; padding: 0; min-width: 0; }
+.owner-app-v2 .owner-self-service label { margin: 12px 0; }
+.owner-app-v2 .owner-self-service textarea { width: 100%; padding: 12px; border: 1px solid #d7dedb; border-radius: 10px; font: inherit; box-sizing: border-box; resize: vertical; }
+.owner-app-v2 .owner-self-service button { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid #007f82; color: #006c70; background: #f1faf8; font: inherit; cursor: pointer; }
+.owner-app-v2 .owner-self-service button[type=submit] { background: #007f82; color: #fff; }
+.owner-app-v2 .owner-self-service button:disabled { opacity: .5; cursor: wait; }
+.owner-app-v2 .owner-self-service details { margin-top: 20px; border-top: 1px solid #e8e9e1; padding-top: 16px; }
+.owner-app-v2 .owner-self-service summary { cursor: pointer; min-height: 40px; }
+.owner-app-v2 .owner-self-service [role=alert] { color: #a83529; }
+.owner-app-v2 .owner-self-service li { overflow-wrap: anywhere; font-size: 13px; }

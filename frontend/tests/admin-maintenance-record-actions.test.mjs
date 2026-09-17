@@ -49,9 +49,10 @@ test('rejected maintenance orders return to handling with a finance rejection hi
   assert.match(workspace, /maintenanceRowEditable\(row\)/);
   assert.match(workspace, /row\.confirmationStatus === 'rejected'/);
   assert.match(workspace, /openHandling\(row\)/);
-  assert.match(workspace, /财务已退回/);
+  assert.match(workspace, /legacy\.t_155845fa2240/);
   assert.match(workspace, /fetchAdminMaintenanceDetail\(row\.id\)/);
-  assert.match(workspace, /detail\?\.actualAmount \?\? row\.amount/);
+  assert.match(workspace, /actualAmount: Number\(row\.estimatedAmount \?\? row\.amount \?\? 0\)/);
+  assert.match(workspace, /detail\?\.actualAmount \?\? detail\?\.estimatedAmount \?\? row\.estimatedAmount \?\? row\.amount/);
   assert.match(workspace, /previousCompletion\?\.note \|\| detail\?\.description/);
   assert.match(workspace, /!\['completed','cancelled'\]\.includes\(row\.status\) \|\| row\.confirmationStatus === 'rejected'/);
   assert.doesNotMatch(workspace, /重新发起财务确认/);

@@ -3,14 +3,14 @@
     <div class="panel table-panel maintenance-list-panel">
       <div class="panel-head">
         <div><h2>{{ $t('legacy.t_43337f59c780') }}</h2><span>{{ filteredRows.length }} {{ $t('legacy.t_ab0eac290998') }}</span></div>
-        <div class="maintenance-head-actions"><button v-if="lastDeletedRecycleBinId" type="button" class="maintenance-undo-btn" @click="undoLastDelete">撤销删除</button><button type="button" class="maintenance-recycle-btn" @click="openRecycleBin">回收站</button><div class="maintenance-tabs">
+        <div class="maintenance-head-actions"><button v-if="lastDeletedRecycleBinId" type="button" class="maintenance-undo-btn" @click="undoLastDelete">{{ $t('legacy.t_2b9fd91427d7') }}</button><button type="button" class="maintenance-recycle-btn" @click="openRecycleBin">{{ $t('legacy.t_64ea8751fba9') }}</button><div class="maintenance-tabs">
           <button type="button" :class="{ active: activeTab === 'expense' }" @click="selectTab('expense')">{{ $t('legacy.t_3361c4c6f1ee') }}</button>
           <button type="button" :class="{ active: activeTab === 'maintenance' }" @click="selectTab('maintenance')">{{ $t('legacy.t_643db1590668') }}</button>
         </div></div>
       </div>
 
       <div v-if="loading" class="admin-owner-state">{{ $t('legacy.t_62d0616a0881') }}</div>
-      <div v-else-if="errorMessage" class="admin-owner-state error"><strong>{{ $t('legacy.t_53afb862b922') }}</strong><span>{{ errorMessage }}</span><button @click="loadData">{{ $t('legacy.t_0c9157b5bfac') }}</button></div>
+      <div v-else-if="errorMessage" class="admin-owner-state error"><strong>{{ $t('legacy.t_53afb862b922') }}</strong><span>{{ $lt(errorMessage) }}</span><button @click="loadData">{{ $t('legacy.t_0c9157b5bfac') }}</button></div>
       <div v-else class="table-wrap maintenance-table-wrap">
         <table v-if="activeTab === 'expense'">
           <thead><tr><th>{{ $t('legacy.t_b6fed9af8313') }}</th><th>{{ $t('legacy.t_114246450ff0') }}</th><th>{{ $t('legacy.t_0cf468db12ee') }}</th><th>{{ $t('legacy.t_9b6c1b038aa5') }}</th><th>{{ $t('legacy.t_380086757011') }}</th><th>{{ $t('legacy.t_5c0ec3674a79') }}</th><th>{{ $t('legacy.t_607b3e1024c4') }}</th><th>{{ $t('legacy.t_99f6fe6c41ad') }}</th><th>{{ $t('legacy.t_f3ea6d345e2a') }}</th></tr></thead>
@@ -19,11 +19,11 @@
             <tr v-for="row in pagedRows()" :key="`expense-${row.id}`" :class="{ selected: selectedKey === rowKey(row) }" @click="selectRow(row)">
               <td>{{ displayDate(row.occurredOn) }}</td>
               <td><strong>{{ row.projectName }}</strong><small>{{ row.unitNo }}</small></td>
-              <td><span class="maintenance-category">{{ categoryLabel(row.category) }}</span></td>
+              <td><span class="maintenance-category">{{ $lt(categoryLabel(row.category)) }}</span></td>
               <td class="maintenance-description">{{ row.description }}</td>
               <td><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(row.amount) }}</strong></td>
               <td :class="{ 'money-gold': Number(row.reserveDeductedAmount) > 0 }">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(row.reserveDeductedAmount) }}</td>
-              <td><span class="tag" :class="statusClass(paymentLabel(row.paymentStatus))">{{ paymentLabel(row.paymentStatus) }}</span></td>
+              <td><span class="tag" :class="statusClass(row.paymentStatus)">{{ $lt(paymentLabel(row.paymentStatus)) }}</span></td>
               <td>{{ Number(row.attachmentCount || 0) }} {{ $t('legacy.t_aa9f1ad4f91c') }}</td>
               <td class="maintenance-row-actions">
                 <div class="maintenance-action-group">
@@ -31,7 +31,7 @@
                   <button v-if="row.editable" type="button" class="maintenance-edit-btn" @click.stop="openExpenseEdit(row)">{{ $t('projectManagement.edit') }}</button>
                   <button v-if="row.editable" type="button" class="maintenance-delete-btn" @click.stop="removeExpense(row)">{{ $t('projectManagement.delete') }}</button>
                 </div>
-                <span v-if="!row.editable" class="maintenance-state-pill is-confirmed">财务已确认</span>
+                <span v-if="!row.editable" class="maintenance-state-pill is-confirmed">{{ $t('legacy.t_e5758461211f') }}</span>
               </td>
             </tr>
           </tbody>
@@ -44,21 +44,21 @@
             <tr v-for="row in pagedRows()" :key="`maintenance-${row.id}`" :class="{ selected: selectedKey === rowKey(row) }" @click="selectRow(row)">
               <td><strong>{{ row.workOrderNo }}</strong></td>
               <td><strong>{{ row.projectName }}</strong><small>{{ row.unitNo }}</small></td>
-              <td><span class="maintenance-category">{{ categoryLabel(row.category) }}</span></td>
+              <td><span class="maintenance-category">{{ $lt(categoryLabel(row.category)) }}</span></td>
               <td class="maintenance-description">{{ row.title }}</td>
               <td>{{ dateTime(row.requestedAt) }}</td>
               <td><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(row.amount) }}</strong></td>
-              <td><span class="tag" :class="statusClass(maintenanceStatusLabel(row.status))">{{ maintenanceStatusLabel(row.status) }}</span></td>
+              <td><span class="tag" :class="statusClass(row.status)">{{ $lt(maintenanceStatusLabel(row.status)) }}</span></td>
               <td>{{ Number(row.attachmentCount || 0) }} {{ $t('legacy.t_aa9f1ad4f91c') }}</td>
               <td class="maintenance-row-actions">
                 <div class="maintenance-action-group">
                   <button type="button" class="maintenance-detail-btn" @click.stop="selectRow(row)">{{ $t('legacy.t_0596bf73ba05') }}</button>
                   <button v-if="maintenanceRowEditable(row)" type="button" class="maintenance-edit-btn" @click.stop="openMaintenanceEdit(row)">{{ $t('projectManagement.edit') }}</button>
                   <button v-if="maintenanceRowEditable(row)" type="button" class="maintenance-delete-btn" @click.stop="removeMaintenance(row)">{{ $t('projectManagement.delete') }}</button>
-                  <button v-if="!['completed','cancelled'].includes(row.status) || row.confirmationStatus === 'rejected' || row.paymentStatus === 'voided'" type="button" class="maintenance-handle-btn" @click.stop="openHandling(row)">{{ row.confirmationStatus === 'rejected' || row.paymentStatus === 'voided' ? '处理' : $t('legacy.t_fda275e0bcc3') }}</button>
+                  <button v-if="!['completed','cancelled'].includes(row.status) || row.confirmationStatus === 'rejected' || row.paymentStatus === 'voided'" type="button" class="maintenance-handle-btn" @click.stop="openHandling(row)">{{ row.confirmationStatus === 'rejected' || row.paymentStatus === 'voided' ? $t('legacy.t_9263e46a0109') : $t('legacy.t_fda275e0bcc3') }}</button>
                 </div>
-                <span v-if="row.confirmationStatus === 'confirmed' && row.status !== 'cancelled'" class="maintenance-state-pill is-confirmed">财务已确认</span>
-                <span v-else-if="row.confirmationStatus === 'rejected'" class="maintenance-state-pill is-rejected">财务已退回</span>
+                <span v-if="row.confirmationStatus === 'confirmed' && row.status !== 'cancelled'" class="maintenance-state-pill is-confirmed">{{ $t('legacy.t_e5758461211f') }}</span>
+                <span v-else-if="row.confirmationStatus === 'rejected'" class="maintenance-state-pill is-rejected">{{ $t('legacy.t_155845fa2240') }}</span>
               </td>
             </tr>
           </tbody>
@@ -74,12 +74,12 @@
         <div class="profile">
           <div class="big-avatar">{{ activeTab === 'expense' ? $t('legacy.t_18d2086d6a02') : $t('legacy.t_ea97fb39f031') }}</div>
           <div><h3>{{ detailTitle }}</h3><p>{{ selectedRow.projectName }} · {{ selectedRow.unitNo }}</p></div>
-          <span class="tag" :class="statusClass(detailStatus)">{{ detailStatus }}</span>
+          <span class="tag" :class="statusClass(activeTab === 'expense' ? selectedRow.paymentStatus : selectedRow.status)">{{ detailStatus }}</span>
         </div>
         <div class="detail-section">
           <h4><span class="num">{{ $t('legacy.t_356a192b7913') }}</span>{{ $t('legacy.t_c738ebbf02dd') }}</h4>
           <div class="kv"><span>{{ activeTab === 'expense' ? $t('legacy.t_f48697f8b6ec') : $t('legacy.t_dde3113a1be2') }}</span><b>{{ activeTab === 'expense' ? displayDate(selectedRow.occurredOn) : dateTime(selectedRow.requestedAt) }}</b></div>
-          <div class="kv"><span>{{ $t('legacy.t_16ed763edcda') }}</span><b>{{ categoryLabel(selectedRow.category) }}</b></div>
+          <div class="kv"><span>{{ $t('legacy.t_16ed763edcda') }}</span><b>{{ $lt(categoryLabel(selectedRow.category)) }}</b></div>
           <div v-if="selectedRow.workOrderNo" class="kv"><span>{{ $t('legacy.t_64838faf9fb0') }}</span><b>{{ selectedRow.workOrderNo }}</b></div>
           <div class="kv"><span>{{ $t('legacy.t_99f6fe6c41ad') }}</span><b>{{ Number(selectedRow.attachmentCount || 0) }} {{ $t('legacy.t_aa9f1ad4f91c') }}</b></div>
         </div>
@@ -87,7 +87,7 @@
           <h4><span class="num">{{ $t('legacy.t_da4b9237bacc') }}</span>{{ $t('legacy.t_72f0fd083aba') }}</h4>
           <div class="kv"><span>{{ $t('legacy.t_76c755be2660') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(detailAmount) }}</b></div>
           <div class="kv"><span>{{ $t('legacy.t_5c0ec3674a79') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.reserveDeductedAmount) }}</b></div>
-          <div v-if="activeTab === 'expense'" class="kv"><span>{{ $t('legacy.t_c6b9a8cfdb21') }}</span><b>{{ paymentMethodLabel(selectedRow.paymentMethod) }}</b></div>
+          <div v-if="activeTab === 'expense'" class="kv"><span>{{ $t('legacy.t_c6b9a8cfdb21') }}</span><b>{{ $lt(paymentMethodLabel(selectedRow.paymentMethod)) }}</b></div>
         </div>
         <div class="detail-section">
           <h4><span class="num">{{ $t('legacy.t_77de68daecd8') }}</span>{{ activeTab === 'expense' ? $t('legacy.t_a52dafecf965') : $t('legacy.t_9d4b38186bb3') }}</h4>
@@ -100,186 +100,258 @@
     </aside>
     </div>
 
+    <dialog ref="monthlyCashflowDialog" class="modal monthly-cashflow-dialog" @close="resetMonthlyCashflow">
+      <div class="modal-head">
+        <div><h3>{{ $t('finance.monthlyCashflow') }}</h3><small>{{ $t('finance.monthlyCashflowHint') }}</small></div>
+        <button type="button" class="icon-close" :aria-label="$t('ui.close')" @click="closeMonthlyCashflow">×</button>
+      </div>
+      <div class="monthly-cashflow-body">
+        <aside class="monthly-unit-panel">
+          <label>{{ $t('finance.searchUnit') }}<input v-model.trim="monthlyUnitSearch" type="search" :placeholder="$t('finance.searchUnitPlaceholder')"></label>
+          <div v-if="monthlyUnitsLoading" class="monthly-cashflow-state">{{ $t('finance.loadingUnits') }}</div>
+          <div v-else-if="!monthlyFilteredUnits.length" class="monthly-cashflow-state">{{ $t('finance.noMatchingUnits') }}</div>
+          <div v-else class="monthly-unit-list">
+            <button v-for="unit in monthlyFilteredUnits" :key="`monthly-unit-${unit.unitId}`" type="button" :class="{ active: String(monthlySelectedUnitId) === String(unit.unitId) }" @click="selectMonthlyUnit(unit)">
+              <strong>{{ unit.projectName }} · {{ unit.unitNo }}</strong>
+              <small>{{ $t('finance.ownerLabel', { name: unit.ownerName || '—' }) }}</small>
+              <small>{{ $t('finance.tenantLabel', { name: unit.tenantName || '—' }) }}</small>
+            </button>
+          </div>
+        </aside>
+
+        <main class="monthly-ledger-panel">
+          <header class="monthly-ledger-head">
+            <div><strong>{{ monthlySelectedUnit ? `${monthlySelectedUnit.projectName} · ${monthlySelectedUnit.unitNo}` : $t('finance.chooseUnit') }}</strong><small v-if="monthlySelectedUnit">{{ monthlySelectedUnit.ownerName || $t('finance.missingOwner') }}</small></div>
+            <label>{{ $t('finance.viewMonth') }}<input v-model="monthlyMonth" type="month"></label>
+          </header>
+
+          <div v-if="monthlyCashflowError" class="monthly-cashflow-state large error"><strong>{{ $t('finance.cashflowLoadFailed') }}</strong><span>{{ $lt(monthlyCashflowError) }}</span><button type="button" @click="reloadMonthlyCashflow">{{ $t('finance.reload') }}</button></div>
+          <div v-else-if="!monthlySelectedUnit" class="monthly-cashflow-state large">{{ $t('finance.chooseUnitHint') }}</div>
+          <div v-else-if="monthlyCashflowLoading" class="monthly-cashflow-state large">{{ $t('finance.loadingCashflow') }}</div>
+          <template v-else>
+            <section class="monthly-summary-grid">
+              <article><span>{{ $t('finance.confirmedIncome') }}</span><strong class="income">RM {{ money(monthlyIncome) }}</strong></article>
+              <article><span>{{ $t('finance.confirmedExpense') }}</span><strong class="expense">RM {{ money(monthlyExpense) }}</strong></article>
+              <article><span>{{ $t('finance.confirmedNet') }}</span><strong :class="monthlyNet >= 0 ? 'income' : 'expense'">RM {{ money(monthlyNet) }}</strong></article>
+              <article><span>{{ $t('finance.monthlyRecordCount') }}</span><strong>{{ $t('finance.recordsValue', { count: monthlyCashflowRows.length }) }}</strong></article>
+            </section>
+            <p class="monthly-summary-note">{{ $t('finance.monthlySummaryScope') }}</p>
+
+            <div class="monthly-cashflow-table-wrap">
+              <table>
+                <thead><tr><th>{{ $t('finance.cashflowDate') }}</th><th>{{ $t('finance.direction') }}</th><th>{{ $t('finance.cashflowItem') }}</th><th>{{ $t('finance.amount') }}</th><th>{{ $t('finance.status') }}</th><th>{{ $t('finance.action') }}</th></tr></thead>
+                <tbody>
+                  <tr v-if="!monthlyCashflowRows.length"><td colspan="6" class="monthly-empty">{{ $t('finance.noMonthlyRecords') }}</td></tr>
+                  <tr v-for="item in monthlyCashflowRows" :key="`monthly-cashflow-${item.id}`" :class="{ selected: String(monthlySelectedCashflowId) === String(item.id) }" @click="openMonthlyCashflowDetail(item)">
+                    <td>{{ displayDate(item.occurredOn) }}</td>
+                    <td><span class="monthly-direction" :class="item.direction">{{ item.direction === 'income' ? $t('finance.income') : $t('finance.expense') }}</span></td>
+                    <td><strong>{{ item.description || $lt(cashflowCategoryLabel(item.category)) }}</strong><small>{{ $lt(cashflowCategoryLabel(item.category)) }} · {{ item.transactionNo || $t('finance.noTransactionNo') }}</small></td>
+                    <td><b class="monthly-amount" :class="item.direction">{{ item.direction === 'income' ? '+' : '-' }} RM {{ money(item.amount) }}</b></td>
+                    <td><span class="monthly-status" :class="item.confirmationStatus">{{ $lt(cashflowConfirmationLabel(item.confirmationStatus)) }}</span></td>
+                    <td><button type="button" class="monthly-detail-button" @click.stop="openMonthlyCashflowDetail(item)">{{ $t('finance.viewDetails') }}</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <section v-if="monthlySelectedCashflow" ref="monthlyCashflowDetail" class="monthly-cashflow-detail">
+              <header><div><span>{{ $t('finance.cashflowDetails') }}</span><strong>{{ monthlySelectedCashflow.description || $lt(cashflowCategoryLabel(monthlySelectedCashflow.category)) }}</strong></div><button type="button" :aria-label="$t('ui.close')" @click="monthlySelectedCashflowId = null">×</button></header>
+              <div class="monthly-detail-grid">
+                <div><span>{{ $t('finance.projectUnit') }}</span><b>{{ monthlySelectedUnit.projectName }} · {{ monthlySelectedUnit.unitNo }}</b></div>
+                <div><span>{{ $t('finance.cashflowDirection') }}</span><b>{{ monthlySelectedCashflow.direction === 'income' ? $t('finance.income') : $t('finance.expense') }}</b></div>
+                <div><span>{{ $t('finance.cashflowCategory') }}</span><b>{{ $lt(cashflowCategoryLabel(monthlySelectedCashflow.category)) }}</b></div>
+                <div><span>{{ $t('finance.cashflowDate') }}</span><b>{{ displayDate(monthlySelectedCashflow.occurredOn) }}</b></div>
+                <div><span>{{ monthlySelectedCashflow.direction === 'income' ? $t('finance.actualReceiptDate') : $t('finance.actualPaymentDate') }}</span><b>{{ displayDate(monthlySelectedCashflow.direction === 'income' ? monthlySelectedCashflow.receiptDate : monthlySelectedCashflow.paymentDate) }}</b></div>
+                <div><span>{{ $t('finance.amount') }}</span><b>RM {{ money(monthlySelectedCashflow.amount) }}</b></div>
+                <div><span>{{ $t('finance.paymentMethod') }}</span><b>{{ $lt(cashflowPaymentMethodLabel(monthlySelectedCashflow.paymentMethod)) }}</b></div>
+                <div><span>{{ $t('finance.confirmationStatus') }}</span><b>{{ $lt(cashflowConfirmationLabel(monthlySelectedCashflow.confirmationStatus)) }}</b></div>
+                <div><span>{{ $t('finance.transactionNo') }}</span><b>{{ monthlySelectedCashflow.transactionNo || '—' }}</b></div>
+                <div><span>{{ $t('finance.dataSource') }}</span><b>{{ $lt(cashflowSourceLabel(monthlySelectedCashflow.source)) }}</b></div>
+                <div><span>{{ $t('finance.paymentStatus') }}</span><b>{{ $lt(cashflowPaymentStatusLabel(monthlySelectedCashflow.paymentStatus)) }}</b></div>
+                <div class="wide"><span>{{ $t('finance.itemDescription') }}</span><b>{{ monthlySelectedCashflow.description || '—' }}</b></div>
+                <div class="wide"><span>{{ $t('finance.notes') }}</span><b>{{ monthlySelectedCashflow.allocationNote || '—' }}</b></div>
+              </div>
+              <button v-if="monthlySelectedCashflow.attachmentId" type="button" class="monthly-proof-button" @click="downloadMonthlyCashflowProof(monthlySelectedCashflow)">{{ $t('finance.downloadAttachment', { name: monthlySelectedCashflow.attachmentName || $t('finance.cashflowProof') }) }}</button>
+            </section>
+          </template>
+        </main>
+      </div>
+      <menu><button type="button" @click="closeMonthlyCashflow">{{ $t('ui.close') }}</button></menu>
+    </dialog>
+
     <dialog ref="expenseCreateDialog" class="modal maintenance-create-dialog">
       <form method="dialog" @submit.prevent="submitExpense">
-        <div class="modal-head"><div><h3>{{ editingExpenseId ? $t('projectManagement.edit') + $t('legacy.t_3361c4c6f1ee') : $t('legacy.t_16c7d92e55ce') }}</h3><small>{{ editingExpenseId ? '可修改错误资料或付款方式；单位不可更换。' : $t('legacy.t_8ca893baf0d3') }}</small></div><button type="button" class="icon-close" @click="closeExpenseCreate">×</button></div>
+        <div class="modal-head"><div><h3>{{ editingExpenseId ? $t('projectManagement.edit') + $t('legacy.t_3361c4c6f1ee') : expenseCreateMode === 'reserve-debit' ? $t('ui.addReserveDebit') : $t('legacy.t_16c7d92e55ce') }}</h3><small>{{ editingExpenseId ? $t('legacy.t_4f634b272d6d') : $t('legacy.t_8ca893baf0d3') }}</small></div><button type="button" class="icon-close" @click="closeExpenseCreate">×</button></div>
         <div v-if="optionsLoading" class="admin-owner-state">{{ $t('legacy.t_c330ff111b3f') }}</div>
         <div v-else class="maintenance-create-body">
           <label class="wide">{{ $t('legacy.t_114246450ff0') }}<select v-model.number="expenseForm.unitId" :disabled="Boolean(editingExpenseId)" required><option disabled value="">{{ $t('legacy.t_06dd9be6b9c7') }}</option><option v-for="unit in options.units" :key="unit.unitId" :value="unit.unitId">{{ unit.projectName }} · {{ unit.unitNo }}（{{ unit.ownerName }}）</option></select></label>
           <label>{{ $t('legacy.t_0cf468db12ee') }}<select v-model="expenseForm.category" required><option value="utilities">{{ $t('legacy.t_39e538e57590') }}</option><option value="management_service_fee">{{ $t('legacy.t_5f6a3d7c1e90') }}</option><option value="land_tax">{{ $t('legacy.t_2e8c9b4a6d71') }}</option><option value="assessment_tax">{{ $t('legacy.t_8b4d1f6a3c20') }}</option><option value="fire_insurance">{{ $t('legacy.t_4c7e2a9d5b13') }}</option><option value="agency_commission">{{ $t('legacy.t_6d1b8f3e4a72') }}</option><option value="cleaning">{{ $t('legacy.t_00e326047628') }}</option><option value="management">{{ $t('legacy.t_a178daac2527') }}</option><option value="maintenance">{{ $t('legacy.t_018bde2b7e24') }}</option><option value="other">{{ $t('legacy.t_c90e8ecbb54d') }}</option></select></label>
           <label>{{ $t('legacy.t_21eebaaf5746') }}<input v-model="expenseForm.occurredOn" type="date" required></label>
            <label>{{ $t('legacy.t_338501824154') }}<input v-model.number="expenseForm.amount" type="number" min="0.01" step="0.01" required></label>
-           <label>{{ $t('legacy.t_ab2dbd55b3fb') }}<select v-model="expenseForm.settlementMethod" required><option value="unpaid">{{ $t('legacy.t_9a2e6c4f8b17') }}</option><option value="reserve" :disabled="!expenseReserveAvailable">{{ $t('legacy.t_ea99cc82f746') }}</option><option value="direct_payment" :disabled="!expenseDirectPaymentAllowed">{{ $t('legacy.t_f5d4d7b78adb') }}</option></select><small v-if="selectedExpenseUnit && !expenseDirectPaymentAllowed" class="handling-warning">业主已解约，代付款已停用。</small></label>
+           <label>{{ $t('legacy.t_ab2dbd55b3fb') }}<select v-model="expenseForm.settlementMethod" required><option value="unpaid">{{ $t('legacy.t_9a2e6c4f8b17') }}</option><option value="reserve" :disabled="!expenseReserveAvailable">{{ $t('legacy.t_ea99cc82f746') }}</option><option value="direct_payment" :disabled="!expenseDirectPaymentAllowed">{{ $t('legacy.t_f5d4d7b78adb') }}</option></select><small v-if="selectedExpenseUnit && !expenseDirectPaymentAllowed" class="handling-warning">{{ $t('legacy.t_bd303f4f95e6') }}</small></label>
            <section class="expense-linked-fields expense-bank-fields wide">
-             <header><strong>银行信息</strong><small>先选择付款方类型，再选择该业主或管理层的已有银行账户；选择“新建账户”时才填写完整资料。</small></header>
-             <label>付款方类型<select v-model="expenseForm.payerType" required @change="onExpensePayerTypeChange"><option value="owner">业主</option><option value="management">管理层</option><option value="other">其他</option></select></label>
-             <label>所属账户<select v-model="expenseForm.accountProfileChoice" :disabled="expenseMasterLoading" required @change="applyExpenseAccountProfileChoice"><option disabled value="">请选择已有账户或新建账户</option><option v-for="option in expenseAccountProfileOptions" :key="option.value" :value="option.value">{{ option.label }}</option><option value="__new__">新建账户</option></select></label>
+             <header><strong>{{ $t('legacy.t_ee2df78f0008') }}</strong><small>{{ $t('legacy.t_4a81340e5b06') }}</small></header>
+             <label>{{ $t('legacy.t_c64046653237') }}<select v-model="expenseForm.payerType" required @change="onExpensePayerTypeChange"><option value="owner">{{ $t('legacy.t_a39a3f21f732') }}</option><option value="management">{{ $t('legacy.t_d87c66000a42') }}</option><option value="other">{{ $t('legacy.t_1a26edf94a81') }}</option></select></label>
+             <label>{{ $t('legacy.t_77c6bcd0dd17') }}<select v-model="expenseForm.accountProfileChoice" :disabled="expenseMasterLoading" required @change="applyExpenseAccountProfileChoice"><option disabled value="">{{ $t('legacy.t_722bdcc15701') }}</option><option v-for="option in expenseAccountProfileOptions" :key="option.value" :value="option.value">{{ $lt(option.label) }}</option><option value="__new__">{{ $t('legacy.t_477f320b8858') }}</option></select></label>
              <template v-if="expenseForm.accountProfileChoice === '__new__' && expenseForm.payerType === 'owner'">
-               <label>银行名称<input v-model.trim="ownerBankForm.itemName" maxlength="120" required></label>
-               <label>收款人姓名<input v-model.trim="ownerBankForm.paymentName" maxlength="160" required></label>
-               <label>银行账号<input v-model.trim="ownerBankForm.accountNo" maxlength="120" required></label>
-               <label>银行／分行代码<input v-model.trim="ownerBankForm.branchCode" maxlength="80"></label>
-               <label class="wide">银行地址<textarea v-model.trim="ownerBankForm.bankAddress" rows="3" maxlength="500"></textarea></label>
-               <label>SWIFT 代码<input v-model.trim="ownerBankForm.swiftCode" maxlength="80"></label>
-               <label>单日转账额度（RM）<input v-model.number="ownerBankForm.transferLimit" type="number" min="0" step="0.01" placeholder="0 表示无限制"><small>填写 0 或留空表示没有额度限制。</small></label>
-               <label class="expense-overseas-toggle wide"><input v-model="ownerBankForm.overseasBank" type="checkbox"><span>是否为海外银行</span></label>
-               <label v-if="ownerBankForm.overseasBank">海外银行汇款手续费（RM）<input v-model.number="ownerBankForm.overseasTransferFee" type="number" min="0" step="0.01" required></label>
-               <label class="wide">备注<textarea v-model.trim="ownerBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
+               <label>{{ $t('legacy.t_b0628057d28d') }}<input v-model.trim="ownerBankForm.itemName" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_ad69bce024e1') }}<input v-model.trim="ownerBankForm.paymentName" maxlength="160" required></label>
+               <label>{{ $t('legacy.t_ecaf440fd399') }}<input v-model.trim="ownerBankForm.accountNo" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_ca2d2f417aa9') }}<input v-model.trim="ownerBankForm.branchCode" maxlength="80"></label>
+               <label class="wide">{{ $t('legacy.t_452a24bc4653') }}<textarea v-model.trim="ownerBankForm.bankAddress" rows="3" maxlength="500"></textarea></label>
+               <label>{{ $t('legacy.t_5c92cbeaa1c4') }}<input v-model.trim="ownerBankForm.swiftCode" maxlength="80"></label>
+               <label>{{ $t('legacy.t_648f677839a0') }}<input v-model.number="ownerBankForm.transferLimit" type="number" min="0" step="0.01" :placeholder="$t('legacy.t_3407d37f1afb')"><small>{{ $t('legacy.t_aa8fc7a05143') }}</small></label>
+               <label class="expense-overseas-toggle wide"><input v-model="ownerBankForm.overseasBank" type="checkbox"><span>{{ $t('legacy.t_62c9f76ca500') }}</span></label>
+               <label v-if="ownerBankForm.overseasBank">{{ $t('legacy.t_229bc69dbcfe') }}<input v-model.number="ownerBankForm.overseasTransferFee" type="number" min="0" step="0.01" required></label>
+               <label class="wide">{{ $t('legacy.t_e0361480e3a5') }}<textarea v-model.trim="ownerBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
              </template>
              <template v-else-if="expenseForm.accountProfileChoice === '__new__' && expenseForm.payerType === 'management'">
-               <label>管理层名称<input v-model.trim="managementBankForm.managementName" maxlength="160" required placeholder="例如：海天公寓管理层"></label>
-               <label>费用用途<input v-model.trim="managementBankForm.purpose" maxlength="160" required placeholder="例如：管理费／维修基金"></label>
-               <label>银行名称<input v-model.trim="managementBankForm.bankName" maxlength="120" required></label>
-               <label>银行账号<input v-model.trim="managementBankForm.accountNo" maxlength="120" required></label>
-               <label>收款户名<input v-model.trim="managementBankForm.accountName" maxlength="160" required></label>
-               <label>分行／SWIFT<input v-model.trim="managementBankForm.branchOrSwift" maxlength="120"></label>
-               <label class="wide">备注<textarea v-model.trim="managementBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
+               <label>{{ $t('legacy.t_6cce88081e59') }}<input v-model.trim="managementBankForm.managementName" maxlength="160" required :placeholder="$t('legacy.t_b35b17ea2d5e')"></label>
+               <label>{{ $t('legacy.t_c6089b863696') }}<input v-model.trim="managementBankForm.purpose" maxlength="160" required :placeholder="$t('legacy.t_4e384ade0732')"></label>
+               <label>{{ $t('legacy.t_b0628057d28d') }}<input v-model.trim="managementBankForm.bankName" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_ecaf440fd399') }}<input v-model.trim="managementBankForm.accountNo" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_8d7a0d8c03e3') }}<input v-model.trim="managementBankForm.accountName" maxlength="160" required></label>
+               <label>{{ $t('legacy.t_5ebfc1bcf469') }}<input v-model.trim="managementBankForm.branchOrSwift" maxlength="120"></label>
+               <label class="wide">{{ $t('legacy.t_e0361480e3a5') }}<textarea v-model.trim="managementBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
              </template>
              <template v-else-if="expenseForm.accountProfileChoice === '__new__' && expenseForm.payerType === 'other'">
-               <label>付款方名称<input v-model.trim="otherPaymentForm.payerName" maxlength="160" required></label>
-               <label>银行名称<input v-model.trim="otherPaymentForm.bankName" maxlength="120" required></label>
-               <label>支付账户号码<input v-model.trim="otherPaymentForm.paymentAccountNo" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_8338fa82daa2') }}<input v-model.trim="otherPaymentForm.payerName" maxlength="160" required></label>
+               <label>{{ $t('legacy.t_b0628057d28d') }}<input v-model.trim="otherPaymentForm.bankName" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_94103fed39eb') }}<input v-model.trim="otherPaymentForm.paymentAccountNo" maxlength="120" required></label>
              </template>
              <template v-else-if="expenseForm.accountProfileChoice">
-               <div class="expense-account-summary"><span>付款方<strong>{{ expenseForm.payerName }}</strong></span><span>银行<strong>{{ expenseForm.bankName }}</strong></span><span>支付账户<strong>{{ expenseForm.paymentAccountNo }}</strong></span></div>
+               <div class="expense-account-summary"><span>{{ $t('legacy.t_fc19a3677fdd') }}<strong>{{ expenseForm.payerName }}</strong></span><span>{{ $t('legacy.t_cb8a39d9d1d9') }}<strong>{{ expenseForm.bankName }}</strong></span><span>{{ $t('legacy.t_1484fc99a1d3') }}<strong>{{ expenseForm.paymentAccountNo }}</strong></span></div>
              </template>
-             <p v-if="expenseMasterLoading" class="expense-master-note">正在读取房产付款资料…</p>
-             <p v-else-if="expenseMasterError" class="admin-property-error">{{ expenseMasterError }}</p>
+             <p v-if="expenseMasterLoading" class="expense-master-note">{{ $t('legacy.t_d6a72dd40b7a') }}</p>
+             <p v-else-if="expenseMasterError" class="admin-property-error">{{ $lt(expenseMasterError) }}</p>
            </section>
            <section class="expense-linked-fields expense-fee-account-fields wide">
-             <header><strong>费用账户号码</strong><small>选择房产已有费用账户，或新建账户类型和号码；新建资料会回写房产基本资料。</small></header>
-             <label>费用账户<select v-model="expenseForm.feeAccountChoice" :disabled="expenseMasterLoading" required @change="applyExpenseFeeAccountChoice"><option disabled value="">请选择费用账户</option><option v-for="option in expenseFeeAccountOptions" :key="option.value" :value="option.value">{{ option.label }}</option><option value="__new__">新建费用账户</option></select></label>
+             <header><strong>{{ $t('legacy.t_4e7829bd5bfc') }}</strong><small>{{ $t('legacy.t_2aec3ab1c2f0') }}</small></header>
+             <label>{{ $t('legacy.t_0bed3a1bfe59') }}<select v-model="expenseForm.feeAccountChoice" :disabled="expenseMasterLoading" @change="applyExpenseFeeAccountChoice"><option value="__none__">{{ $t('finance.noFeeAccount') }}</option><option v-for="option in expenseFeeAccountOptions" :key="option.value" :value="option.value">{{ $lt(option.label) }}</option><option value="__new__">{{ $t('legacy.t_396f770afe64') }}</option></select></label>
              <template v-if="expenseForm.feeAccountChoice === '__new__'">
-               <label>费用账户类型<select v-model="expenseForm.feeAccountKey" required><option disabled value="">请选择账户类型</option><option v-for="option in feeAccountTypes" :key="option.key" :value="option.key">{{ option.label }}</option></select></label>
-               <label>新费用账户号码<input v-model.trim="expenseForm.feeAccountNo" maxlength="120" required placeholder="请输入费用账户号码"></label>
+               <label>{{ $t('legacy.t_e11a088e21e4') }}<select v-model="expenseForm.feeAccountTypeChoice" required><option disabled value="">{{ $t('legacy.t_568e09ca5777') }}</option><option v-for="option in feeAccountTypes" :key="option.key" :value="option.key">{{ $lt(option.label) }}</option></select></label>
+               <label v-if="expenseForm.feeAccountTypeChoice === 'other'">{{ $t('finance.otherFeeAccountType') }}<input v-model.trim="expenseForm.feeAccountOtherType" maxlength="50" :placeholder="$t('finance.otherFeeAccountTypePlaceholder')"><small>{{ $t('finance.optionalField') }}</small></label>
+               <label>{{ $t('legacy.t_c25cc5a91a88') }}<input v-model.trim="expenseForm.feeAccountNo" maxlength="120" required :placeholder="$t('legacy.t_6f20c478331c')"></label>
              </template>
            </section>
           <section v-if="selectedExpenseUnit" class="create-unit-summary wide">
-            <span>{{ $t('legacy.t_ef2b2d104853') }}<b>{{ selectedExpenseUnit.ownerName }}</b></span><span>{{ $t('legacy.t_facfa1a1db0d') }}<b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedExpenseUnit.reserveBalance) }}</b></span><span :class="{ shortage: expenseReserveAfter < 0 }">{{ $t('legacy.t_37c0465513e1') }}<b>RM {{ money(expenseReserveAfter) }}</b></span>
+            <span>{{ $t('legacy.t_ef2b2d104853') }}<b>{{ selectedExpenseUnit.ownerName }}</b></span><span>{{ $t('legacy.t_facfa1a1db0d') }}<b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedExpenseUnit.reserveBalance) }}</b></span><span :class="{ shortage: expenseReserveAfter < 0 }">{{ $t('legacy.t_37c0465513e1') }}<b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(expenseReserveAfter) }}</b></span>
           </section>
           <label class="wide">{{ $t('legacy.t_a52dafecf965') }}<textarea v-model.trim="expenseForm.description" maxlength="500" rows="4" required :placeholder="$t('legacy.t_520b35536c38')"></textarea></label>
-          <p v-if="expenseCreateError" class="admin-property-error wide">{{ expenseCreateError }}</p>
+          <p v-if="expenseCreateError" class="admin-property-error wide">{{ $lt(expenseCreateError) }}</p>
         </div>
-        <menu><button type="button" @click="closeExpenseCreate">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :disabled="expenseSaving || optionsLoading">{{ expenseSaving ? $t('legacy.t_8488ea2522af') : editingExpenseId ? '保存修改' : $t('legacy.t_8c962ae7a7fb') }}</button></menu>
+        <menu><button type="button" @click="closeExpenseCreate">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :disabled="expenseSaving || optionsLoading">{{ expenseSaving ? $t('legacy.t_8488ea2522af') : editingExpenseId ? $t('legacy.t_60b4ae9082a3') : $t('legacy.t_8c962ae7a7fb') }}</button></menu>
       </form>
     </dialog>
 
     <dialog ref="maintenanceCreateDialog" class="modal maintenance-create-dialog">
       <form method="dialog" @submit.prevent="submitMaintenanceCreate">
-        <div class="modal-head"><div><h3>{{ editingMaintenanceId ? $t('projectManagement.edit') + $t('legacy.t_643db1590668') : $t('legacy.t_1c14558442e7') }}</h3><small>{{ editingMaintenanceId ? '修改工单资料与处理状态。' : $t('legacy.t_138f739a4607') }}</small></div><button type="button" class="icon-close" @click="closeMaintenanceCreate">×</button></div>
+        <div class="modal-head"><div><h3>{{ editingMaintenanceId ? $t('projectManagement.edit') + $t('legacy.t_643db1590668') : $t('legacy.t_1c14558442e7') }}</h3><small>{{ editingMaintenanceId ? $t('legacy.t_df18fd84a255') : $t('legacy.t_138f739a4607') }}</small></div><button type="button" class="icon-close" @click="closeMaintenanceCreate">×</button></div>
         <div v-if="optionsLoading" class="admin-owner-state">{{ $t('legacy.t_ff1df444fc44') }}</div>
         <div v-else class="maintenance-create-body">
           <label class="wide">{{ $t('legacy.t_114246450ff0') }}<select v-model.number="maintenanceCreateForm.unitId" :disabled="Boolean(editingMaintenanceId)" required><option disabled value="">{{ $t('legacy.t_06dd9be6b9c7') }}</option><option v-for="unit in options.units" :key="unit.unitId" :value="unit.unitId">{{ unit.projectName }} · {{ unit.unitNo }}（{{ unit.ownerName }}）</option></select></label>
           <label>{{ $t('legacy.t_4e3157d2e547') }}<select v-model="maintenanceCreateForm.category" required><option value="plumbing">{{ $t('legacy.t_925558624144') }}</option><option value="air_conditioning">{{ $t('legacy.t_e7ec651a7c0f') }}</option><option value="electrical">{{ $t('legacy.t_c230e3bc3ab6') }}</option><option value="painting">{{ $t('legacy.t_6a81927031d5') }}</option><option value="other">{{ $t('legacy.t_587c86584e8e') }}</option></select></label>
-          <label>{{ $t('legacy.t_2127eb1f484f') }}<select v-model="maintenanceCreateForm.vendorId"><option :value="null">{{ $t('legacy.t_4e4ceafa8ee3') }}</option><option v-for="vendor in options.vendors" :key="vendor.id" :value="vendor.id">{{ vendorOptionLabel(vendor) }}</option></select></label>
+          <label>{{ $t('legacy.t_2127eb1f484f') }}<select v-model="maintenanceCreateForm.vendorId"><option :value="null">{{ $t('legacy.t_4e4ceafa8ee3') }}</option><option v-for="vendor in options.vendors" :key="vendor.id" :value="vendor.id">{{ $lt(vendorOptionLabel(vendor)) }}</option></select></label>
            <label>{{ $t('legacy.t_dde3113a1be2') }}<input v-model="maintenanceCreateForm.requestedAt" type="datetime-local" required></label>
-           <label>预计金额（RM）<input v-model.number="maintenanceCreateForm.estimatedAmount" type="number" min="0" step="0.01"></label>
+           <label>{{ $t('legacy.t_bc34950fde2f') }}<input v-model.number="maintenanceCreateForm.estimatedAmount" type="number" min="0" step="0.01"></label>
            <section class="expense-linked-fields maintenance-bank-fields wide">
-             <header><strong>银行信息</strong><small>先选择付款方类型，再选择该业主或管理层的已有银行账户；选择“新建账户”时才填写完整资料。</small></header>
-             <label>付款方类型<select v-model="maintenanceCreateForm.payerType" required @change="onMaintenancePayerTypeChange"><option value="owner">业主</option><option value="management">管理层</option><option value="other">其他</option></select></label>
-             <label>所属账户<select v-model="maintenanceCreateForm.accountProfileChoice" :disabled="expenseMasterLoading" required @change="applyMaintenanceAccountProfileChoice"><option disabled value="">请选择已有账户或新建账户</option><option v-for="option in maintenanceAccountProfileOptions" :key="option.value" :value="option.value">{{ option.label }}</option><option value="__new__">新建账户</option></select></label>
+             <header><strong>{{ $t('legacy.t_ee2df78f0008') }}</strong><small>{{ $t('legacy.t_4a81340e5b06') }}</small></header>
+             <label>{{ $t('legacy.t_c64046653237') }}<select v-model="maintenanceCreateForm.payerType" required @change="onMaintenancePayerTypeChange"><option value="owner">{{ $t('legacy.t_a39a3f21f732') }}</option><option value="management">{{ $t('legacy.t_d87c66000a42') }}</option><option value="other">{{ $t('legacy.t_1a26edf94a81') }}</option></select></label>
+             <label>{{ $t('legacy.t_77c6bcd0dd17') }}<select v-model="maintenanceCreateForm.accountProfileChoice" :disabled="expenseMasterLoading" required @change="applyMaintenanceAccountProfileChoice"><option disabled value="">{{ $t('legacy.t_722bdcc15701') }}</option><option v-for="option in maintenanceAccountProfileOptions" :key="option.value" :value="option.value">{{ $lt(option.label) }}</option><option value="__new__">{{ $t('legacy.t_477f320b8858') }}</option></select></label>
              <template v-if="maintenanceCreateForm.accountProfileChoice === '__new__' && maintenanceCreateForm.payerType === 'owner'">
-               <label>银行名称<input v-model.trim="ownerBankForm.itemName" maxlength="120" required></label>
-               <label>收款人姓名<input v-model.trim="ownerBankForm.paymentName" maxlength="160" required></label>
-               <label>银行账号<input v-model.trim="ownerBankForm.accountNo" maxlength="120" required></label>
-               <label>银行／分行代码<input v-model.trim="ownerBankForm.branchCode" maxlength="80"></label>
-               <label class="wide">银行地址<textarea v-model.trim="ownerBankForm.bankAddress" rows="3" maxlength="500"></textarea></label>
-               <label>SWIFT 代码<input v-model.trim="ownerBankForm.swiftCode" maxlength="80"></label>
-               <label>单日转账额度（RM）<input v-model.number="ownerBankForm.transferLimit" type="number" min="0" step="0.01" placeholder="0 表示无限制"><small>填写 0 或留空表示没有额度限制。</small></label>
-               <label class="expense-overseas-toggle wide"><input v-model="ownerBankForm.overseasBank" type="checkbox"><span>是否为海外银行</span></label>
-               <label v-if="ownerBankForm.overseasBank">海外银行汇款手续费（RM）<input v-model.number="ownerBankForm.overseasTransferFee" type="number" min="0" step="0.01" required></label>
-               <label class="wide">备注<textarea v-model.trim="ownerBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
+               <label>{{ $t('legacy.t_b0628057d28d') }}<input v-model.trim="ownerBankForm.itemName" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_ad69bce024e1') }}<input v-model.trim="ownerBankForm.paymentName" maxlength="160" required></label>
+               <label>{{ $t('legacy.t_ecaf440fd399') }}<input v-model.trim="ownerBankForm.accountNo" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_ca2d2f417aa9') }}<input v-model.trim="ownerBankForm.branchCode" maxlength="80"></label>
+               <label class="wide">{{ $t('legacy.t_452a24bc4653') }}<textarea v-model.trim="ownerBankForm.bankAddress" rows="3" maxlength="500"></textarea></label>
+               <label>{{ $t('legacy.t_5c92cbeaa1c4') }}<input v-model.trim="ownerBankForm.swiftCode" maxlength="80"></label>
+               <label>{{ $t('legacy.t_648f677839a0') }}<input v-model.number="ownerBankForm.transferLimit" type="number" min="0" step="0.01" :placeholder="$t('legacy.t_3407d37f1afb')"><small>{{ $t('legacy.t_aa8fc7a05143') }}</small></label>
+               <label class="expense-overseas-toggle wide"><input v-model="ownerBankForm.overseasBank" type="checkbox"><span>{{ $t('legacy.t_62c9f76ca500') }}</span></label>
+               <label v-if="ownerBankForm.overseasBank">{{ $t('legacy.t_229bc69dbcfe') }}<input v-model.number="ownerBankForm.overseasTransferFee" type="number" min="0" step="0.01" required></label>
+               <label class="wide">{{ $t('legacy.t_e0361480e3a5') }}<textarea v-model.trim="ownerBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
              </template>
              <template v-else-if="maintenanceCreateForm.accountProfileChoice === '__new__' && maintenanceCreateForm.payerType === 'management'">
-               <label>管理层名称<input v-model.trim="managementBankForm.managementName" maxlength="160" required placeholder="例如：海天公寓管理层"></label>
-               <label>费用用途<input v-model.trim="managementBankForm.purpose" maxlength="160" required placeholder="例如：管理费／维修基金"></label>
-               <label>银行名称<input v-model.trim="managementBankForm.bankName" maxlength="120" required></label>
-               <label>银行账号<input v-model.trim="managementBankForm.accountNo" maxlength="120" required></label>
-               <label>收款户名<input v-model.trim="managementBankForm.accountName" maxlength="160" required></label>
-               <label>分行／SWIFT<input v-model.trim="managementBankForm.branchOrSwift" maxlength="120"></label>
-               <label class="wide">备注<textarea v-model.trim="managementBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
+               <label>{{ $t('legacy.t_6cce88081e59') }}<input v-model.trim="managementBankForm.managementName" maxlength="160" required :placeholder="$t('legacy.t_b35b17ea2d5e')"></label>
+               <label>{{ $t('legacy.t_c6089b863696') }}<input v-model.trim="managementBankForm.purpose" maxlength="160" required :placeholder="$t('legacy.t_4e384ade0732')"></label>
+               <label>{{ $t('legacy.t_b0628057d28d') }}<input v-model.trim="managementBankForm.bankName" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_ecaf440fd399') }}<input v-model.trim="managementBankForm.accountNo" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_8d7a0d8c03e3') }}<input v-model.trim="managementBankForm.accountName" maxlength="160" required></label>
+               <label>{{ $t('legacy.t_5ebfc1bcf469') }}<input v-model.trim="managementBankForm.branchOrSwift" maxlength="120"></label>
+               <label class="wide">{{ $t('legacy.t_e0361480e3a5') }}<textarea v-model.trim="managementBankForm.remarks" rows="3" maxlength="1000"></textarea></label>
              </template>
              <template v-else-if="maintenanceCreateForm.accountProfileChoice === '__new__' && maintenanceCreateForm.payerType === 'other'">
-               <label>付款方名称<input v-model.trim="otherPaymentForm.payerName" maxlength="160" required></label>
-               <label>银行名称<input v-model.trim="otherPaymentForm.bankName" maxlength="120" required></label>
-               <label>支付账户号码<input v-model.trim="otherPaymentForm.paymentAccountNo" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_8338fa82daa2') }}<input v-model.trim="otherPaymentForm.payerName" maxlength="160" required></label>
+               <label>{{ $t('legacy.t_b0628057d28d') }}<input v-model.trim="otherPaymentForm.bankName" maxlength="120" required></label>
+               <label>{{ $t('legacy.t_94103fed39eb') }}<input v-model.trim="otherPaymentForm.paymentAccountNo" maxlength="120" required></label>
              </template>
              <template v-else-if="maintenanceCreateForm.accountProfileChoice">
-               <div class="expense-account-summary"><span>付款方<strong>{{ maintenanceCreateForm.payerName }}</strong></span><span>银行<strong>{{ maintenanceCreateForm.bankName }}</strong></span><span>支付账户<strong>{{ maintenanceCreateForm.paymentAccountNo }}</strong></span></div>
+               <div class="expense-account-summary"><span>{{ $t('legacy.t_fc19a3677fdd') }}<strong>{{ maintenanceCreateForm.payerName }}</strong></span><span>{{ $t('legacy.t_cb8a39d9d1d9') }}<strong>{{ maintenanceCreateForm.bankName }}</strong></span><span>{{ $t('legacy.t_1484fc99a1d3') }}<strong>{{ maintenanceCreateForm.paymentAccountNo }}</strong></span></div>
              </template>
-             <p v-if="expenseMasterLoading" class="expense-master-note">正在读取房产付款资料…</p>
-             <p v-else-if="expenseMasterError" class="admin-property-error">{{ expenseMasterError }}</p>
+             <p v-if="expenseMasterLoading" class="expense-master-note">{{ $t('legacy.t_d6a72dd40b7a') }}</p>
+             <p v-else-if="expenseMasterError" class="admin-property-error">{{ $lt(expenseMasterError) }}</p>
            </section>
-           <section class="expense-linked-fields maintenance-fee-account-fields wide">
-             <header><strong>费用账户号码</strong><small>选择房产已有费用账户，或新建账户类型和号码；新建资料会回写房产基本资料。</small></header>
-             <label>费用账户<select v-model="maintenanceCreateForm.feeAccountChoice" :disabled="expenseMasterLoading" required @change="applyMaintenanceFeeAccountChoice"><option disabled value="">请选择费用账户</option><option v-for="option in maintenanceFeeAccountOptions" :key="option.value" :value="option.value">{{ option.label }}</option><option value="__new__">新建费用账户</option></select></label>
-             <template v-if="maintenanceCreateForm.feeAccountChoice === '__new__'">
-               <label>费用账户类型<select v-model="maintenanceCreateForm.feeAccountKey" required><option disabled value="">请选择账户类型</option><option v-for="option in feeAccountTypes" :key="option.key" :value="option.key">{{ option.label }}</option></select></label>
-               <label>新费用账户号码<input v-model.trim="maintenanceCreateForm.feeAccountNo" maxlength="120" required placeholder="请输入费用账户号码"></label>
-             </template>
-           </section>
-          <label v-if="editingMaintenanceId">工单状态<select v-model="maintenanceCreateForm.status" :disabled="maintenanceCreateForm.status === 'completed'" required><option value="submitted">待处理</option><option value="assigned">已指派</option><option value="in_progress">处理中</option><option value="inspection">待验收</option><option v-if="maintenanceCreateForm.status === 'completed'" value="completed">已完成</option></select></label>
+          <label v-if="editingMaintenanceId">{{ $t('legacy.t_8cce1409beb7') }}<select v-model="maintenanceCreateForm.status" :disabled="maintenanceCreateForm.status === 'completed'" required><option value="submitted">{{ $t('legacy.t_59a9eb4e6574') }}</option><option value="assigned">{{ $t('legacy.t_89f43720c2e8') }}</option><option value="in_progress">{{ $t('legacy.t_fcb979ef0b91') }}</option><option value="inspection">{{ $t('legacy.t_fc0223925681') }}</option><option v-if="maintenanceCreateForm.status === 'completed'" value="completed">{{ $t('legacy.t_e99b48a29bdf') }}</option></select></label>
           <label class="wide">{{ $t('legacy.t_38ca8573c24b') }}<input v-model.trim="maintenanceCreateForm.title" maxlength="180" required :placeholder="$t('legacy.t_332ded447fbd')"></label>
           <label class="wide">{{ $t('legacy.t_5586fd550c39') }}<textarea v-model.trim="maintenanceCreateForm.description" maxlength="1000" rows="4" :placeholder="$t('legacy.t_07202ef775ba')"></textarea></label>
-          <p v-if="maintenanceCreateError" class="admin-property-error wide">{{ maintenanceCreateError }}</p>
+          <p v-if="maintenanceCreateError" class="admin-property-error wide">{{ $lt(maintenanceCreateError) }}</p>
         </div>
-        <menu><button type="button" @click="closeMaintenanceCreate">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :disabled="maintenanceCreateSaving || optionsLoading">{{ maintenanceCreateSaving ? $t('legacy.t_2cd5496ec548') : editingMaintenanceId ? '保存修改' : $t('legacy.t_2a90d4ff462c') }}</button></menu>
+        <menu><button type="button" @click="closeMaintenanceCreate">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :disabled="maintenanceCreateSaving || optionsLoading">{{ maintenanceCreateSaving ? $t('legacy.t_2cd5496ec548') : editingMaintenanceId ? $t('legacy.t_60b4ae9082a3') : $t('legacy.t_2a90d4ff462c') }}</button></menu>
       </form>
     </dialog>
 
     <dialog ref="handlingDialog" class="modal maintenance-handling-dialog">
       <form method="dialog" @submit.prevent="submitHandling">
         <div class="modal-head"><div><h3>{{ $t('legacy.t_3761878742b8') }}</h3><small>{{ handlingRow?.workOrderNo }} · {{ handlingRow?.projectName }} {{ handlingRow?.unitNo }}</small></div><button type="button" class="icon-close" @click="closeHandling">×</button></div>
-        <p v-if="handlingRow?.confirmationStatus === 'rejected'" class="maintenance-finance-rejected-note">财务已退回：请核对原有资料，处理完成后将再次提交财务确认。</p>
+        <p v-if="handlingRow?.confirmationStatus === 'rejected'" class="maintenance-finance-rejected-note">{{ $t('legacy.t_a55411a3c0ba') }}</p>
         <div v-if="handlingLoading" class="admin-owner-state">{{ $t('legacy.t_e32212dc8516') }}</div>
         <div v-else class="maintenance-handling-body">
           <section class="handling-reserve-summary">
             <div><span>{{ $t('legacy.t_82d54c45b8dd') }}</span><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(handlingInfo.reserveBalance) }}</strong></div>
             <div><span>{{ $t('legacy.t_fcd532741253') }}</span><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(handlingInfo.reserveDeductedAmount) }}</strong></div>
             <div><span>{{ $t('legacy.t_3d416cf138b0') }}</span><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(handlingForm.actualAmount) }}</strong></div>
-            <div :class="{ shortage: reserveAfter < 0 }"><span>{{ $t('legacy.t_3c9d8e73179c') }}</span><strong>RM {{ money(reserveAfter) }}</strong></div>
+            <div :class="{ shortage: reserveAfter < 0 }"><span>{{ $t('legacy.t_3c9d8e73179c') }}</span><strong>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(reserveAfter) }}</strong></div>
           </section>
 
            <label>{{ $t('legacy.t_3b2b90c8aff2') }}<input v-model.number="handlingForm.actualAmount" type="number" min="0.01" step="0.01" required></label>
-           <label>{{ $t('legacy.t_ab2dbd55b3fb') }}<select v-model="handlingForm.settlementMethod" required><option value="reserve" :disabled="!handlingInfo.reserveAccountAvailable">{{ $t('legacy.t_ea99cc82f746') }}</option><option value="direct_payment" :disabled="!handlingDirectPaymentAllowed">{{ $t('legacy.t_3afbca59e929') }}</option></select><small v-if="!handlingDirectPaymentAllowed" class="handling-warning">业主已解约，不能再提交代付款。</small><small v-else-if="handlingForm.settlementMethod === 'reserve' && reserveShortage > 0" class="handling-warning">{{ $t('legacy.t_c1130213b25d') }}</small></label>
-           <label>付款方<input v-model.trim="handlingForm.payerName" maxlength="160" placeholder="例如：业主或管理层"></label>
-           <label>银行<input v-model.trim="handlingForm.bankName" maxlength="120" placeholder="银行名称"></label>
-           <label>支付账户号码<input v-model.trim="handlingForm.paymentAccountNo" maxlength="80" placeholder="收付款账户号码"></label>
+           <label>{{ $t('legacy.t_ab2dbd55b3fb') }}<select v-model="handlingForm.settlementMethod" required><option value="reserve" :disabled="!handlingInfo.reserveAccountAvailable">{{ $t('legacy.t_ea99cc82f746') }}</option><option value="direct_payment" :disabled="!handlingDirectPaymentAllowed">{{ $t('legacy.t_3afbca59e929') }}</option></select><small v-if="!handlingDirectPaymentAllowed" class="handling-warning">{{ $t('legacy.t_cfa47540bcbe') }}</small><small v-else-if="handlingForm.settlementMethod === 'reserve' && reserveShortage > 0" class="handling-warning">{{ $t('legacy.t_c1130213b25d') }}</small></label>
+           <label>{{ $t('legacy.t_fc19a3677fdd') }}<input v-model.trim="handlingForm.payerName" maxlength="160" :placeholder="$t('legacy.t_054a41eacd3e')"></label>
+           <label>{{ $t('legacy.t_cb8a39d9d1d9') }}<input v-model.trim="handlingForm.bankName" maxlength="120" :placeholder="$t('legacy.t_b0628057d28d')"></label>
+           <label>{{ $t('legacy.t_94103fed39eb') }}<input v-model.trim="handlingForm.paymentAccountNo" maxlength="80" :placeholder="$t('legacy.t_b2c297b05a0f')"></label>
 
           <div class="handling-photo-grid">
-            <label class="handling-photo-field"><span>{{ $t('legacy.t_c769e4276274') }} <b v-if="requiredHandlingPhotos">必须</b><em v-else>可选</em></span><input type="file" accept="image/jpeg,image/png,application/pdf" multiple @change="setHandlingFiles('before', $event)"><small>{{ $t('legacy.t_58705ba10b3c') }} {{ handlingInfo.beforePhotoCount || 0 }} {{ $t('legacy.t_e1eeb732c04c') }} {{ handlingFiles.before.length }} {{ $t('legacy.t_6dcb656fb70d') }}</small></label>
-            <label class="handling-photo-field"><span>{{ $t('legacy.t_e4a60df0e601') }} <b v-if="requiredHandlingPhotos">必须</b><em v-else>可选</em></span><input type="file" accept="image/jpeg,image/png,application/pdf" multiple @change="setHandlingFiles('after', $event)"><small>{{ $t('legacy.t_58705ba10b3c') }} {{ handlingInfo.afterPhotoCount || 0 }} {{ $t('legacy.t_e1eeb732c04c') }} {{ handlingFiles.after.length }} {{ $t('legacy.t_6dcb656fb70d') }}</small></label>
+            <label class="handling-photo-field"><span>{{ $t('legacy.t_c769e4276274') }} <b v-if="requiredHandlingPhotos">{{ $t('legacy.t_890e87b370cd') }}</b><em v-else>{{ $t('legacy.t_53e32830a538') }}</em></span><input type="file" accept="image/jpeg,image/png,application/pdf" multiple @change="setHandlingFiles('before', $event)"><small>{{ $t('legacy.t_58705ba10b3c') }} {{ handlingInfo.beforePhotoCount || 0 }} {{ $t('legacy.t_e1eeb732c04c') }} {{ handlingFiles.before.length }} {{ $t('legacy.t_6dcb656fb70d') }}</small></label>
+            <label class="handling-photo-field"><span>{{ $t('legacy.t_e4a60df0e601') }} <b v-if="requiredHandlingPhotos">{{ $t('legacy.t_890e87b370cd') }}</b><em v-else>{{ $t('legacy.t_53e32830a538') }}</em></span><input type="file" accept="image/jpeg,image/png,application/pdf" multiple @change="setHandlingFiles('after', $event)"><small>{{ $t('legacy.t_58705ba10b3c') }} {{ handlingInfo.afterPhotoCount || 0 }} {{ $t('legacy.t_e1eeb732c04c') }} {{ handlingFiles.after.length }} {{ $t('legacy.t_6dcb656fb70d') }}</small></label>
             <label class="handling-photo-field"><span>{{ $t('legacy.t_addd26b636b6') }}</span><input type="file" accept="image/jpeg,image/png,application/pdf" multiple @change="setHandlingFiles('invoice', $event)"><small>{{ $t('legacy.t_39c9779e3d16') }} {{ handlingFiles.invoice.length }} {{ $t('legacy.t_7d54bc69bbe4') }}</small></label>
-            <p class="handling-photo-rule">{{ requiredHandlingPhotos ? '维修金额超过 RM 500，维修前与维修后照片各至少上传 1 份。' : '维修金额不超过 RM 500，维修前与维修后照片可按需要上传。' }} 支持 JPG、PNG、PDF，单类最多 6 份。</p>
+            <p class="handling-photo-rule">{{ requiredHandlingPhotos ? $t('legacy.t_4661c19249bb') : $t('legacy.t_822729762109') }} {{ $t('legacy.t_e0beefd5b850') }}</p>
           </div>
 
           <label class="handling-note">{{ $t('legacy.t_51d8d317d95c') }}<textarea v-model.trim="handlingForm.completionNote" maxlength="500" rows="4" required :placeholder="$t('legacy.t_35d405d839f4')"></textarea></label>
-          <p v-if="handlingError" class="admin-property-error wide">{{ handlingError }}</p>
+          <p v-if="handlingError" class="admin-property-error wide">{{ $lt(handlingError) }}</p>
         </div>
         <menu><button type="button" @click="closeHandling">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary-btn" :disabled="handlingSaving || handlingLoading || (handlingForm.settlementMethod === 'direct_payment' && !handlingDirectPaymentAllowed)">{{ handlingSaving ? $t('legacy.t_1e038f9b55ec') : $t('legacy.t_dd2218bd6344') }}</button></menu>
       </form>
     </dialog>
 
     <dialog ref="recycleBinDialog" class="modal recycle-bin-dialog">
-      <div class="modal-head"><div><h3>回收站</h3><small>已删除的收支与维修记录保留 30 天，逾期自动清理。</small></div><button type="button" class="icon-close" @click="closeRecycleBin">×</button></div>
+      <div class="modal-head"><div><h3>{{ $t('legacy.t_64ea8751fba9') }}</h3><small>{{ $t('legacy.t_8fc4d8ff49f0') }}</small></div><button type="button" class="icon-close" @click="closeRecycleBin">×</button></div>
       <div class="recycle-bin-body">
-        <div v-if="recycleBinLoading" class="admin-owner-state">正在读取回收站…</div>
-        <div v-else-if="recycleBinError" class="admin-owner-state error"><span>{{ recycleBinError }}</span><button type="button" @click="loadRecycleBin">重试</button></div>
-        <div v-else-if="!recycleBin.length" class="admin-owner-empty">回收站目前没有记录</div>
+        <div v-if="recycleBinLoading" class="admin-owner-state">{{ $t('legacy.t_4270c3c9f938') }}</div>
+        <div v-else-if="recycleBinError" class="admin-owner-state error"><span>{{ $lt(recycleBinError) }}</span><button type="button" @click="loadRecycleBin">{{ $t('legacy.t_e2d53a6d3a6a') }}</button></div>
+        <div v-else-if="!recycleBin.length" class="admin-owner-empty">{{ $t('legacy.t_deeaa1b9ebb3') }}</div>
         <ul v-else class="recycle-bin-list">
           <li v-for="item in recycleBin" :key="item.id">
-            <div><strong>{{ item.title || item.referenceNo }}</strong><small>{{ item.entityType === 'expense' ? '支出记录' : '维修工单' }} · {{ item.projectName || '—' }} {{ item.unitNo || '' }} · RM {{ money(item.amount) }}</small><small>删除于 {{ dateTime(item.deletedAt) }} · 保留至 {{ dateTime(item.expiresAt) }}</small></div>
-            <span><button type="button" class="recycle-restore-btn" @click="restoreRecycleItem(item)">恢复</button><button type="button" class="recycle-purge-btn" @click="purgeRecycleItem(item)">永久移除</button></span>
+            <div><strong>{{ item.title || item.referenceNo }}</strong><small>{{ item.entityType === 'expense' ? $t('legacy.t_af6b631a1887') : $t('legacy.t_4fd0ca83e04b') }} · {{ item.projectName || '—' }} {{ item.unitNo || '' }} {{ $t('legacy.t_6287ccc52c97') }} {{ money(item.amount) }}</small><small>{{ $t('legacy.t_21c3eabe9dd6') }} {{ dateTime(item.deletedAt) }} {{ $t('legacy.t_5a595206e5d8') }} {{ dateTime(item.expiresAt) }}</small></div>
+            <span><button type="button" class="recycle-restore-btn" @click="restoreRecycleItem(item)">{{ $t('legacy.t_79748ca1c6e5') }}</button><button type="button" class="recycle-purge-btn" @click="purgeRecycleItem(item)">{{ $t('legacy.t_7f684c0e6ab5') }}</button></span>
           </li>
         </ul>
       </div>
-      <menu><button type="button" @click="closeRecycleBin">关闭</button></menu>
+      <menu><button type="button" @click="closeRecycleBin">{{ $t('legacy.t_6c14bd7f6f9e') }}</button></menu>
     </dialog>
   </section>
 </template>
 
 <script>
-import { completeAdminMaintenance, createAdminExpense, createAdminMaintenance, createAdminPropertyBankAccount, deleteAdminExpense, deleteAdminMaintenance, fetchAdminExpenses, fetchAdminMaintenanceDetail, fetchAdminMaintenanceHandling, fetchAdminMaintenanceOptions, fetchAdminPropertyBankAccounts, fetchAdminPropertyBasicProfile, fetchAdminRecycleBin, purgeAdminRecycleBin, restoreAdminRecycleBin, saveAdminPropertyBasicProfile, updateAdminExpense, updateAdminMaintenance, uploadAdminMaintenancePhotos } from '../services/propertyApi';
+import { completeAdminMaintenance, createAdminExpense, createAdminMaintenance, createAdminPropertyBankAccount, deleteAdminExpense, deleteAdminMaintenance, downloadAdminPropertyCashflowProof, fetchAdminExpenses, fetchAdminMaintenanceDetail, fetchAdminMaintenanceHandling, fetchAdminMaintenanceOptions, fetchAdminPropertyBankAccounts, fetchAdminPropertyBasicProfile, fetchAdminMonthlyCashflowUnits, fetchAdminPropertyCashflows, fetchAdminRecycleBin, purgeAdminRecycleBin, restoreAdminRecycleBin, saveAdminPropertyBasicProfile, updateAdminExpense, updateAdminMaintenance, uploadAdminMaintenancePhotos } from '../services/propertyApi';
 import { formatDate, formatDateTime } from '../utils/dateFormat';
 
 const STATUS_MAP = { submitted: '待處理', assigned: '已指派', in_progress: '處理中', inspection: '待驗收', completed: '已完成', cancelled: '已取消' };
@@ -288,14 +360,18 @@ const FEE_ACCOUNT_TYPES = [
   { key: 'electricity', label: '电费' }, { key: 'water', label: '水费' },
   { key: 'sewerage', label: '排污费' }, { key: 'gas', label: '燃气费' },
   { key: 'withholdingTax', label: '预扣税' }, { key: 'landTax', label: '地税' },
-  { key: 'assessmentTax', label: '门牌税' }
+  { key: 'assessmentTax', label: '门牌税' }, { key: 'other', label: '其他' }
 ];
 const managementAccountId = () => globalThis.crypto?.randomUUID?.() || `management-bank-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const currentMonthValue = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
 
 export default {
   inject: ['page'],
   data() {
-    return { activeTab: 'expense', listPage: 1, listPageSize: 5, maintenanceDetailOpen: false, response: { summary: {}, properties: [], expenses: [], maintenance: [] }, loading: false, errorMessage: '', selectedKey: '', maintenanceDetail: null, requestSerial: 0, options: { units: [], vendors: [] }, optionsLoading: false, exportPaymentProfiles: {}, editingExpenseId: null, expenseForm: this.emptyExpenseForm(), ownerBankForm: this.emptyOwnerBankForm(), managementBankForm: this.emptyManagementBankForm(), otherPaymentForm: this.emptyOtherPaymentForm(), expenseSaving: false, expenseCreateError: '', expenseMasterLoading: false, expenseMasterError: '', expenseMasterProfile: {}, expenseOwnerBankAccounts: [], expenseMasterRequestSerial: 0, editingMaintenanceId: null, maintenanceCreateForm: this.emptyMaintenanceForm(), maintenanceCreateSaving: false, maintenanceCreateError: '', handlingRow: null, handlingInfo: {}, handlingForm: { actualAmount: 0, settlementMethod: 'reserve', completionNote: '', payerName: '', bankName: '', paymentAccountNo: '', feeAccountKey: '', feeAccountNo: '' }, handlingFiles: { before: [], after: [], invoice: [] }, handlingLoading: false, handlingSaving: false, handlingError: '', recycleBin: [], recycleBinLoading: false, recycleBinError: '', lastDeletedRecycleBinId: null };
+    return { activeTab: 'expense', listPage: 1, listPageSize: 5, maintenanceDetailOpen: false, response: { summary: {}, properties: [], expenses: [], maintenance: [] }, loading: false, errorMessage: '', selectedKey: '', maintenanceDetail: null, requestSerial: 0, options: { units: [], vendors: [] }, optionsLoading: false, exportPaymentProfiles: {}, editingExpenseId: null, expenseCreateMode: '', expenseForm: this.emptyExpenseForm(), ownerBankForm: this.emptyOwnerBankForm(), managementBankForm: this.emptyManagementBankForm(), otherPaymentForm: this.emptyOtherPaymentForm(), expenseSaving: false, expenseCreateError: '', expenseMasterLoading: false, expenseMasterError: '', expenseMasterProfile: {}, expenseOwnerBankAccounts: [], expenseMasterRequestSerial: 0, editingMaintenanceId: null, maintenanceCreateForm: this.emptyMaintenanceForm(), maintenanceCreateSaving: false, maintenanceCreateError: '', handlingRow: null, handlingInfo: {}, handlingForm: { actualAmount: 0, settlementMethod: 'reserve', completionNote: '', payerName: '', bankName: '', paymentAccountNo: '', feeAccountKey: '', feeAccountNo: '' }, handlingFiles: { before: [], after: [], invoice: [] }, handlingLoading: false, handlingSaving: false, handlingError: '', recycleBin: [], recycleBinLoading: false, recycleBinError: '', lastDeletedRecycleBinId: null, monthlyUnits: [], monthlyUnitsLoading: false, monthlyMonth: currentMonthValue(), monthlyUnitSearch: '', monthlySelectedUnitId: '', monthlyCashflows: [], monthlyCashflowLoading: false, monthlyCashflowError: '', monthlyCashflowRequestSerial: 0, monthlySelectedCashflowId: null };
   },
   computed: {
     rows() { return this.activeTab === 'expense' ? this.response.expenses || [] : this.response.maintenance || []; },
@@ -339,7 +415,6 @@ export default {
       if (this.expenseForm.payerType === 'management') return this.expenseManagementAccounts.map((account, index) => ({ value: `management:${account.id ?? index}`, label: `${account.managementName || account.accountName || '管理层'} · ${account.bankName || '未填写银行'} · ${account.accountNo || '未填写账号'}`, payerName: account.managementName || account.accountName || '', bankName: account.bankName || '', paymentAccountNo: account.accountNo || '' })).filter(account => account.payerName && account.bankName && account.paymentAccountNo);
       return [];
     },
-    maintenanceFeeAccountOptions() { return this.expenseFeeAccountOptions; },
     maintenanceAccountProfileOptions() {
       if (this.maintenanceCreateForm.payerType === 'owner') return this.expenseOwnerBankAccounts.map((account, index) => ({ value: `owner:${account.id ?? index}`, label: `${account.paymentName || this.selectedMaintenanceUnit?.ownerName || '业主'} · ${account.itemName || '未填写银行'} · ${account.accountNo || '未填写账号'}`, payerName: account.paymentName || this.selectedMaintenanceUnit?.ownerName || '', bankName: account.itemName || '', paymentAccountNo: account.accountNo || '' })).filter(account => account.payerName && account.bankName && account.paymentAccountNo);
       if (this.maintenanceCreateForm.payerType === 'management') return this.expenseManagementAccounts.map((account, index) => ({ value: `management:${account.id ?? index}`, label: `${account.managementName || account.accountName || '管理层'} · ${account.bankName || '未填写银行'} · ${account.accountNo || '未填写账号'}`, payerName: account.managementName || account.accountName || '', bankName: account.bankName || '', paymentAccountNo: account.accountNo || '' })).filter(account => account.payerName && account.bankName && account.paymentAccountNo);
@@ -348,7 +423,29 @@ export default {
     expenseCreatesMasterAccount() { return this.expenseForm.payerType !== 'other' && this.expenseForm.accountProfileChoice === '__new__'; },
     maintenanceCreatesMasterAccount() { return this.maintenanceCreateForm.payerType !== 'other' && this.maintenanceCreateForm.accountProfileChoice === '__new__'; },
      handlingDirectPaymentAllowed() { return this.handlingInfo?.directPaymentAllowed !== false; },
-     requiredHandlingPhotos() { return Number(this.handlingForm.actualAmount || 0) > 500; }
+     requiredHandlingPhotos() { return Number(this.handlingForm.actualAmount || 0) > 500; },
+     monthlyFilteredUnits() {
+       const keyword = String(this.monthlyUnitSearch || '').trim().toLowerCase();
+       if (!keyword) return this.monthlyUnits || [];
+       return (this.monthlyUnits || []).filter(unit => [unit.projectName, unit.unitNo, unit.ownerName, unit.tenantName].some(value => String(value || '').toLowerCase().includes(keyword)));
+     },
+     monthlySelectedUnit() { return (this.monthlyUnits || []).find(unit => String(unit.unitId) === String(this.monthlySelectedUnitId)) || null; },
+     monthlyCashflowRows() {
+       const month = String(this.monthlyMonth || '');
+       const seen = new Set();
+       return (this.monthlyCashflows || []).filter(item => {
+         if (String(item.occurredOn || '').slice(0, 7) !== month) return false;
+         const key = item.financeRecordId ? `finance:${item.financeRecordId}` : `cashflow:${item.id}`;
+         if (seen.has(key)) return false;
+         seen.add(key);
+         return true;
+       }).sort((left, right) => String(right.occurredOn || '').localeCompare(String(left.occurredOn || '')) || Number(right.id || 0) - Number(left.id || 0));
+     },
+     monthlyConfirmedCashflowRows() { return this.monthlyCashflowRows.filter(item => item.confirmationStatus === 'confirmed' && !['deposit', 'deposit_refund'].includes(item.category)); },
+     monthlyIncome() { return this.monthlyConfirmedCashflowRows.filter(item => item.direction === 'income').reduce((sum, item) => sum + Number(item.amount || 0), 0); },
+     monthlyExpense() { return this.monthlyConfirmedCashflowRows.filter(item => item.direction === 'expense').reduce((sum, item) => sum + Number(item.amount || 0), 0); },
+     monthlyNet() { return this.monthlyIncome - this.monthlyExpense; },
+     monthlySelectedCashflow() { return this.monthlyCashflowRows.find(item => String(item.id) === String(this.monthlySelectedCashflowId)) || null; }
   },
   watch: {
     filteredRows: {
@@ -364,6 +461,8 @@ export default {
     'page.dateEnd'() { this.loadData(); },
     'page.adminExpenseCreateNonce'() { this.openExpenseCreate(); },
     'page.adminMaintenanceCreateNonce'() { this.openMaintenanceCreate(); },
+    'page.adminMaintenanceMonthlyCashflowNonce'() { this.openMonthlyCashflow(); },
+    monthlyMonth() { this.monthlySelectedCashflowId = null; if (this.monthlySelectedUnit) this.reloadMonthlyCashflow(); },
     'expenseForm.unitId'(unitId) {
       if (unitId && this.selectedExpenseUnit) this.loadExpenseMasterData(unitId);
       else if (!unitId) this.resetExpenseMasterData();
@@ -375,6 +474,68 @@ export default {
   },
   mounted() { this.loadData(); },
   methods: {
+    async openMonthlyCashflow() {
+      this.resetMonthlyCashflow();
+      this.$refs.monthlyCashflowDialog?.showModal();
+      
+      this.monthlyUnitsLoading = true;
+      try { this.monthlyUnits = await fetchAdminMonthlyCashflowUnits(); }
+      catch (error) { this.monthlyCashflowError = error.message || this.$t('finance.unitsLoadFailed'); }
+      finally { this.monthlyUnitsLoading = false; }
+    },
+    closeMonthlyCashflow() { this.monthlyCashflowRequestSerial += 1; this.monthlyCashflowLoading = false; this.$refs.monthlyCashflowDialog?.close(); },
+    resetMonthlyCashflow() {
+      this.monthlyCashflowRequestSerial += 1;
+      this.monthlyMonth = currentMonthValue();
+      this.monthlyUnitSearch = '';
+      this.monthlySelectedUnitId = '';
+      this.monthlyCashflows = [];
+      this.monthlyCashflowLoading = false;
+      this.monthlyCashflowError = '';
+      this.monthlySelectedCashflowId = null;
+    },
+    async selectMonthlyUnit(unit) {
+      const serial = ++this.monthlyCashflowRequestSerial;
+      this.monthlyCashflowLoading = false;
+      this.monthlySelectedUnitId = unit?.unitId || '';
+      this.monthlySelectedCashflowId = null;
+      this.monthlyCashflows = [];
+      this.monthlyCashflowError = '';
+      if (!unit?.ownerId || !unit?.ownerUnitId) { this.monthlyCashflowError = this.$t('finance.unitLinkMissing'); return; }
+      this.monthlyCashflowLoading = true;
+      try {
+        const rows = await fetchAdminPropertyCashflows(unit.ownerId, unit.ownerUnitId, this.monthlyMonth);
+        if (serial === this.monthlyCashflowRequestSerial) this.monthlyCashflows = Array.isArray(rows) ? rows : [];
+      } catch (error) {
+        if (serial === this.monthlyCashflowRequestSerial) this.monthlyCashflowError = error.message || this.$t('finance.cashflowLoadFailed');
+      } finally {
+        if (serial === this.monthlyCashflowRequestSerial) this.monthlyCashflowLoading = false;
+      }
+    },
+    reloadMonthlyCashflow() { if (this.monthlySelectedUnit) return this.selectMonthlyUnit(this.monthlySelectedUnit); return this.openMonthlyCashflow(); },
+    openMonthlyCashflowDetail(item) { this.monthlySelectedCashflowId = item?.id ?? null; this.$nextTick(() => this.$refs.monthlyCashflowDetail?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); },
+    async downloadMonthlyCashflowProof(item) {
+      const unit = this.monthlySelectedUnit;
+      if (!unit || !item?.attachmentId) return;
+      try {
+        const result = await downloadAdminPropertyCashflowProof(unit.ownerId, unit.ownerUnitId, item.id);
+        const url = URL.createObjectURL(result.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = item.attachmentName || `cashflow-${item.id}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (error) { this.page.showToast?.(error.message || this.$t('finance.attachmentDownloadFailed')); }
+    },
+    cashflowCategoryLabel(value) {
+      return ({ rent: '租金收入', maintenance: '维修支出', utilities: '水电杂费', management: '管理费', management_service_fee: '代管服务费', land_tax: '地税', assessment_tax: '门牌税', fire_insurance: '火险', agency_commission: '中介佣金', cleaning: '清洁费', deposit: '押金', deposit_refund: '押金退款', deposit_forfeiture: '押金没收', service_fee: '服务费', insurance: '保险', tax: '税费', other: '其他' })[value] || value || '其他';
+    },
+    cashflowSourceLabel(value) { return ({ manual: '人工登记', rent: '租约收租', maintenance: '维修结算', system: '系统流水' })[value] || '系统流水'; },
+    cashflowPaymentMethodLabel(value) { return ({ unpaid: '尚未支付', bank_transfer: '银行转账', online_payment: '线上付款', cash: '现金', cheque: '支票', reserve_account: '预备金', direct_payment: '直接付款', other: '其他' })[value] || value || '—'; },
+    cashflowPaymentStatusLabel(value) { return ({ paid: '已付款', partial: '部分付款', unpaid: '待付款', pending: '待付款', voided: '已作废' })[value] || value || '—'; },
+    cashflowConfirmationLabel(value) { return ({ confirmed: '已确认', rejected: '已退回', pending: '待确认' })[value] || '待确认'; },
     syncExportRows() {
       const headers = ['日期', '行政区', '房产／单位', '业主', '租客', '收支类别', '收支说明', '金额', '支付方式', '付款方', '费用账户号码', '支付账户号码', 'Jompay', 'Ref No.'];
       if (this.activeTab === 'maintenance') {
@@ -402,10 +563,10 @@ export default {
       const account = [...ownerAccounts, ...managementAccounts].find(item => String(item.accountNo || '').trim() === normalizedAccount) || {};
       const numbers = profile.paymentAccountNumbers || {};
       const categoryFeeKey = { electricity: 'electricity', water: 'water', sewerage: 'sewerage', gas: 'gas', withholding_tax: 'withholdingTax', land_tax: 'landTax', assessment_tax: 'assessmentTax' }[row.category];
-      const feeKey = row.feeAccountKey || categoryFeeKey || '';
+      const feeKey = row.feeAccountKey || (recordType === 'maintenance' ? categoryFeeKey : '') || '';
       const feeType = FEE_ACCOUNT_TYPES.find(item => item.key === feeKey);
       const availableFees = FEE_ACCOUNT_TYPES.filter(item => String(numbers[item.key] || '').trim());
-      const feeAccountNo = feeKey ? String(row.feeAccountNo || numbers[feeKey] || '').trim() : availableFees.map(item => `${item.label}：${String(numbers[item.key]).trim()}`).join('；');
+      const feeAccountNo = feeKey ? String(row.feeAccountNo || numbers[feeKey] || '').trim() : '';
       const recipientName = String(account.paymentName || account.accountName || row.payerName || '').trim();
       const bankName = String(row.bankName || account.itemName || account.bankName || '').trim();
       const bankAccountNo = normalizedAccount || String(account.accountNo || '').trim();
@@ -415,14 +576,13 @@ export default {
       if (!recipientName) missing.push('收款户名');
       if (!bankName) missing.push('银行名称');
       if (!bankAccountNo) missing.push('银行账号');
-      if (!feeAccountNo) missing.push('费用账户号码');
       if (account.overseasBank && !swiftCode) missing.push('SWIFT 代码');
       const confirmation = String(row.confirmationStatus || 'pending');
       const paymentStatus = String(row.paymentStatus || 'unpaid');
       const payoutStatus = paymentStatus === 'paid' ? '已付款' : confirmation !== 'confirmed' ? '待财务确认' : missing.length ? '资料待补充' : '可出款';
       return {
         region: [row.state, row.city].filter(Boolean).join('／'), ownerName: linked.ownerName || '', tenantName: linked.tenantName || '',
-        feeAccountType: feeType?.label || (availableFees.length ? '房产费用账户' : ''), feeAccountNo,
+        feeAccountType: feeType?.label || (feeKey && feeKey !== 'other' ? feeKey : feeAccountNo ? '其他' : ''), feeAccountNo: feeAccountNo || '—',
         recipientName, bankName, bankAccountNo, branchCode, swiftCode,
         bankAddress: account.bankAddress || '', overseasBank: account.overseasBank ? '是' : '否',
         overseasTransferFee: Number(account.overseasTransferFee || 0), transferLimit: Number(account.transferLimit || 0),
@@ -449,11 +609,11 @@ export default {
     },
     today() { return new Date().toLocaleDateString('en-CA'); },
     localDateTime() { const date = new Date(); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0, 16); },
-    emptyExpenseForm() { return { unitId: '', category: 'utilities', description: '', amount: null, occurredOn: this.today(), settlementMethod: 'unpaid', payerType: 'owner', accountProfileChoice: '', payerName: '', feeAccountChoice: '', feeAccountKey: '', feeAccountNo: '', bankName: '', paymentAccountNo: '' }; },
+    emptyExpenseForm() { return { unitId: '', category: 'utilities', description: '', amount: null, occurredOn: this.today(), settlementMethod: 'unpaid', payerType: 'owner', accountProfileChoice: '', payerName: '', feeAccountChoice: '__none__', feeAccountTypeChoice: '', feeAccountOtherType: '', feeAccountKey: '', feeAccountNo: '', bankName: '', paymentAccountNo: '' }; },
     emptyOwnerBankForm() { return { itemName: '', paymentName: '', accountNo: '', bankAddress: '', branchCode: '', swiftCode: '', transferLimit: 0, overseasBank: false, overseasTransferFee: 0, remarks: '' }; },
     emptyManagementBankForm() { return { managementName: '', purpose: '', bankName: '', accountNo: '', accountName: '', branchOrSwift: '', remarks: '' }; },
     emptyOtherPaymentForm() { return { payerName: '', bankName: '', paymentAccountNo: '' }; },
-    emptyMaintenanceForm() { return { unitId: '', vendorId: null, category: 'plumbing', title: '', description: '', requestedAt: this.localDateTime(), estimatedAmount: null, payerType: 'owner', accountProfileChoice: '', payerName: '', feeAccountChoice: '', feeAccountKey: '', feeAccountNo: '', bankName: '', paymentAccountNo: '', status: 'submitted' }; },
+    emptyMaintenanceForm() { return { unitId: '', vendorId: null, category: 'plumbing', title: '', description: '', requestedAt: this.localDateTime(), estimatedAmount: null, payerType: 'owner', accountProfileChoice: '', payerName: '', feeAccountKey: '', feeAccountNo: '', bankName: '', paymentAccountNo: '', status: 'submitted' }; },
     async loadOptions() {
       this.optionsLoading = true;
       try { this.options = await fetchAdminMaintenanceOptions(); }
@@ -461,17 +621,21 @@ export default {
       finally { this.optionsLoading = false; }
     },
     async openExpenseCreate() {
-      this.editingExpenseId = null; this.expenseForm = this.emptyExpenseForm(); this.resetNewExpenseAccountForms(); this.resetExpenseMasterData(); this.expenseCreateError = ''; this.$refs.expenseCreateDialog?.showModal();
+      this.editingExpenseId = null; this.expenseCreateMode = this.page.adminExpenseCreateMode || ''; this.page.adminExpenseCreateMode = ''; this.expenseForm = this.emptyExpenseForm();
+      if (this.expenseCreateMode === 'reserve-debit') this.expenseForm.settlementMethod = 'reserve';
+      this.resetNewExpenseAccountForms(); this.resetExpenseMasterData(); this.expenseCreateError = ''; this.$refs.expenseCreateDialog?.showModal();
       try { await this.loadOptions(); } catch (error) { this.expenseCreateError = error.message; }
     },
     async openExpenseEdit(row) {
-      this.editingExpenseId = row.id;
+      this.editingExpenseId = row.id; this.expenseCreateMode = '';
       this.resetNewExpenseAccountForms();
-      this.expenseForm = { ...this.emptyExpenseForm(), unitId: row.unitId, category: row.category, description: row.description, amount: Number(row.amount || 0), occurredOn: row.occurredOn, settlementMethod: row.paymentMethod === 'reserve_account' || Number(row.reserveDeductedAmount || 0) > 0 ? 'reserve' : row.paymentMethod === 'direct_payment' ? 'direct_payment' : 'unpaid', payerName: row.payerName || '', bankName: row.bankName || '', paymentAccountNo: row.paymentAccountNo || '', feeAccountKey: row.feeAccountKey || '', feeAccountNo: row.feeAccountNo || '' };
+      const storedFeeAccountKey = String(row.feeAccountKey || '').trim();
+      const knownFeeAccountType = FEE_ACCOUNT_TYPES.some(type => type.key === storedFeeAccountKey);
+      this.expenseForm = { ...this.emptyExpenseForm(), unitId: row.unitId, category: row.category, description: row.description, amount: Number(row.amount || 0), occurredOn: row.occurredOn, settlementMethod: row.paymentMethod === 'reserve_account' || Number(row.reserveDeductedAmount || 0) > 0 ? 'reserve' : row.paymentMethod === 'direct_payment' ? 'direct_payment' : 'unpaid', payerName: row.payerName || '', bankName: row.bankName || '', paymentAccountNo: row.paymentAccountNo || '', feeAccountTypeChoice: storedFeeAccountKey ? knownFeeAccountType ? storedFeeAccountKey : 'other' : '', feeAccountOtherType: storedFeeAccountKey && !knownFeeAccountType ? storedFeeAccountKey : '', feeAccountKey: storedFeeAccountKey, feeAccountNo: row.feeAccountNo || '' };
       this.expenseCreateError = ''; this.$refs.expenseCreateDialog?.showModal();
       try { await this.loadOptions(); await this.loadExpenseMasterData(row.unitId); } catch (error) { this.expenseCreateError = error.message; }
     },
-    closeExpenseCreate() { this.$refs.expenseCreateDialog?.close(); this.expenseCreateError = ''; this.editingExpenseId = null; },
+    closeExpenseCreate() { this.$refs.expenseCreateDialog?.close(); this.expenseCreateError = ''; this.editingExpenseId = null; this.expenseCreateMode = ''; },
     resetNewExpenseAccountForms() {
       this.ownerBankForm = this.emptyOwnerBankForm();
       this.managementBankForm = this.emptyManagementBankForm();
@@ -525,9 +689,10 @@ export default {
           else this.ownerBankForm = { ...this.emptyOwnerBankForm(), itemName: form.bankName, paymentName: form.payerName, accountNo: form.paymentAccountNo };
         }
       } else if (form.payerType === 'other') form.accountProfileChoice = '__new__';
-      const feeMatch = this.expenseFeeAccountOptions.find(option => String(this.expenseMasterProfile?.paymentAccountNumbers?.[option.value] || '').trim() === String(form.feeAccountNo || '').trim());
-      if (form.feeAccountNo && feeMatch) { form.feeAccountChoice = feeMatch.value; form.feeAccountKey = feeMatch.value; }
-      else if (this.expenseFeeAccountOptions.length === 1) { form.feeAccountChoice = this.expenseFeeAccountOptions[0].value; this.applyExpenseFeeAccountChoice(); }
+      const feeMatch = this.expenseFeeAccountOptions.find(option => (!form.feeAccountKey || option.value === form.feeAccountKey) && String(this.expenseMasterProfile?.paymentAccountNumbers?.[option.value] || '').trim() === String(form.feeAccountNo || '').trim());
+      if (form.feeAccountNo && feeMatch) { form.feeAccountChoice = feeMatch.value; form.feeAccountTypeChoice = feeMatch.value; form.feeAccountKey = feeMatch.value; }
+      else if (form.feeAccountNo) form.feeAccountChoice = '__new__';
+      else form.feeAccountChoice = '__none__';
     },
     onExpensePayerTypeChange() {
       const form = this.expenseForm;
@@ -545,7 +710,9 @@ export default {
       form.payerName = selected.payerName; form.bankName = selected.bankName; form.paymentAccountNo = selected.paymentAccountNo;
     },
     applyExpenseFeeAccountChoice() {
-      if (this.expenseForm.feeAccountChoice === '__new__') { this.expenseForm.feeAccountKey = ''; this.expenseForm.feeAccountNo = ''; return; }
+      if (['__new__', '__none__'].includes(this.expenseForm.feeAccountChoice)) { this.expenseForm.feeAccountTypeChoice = ''; this.expenseForm.feeAccountOtherType = ''; this.expenseForm.feeAccountKey = ''; this.expenseForm.feeAccountNo = ''; return; }
+      this.expenseForm.feeAccountTypeChoice = this.expenseForm.feeAccountChoice;
+      this.expenseForm.feeAccountOtherType = '';
       this.expenseForm.feeAccountKey = this.expenseForm.feeAccountChoice;
       this.expenseForm.feeAccountNo = String(this.expenseMasterProfile?.paymentAccountNumbers?.[this.expenseForm.feeAccountChoice] || '').trim();
     },
@@ -563,9 +730,6 @@ export default {
           else this.ownerBankForm = { ...this.emptyOwnerBankForm(), itemName: form.bankName, paymentName: form.payerName, accountNo: form.paymentAccountNo };
         }
       } else if (form.payerType === 'other') form.accountProfileChoice = '__new__';
-      const feeMatch = this.maintenanceFeeAccountOptions.find(option => String(this.expenseMasterProfile?.paymentAccountNumbers?.[option.value] || '').trim() === String(form.feeAccountNo || '').trim());
-      if (form.feeAccountNo && feeMatch) { form.feeAccountChoice = feeMatch.value; form.feeAccountKey = feeMatch.value; }
-      else if (this.maintenanceFeeAccountOptions.length === 1) { form.feeAccountChoice = this.maintenanceFeeAccountOptions[0].value; this.applyMaintenanceFeeAccountChoice(); }
     },
     onMaintenancePayerTypeChange() {
       const form = this.maintenanceCreateForm;
@@ -581,12 +745,6 @@ export default {
       const selected = this.maintenanceAccountProfileOptions.find(option => option.value === form.accountProfileChoice);
       if (!selected) return;
       form.payerName = selected.payerName; form.bankName = selected.bankName; form.paymentAccountNo = selected.paymentAccountNo;
-    },
-    applyMaintenanceFeeAccountChoice() {
-      const form = this.maintenanceCreateForm;
-      if (form.feeAccountChoice === '__new__') { form.feeAccountKey = ''; form.feeAccountNo = ''; return; }
-      form.feeAccountKey = form.feeAccountChoice;
-      form.feeAccountNo = String(this.expenseMasterProfile?.paymentAccountNumbers?.[form.feeAccountChoice] || '').trim();
     },
     applyNewMaintenanceAccountValues() {
       const form = this.maintenanceCreateForm;
@@ -609,9 +767,6 @@ export default {
       const form = this.maintenanceCreateForm;
       this.applyNewMaintenanceAccountValues();
       if (!form.payerType || !form.accountProfileChoice) return '请选择付款方类型和所属账户。';
-      if (!form.feeAccountChoice) return '请选择费用账户。';
-      if (form.feeAccountChoice === '__new__' && (!form.feeAccountKey || !form.feeAccountNo.trim())) return '请填写新费用账户的类型和号码。';
-      if (!form.feeAccountKey || !form.feeAccountNo.trim()) return '请选择有效的费用账户。';
       if (form.accountProfileChoice === '__new__' && form.payerType === 'owner') {
         if (!this.ownerBankForm.itemName.trim() || !this.ownerBankForm.paymentName.trim() || !this.ownerBankForm.accountNo.trim()) return '请完整填写业主账户的银行名称、收款人姓名和银行账号。';
         if (Number(this.ownerBankForm.transferLimit || 0) < 0 || Number(this.ownerBankForm.overseasTransferFee || 0) < 0) return '转账额度和海外汇款手续费不能小于 0。';
@@ -642,9 +797,8 @@ export default {
       const form = this.expenseForm;
       this.applyNewExpenseAccountValues();
       if (!form.payerType || !form.accountProfileChoice) return '请选择付款方类型和所属账户。';
-      if (!form.feeAccountChoice) return '请选择费用账户。';
-      if (form.feeAccountChoice === '__new__' && (!form.feeAccountKey || !form.feeAccountNo.trim())) return '请填写新费用账户的类型和号码。';
-      if (!form.feeAccountKey || !form.feeAccountNo.trim()) return '请选择有效的费用账户。';
+      if (form.feeAccountChoice === '__new__' && (!form.feeAccountTypeChoice || !form.feeAccountNo.trim())) return '请填写新费用账户的类型和号码。';
+      if (!['__none__', '__new__'].includes(form.feeAccountChoice) && (!form.feeAccountKey || !form.feeAccountNo.trim())) return '请选择有效的费用账户。';
       if (form.accountProfileChoice === '__new__' && form.payerType === 'owner') {
         if (!this.ownerBankForm.itemName.trim() || !this.ownerBankForm.paymentName.trim() || !this.ownerBankForm.accountNo.trim()) return '请完整填写业主账户的银行名称、收款人姓名和银行账号。';
         if (Number(this.ownerBankForm.transferLimit || 0) < 0 || Number(this.ownerBankForm.overseasTransferFee || 0) < 0) return '转账额度和海外汇款手续费不能小于 0。';
@@ -657,7 +811,10 @@ export default {
     },
     expenseRequestPayload() {
       const form = this.expenseForm;
-      return { unitId: form.unitId, category: form.category, description: form.description, amount: form.amount, occurredOn: form.occurredOn, settlementMethod: form.settlementMethod, payerName: form.payerName, bankName: form.bankName, paymentAccountNo: form.paymentAccountNo, feeAccountKey: form.feeAccountKey, feeAccountNo: form.feeAccountNo };
+      const feeAccountKey = form.feeAccountChoice === '__new__'
+        ? form.feeAccountTypeChoice === 'other' ? form.feeAccountOtherType.trim() || 'other' : form.feeAccountTypeChoice
+        : form.feeAccountKey;
+      return { unitId: form.unitId, category: form.category, description: form.description, amount: form.amount, occurredOn: form.occurredOn, settlementMethod: form.settlementMethod, payerName: form.payerName, bankName: form.bankName, paymentAccountNo: form.paymentAccountNo, feeAccountKey, feeAccountNo: form.feeAccountNo };
     },
     async syncExpenseMasterData() {
       const form = this.expenseForm;
@@ -669,8 +826,8 @@ export default {
       ]);
       const profile = latestProfile || {};
       let profileChanged = false;
-      if (form.feeAccountChoice === '__new__') {
-        profile.paymentAccountNumbers = { ...(profile.paymentAccountNumbers || {}), [form.feeAccountKey]: form.feeAccountNo.trim() };
+      if (form.feeAccountChoice === '__new__' && form.feeAccountTypeChoice !== 'other') {
+        profile.paymentAccountNumbers = { ...(profile.paymentAccountNumbers || {}), [form.feeAccountTypeChoice]: form.feeAccountNo.trim() };
         profileChanged = true;
       }
       if (form.payerType === 'management' && this.expenseCreatesMasterAccount) {
@@ -705,10 +862,6 @@ export default {
       ]);
       const profile = latestProfile || {};
       let profileChanged = false;
-      if (form.feeAccountChoice === '__new__') {
-        profile.paymentAccountNumbers = { ...(profile.paymentAccountNumbers || {}), [form.feeAccountKey]: form.feeAccountNo.trim() };
-        profileChanged = true;
-      }
       if (form.payerType === 'management' && this.maintenanceCreatesMasterAccount) {
         const accounts = Array.isArray(profile.managementBankAccounts) ? [...profile.managementBankAccounts] : [];
         const newAccount = { ...this.managementBankForm, id: managementAccountId(), managementName: this.managementBankForm.managementName.trim(), purpose: this.managementBankForm.purpose.trim(), bankName: this.managementBankForm.bankName.trim(), accountNo: this.managementBankForm.accountNo.trim(), accountName: this.managementBankForm.accountName.trim(), branchOrSwift: this.managementBankForm.branchOrSwift.trim(), remarks: this.managementBankForm.remarks.trim() || '由新增维修回写' };
@@ -735,12 +888,12 @@ export default {
       const linkedFieldError = this.validateExpenseLinkedFields();
       if (linkedFieldError) { this.expenseCreateError = linkedFieldError; return; }
       this.expenseSaving = true; this.expenseCreateError = '';
-      try { const editing = this.editingExpenseId; await this.syncExpenseMasterData(); const payload = this.expenseRequestPayload(); const result = editing ? await updateAdminExpense(editing, payload) : await createAdminExpense(payload); this.closeExpenseCreate(); this.activeTab = 'expense'; await this.loadData(); this.page.showToast?.(editing ? '支出记录已修改，关联付款资料已同步' : `支出 ${result.referenceNo} 已建立，关联付款资料已同步`); }
+      try { const editing = this.editingExpenseId; await this.syncExpenseMasterData(); const payload = this.expenseRequestPayload(); const result = editing ? await updateAdminExpense(editing, payload) : await createAdminExpense(payload); this.closeExpenseCreate(); this.activeTab = 'expense'; await this.loadData(); this.page.showToast?.(editing ? '支出记录已修改，关联付款资料已同步' : this.$ltf`支出 ${result.referenceNo} 已建立，关联付款资料已同步`); }
       catch (error) { this.expenseCreateError = error.message || (this.editingExpenseId ? '修改支出失败' : '新增支出失败'); }
       finally { this.expenseSaving = false; }
     },
     async removeExpense(row) {
-      if (!window.confirm(`确定删除支出记录“${row.description}”吗？删除后会保留审计记录。`)) return;
+      if (!window.confirm(this.$ltf`确定删除支出记录“${row.description}”吗？删除后会保留审计记录。`)) return;
       try { this.lastDeletedRecycleBinId = await deleteAdminExpense(row.id); this.closeMaintenanceDetail(); await this.loadData(); this.page.showToast?.('支出记录已删除，可点击“撤销删除”恢复'); }
       catch (error) { this.page.showToast?.(error.message || '删除支出失败'); }
     },
@@ -765,13 +918,13 @@ export default {
         await this.syncMaintenanceMasterData();
         const payload = { vendorId: this.maintenanceCreateForm.vendorId, category: this.maintenanceCreateForm.category, title: this.maintenanceCreateForm.title, description: this.maintenanceCreateForm.description, requestedAt: this.maintenanceCreateForm.requestedAt, estimatedAmount: this.maintenanceCreateForm.estimatedAmount, payerName: this.maintenanceCreateForm.payerName, bankName: this.maintenanceCreateForm.bankName, paymentAccountNo: this.maintenanceCreateForm.paymentAccountNo, feeAccountKey: this.maintenanceCreateForm.feeAccountKey, feeAccountNo: this.maintenanceCreateForm.feeAccountNo, ...(editing ? { status: this.maintenanceCreateForm.status } : { unitId: this.maintenanceCreateForm.unitId }) };
         const result = editing ? await updateAdminMaintenance(editing, payload) : await createAdminMaintenance(payload);
-        this.closeMaintenanceCreate(); this.activeTab = 'maintenance'; await this.loadData(); this.page.showToast?.(editing ? '维修工单已修改，关联付款资料已同步' : `维修工单 ${result.referenceNo} 已建立，关联付款资料已同步`);
+        this.closeMaintenanceCreate(); this.activeTab = 'maintenance'; await this.loadData(); this.page.showToast?.(editing ? '维修工单已修改，关联付款资料已同步' : this.$ltf`维修工单 ${result.referenceNo} 已建立，关联付款资料已同步`);
       }
       catch (error) { this.maintenanceCreateError = error.message || (this.editingMaintenanceId ? '修改维修工单失败' : '新增维修工单失败'); }
       finally { this.maintenanceCreateSaving = false; }
     },
     async removeMaintenance(row) {
-      if (!window.confirm(`确定删除维修工单“${row.title}”吗？删除后会保留审计记录。`)) return;
+      if (!window.confirm(this.$ltf`确定删除维修工单“${row.title}”吗？删除后会保留审计记录。`)) return;
       try { this.lastDeletedRecycleBinId = await deleteAdminMaintenance(row.id); this.closeMaintenanceDetail(); await this.loadData(); this.page.showToast?.('维修工单已删除，可点击“撤销删除”恢复'); }
       catch (error) { this.page.showToast?.(error.message || '删除维修工单失败'); }
     },
@@ -789,12 +942,12 @@ export default {
       catch (error) { this.page.showToast?.(error.message || '撤销删除失败'); }
     },
     async restoreRecycleItem(item) {
-      if (!window.confirm(`确定恢复“${item.title || item.referenceNo}”吗？`)) return;
+      if (!window.confirm(this.$ltf`确定恢复“${item.title || item.referenceNo}”吗？`)) return;
       try { await restoreAdminRecycleBin(item.id); if (this.lastDeletedRecycleBinId === item.id) this.lastDeletedRecycleBinId = null; await this.loadRecycleBin(); await this.loadData(); this.page.showToast?.('记录已恢复'); }
       catch (error) { this.page.showToast?.(error.message || '恢复记录失败'); }
     },
     async purgeRecycleItem(item) {
-      if (!window.confirm(`确定从回收站永久移除“${item.title || item.referenceNo}”吗？原记录将继续保留审计状态。`)) return;
+      if (!window.confirm(this.$ltf`确定从回收站永久移除“${item.title || item.referenceNo}”吗？原记录将继续保留审计状态。`)) return;
       try { await purgeAdminRecycleBin(item.id); if (this.lastDeletedRecycleBinId === item.id) this.lastDeletedRecycleBinId = null; await this.loadRecycleBin(); this.page.showToast?.('回收站记录已移除'); }
       catch (error) { this.page.showToast?.(error.message || '移除回收站记录失败'); }
     },
@@ -861,7 +1014,7 @@ export default {
     async loadDetail(row) { const id = this.activeTab === 'maintenance' ? row.id : row.workOrderId; if (!id) { this.maintenanceDetail = null; return; } try { this.maintenanceDetail = await fetchAdminMaintenanceDetail(id); } catch { this.maintenanceDetail = null; } },
     async openHandling(row) {
       this.handlingRow = row; this.handlingLoading = true; this.handlingError = ''; this.handlingFiles = { before: [], after: [], invoice: [] };
-      this.handlingForm = { actualAmount: Number(row.amount || 0), settlementMethod: 'reserve', completionNote: '', payerName: row.payerName || '', bankName: row.bankName || '', paymentAccountNo: row.paymentAccountNo || '', feeAccountKey: row.feeAccountKey || '', feeAccountNo: row.feeAccountNo || '' };
+      this.handlingForm = { actualAmount: Number(row.estimatedAmount ?? row.amount ?? 0), settlementMethod: 'reserve', completionNote: '', payerName: row.payerName || '', bankName: row.bankName || '', paymentAccountNo: row.paymentAccountNo || '', feeAccountKey: row.feeAccountKey || '', feeAccountNo: row.feeAccountNo || '' };
       this.$refs.handlingDialog.showModal();
       try {
         const [handlingInfo, detail] = await Promise.all([
@@ -870,7 +1023,7 @@ export default {
         ]);
         this.handlingInfo = handlingInfo || {};
         const previousCompletion = (detail?.history || []).filter(item => item.status === 'completed').at(-1);
-        this.handlingForm.actualAmount = Number(detail?.actualAmount ?? row.amount ?? 0);
+        this.handlingForm.actualAmount = Number(detail?.actualAmount ?? detail?.estimatedAmount ?? row.estimatedAmount ?? row.amount ?? 0);
         const previousMethod = detail?.paymentMethod;
         this.handlingForm.settlementMethod = previousMethod === 'direct_payment'
           ? 'direct_payment'
@@ -923,7 +1076,7 @@ export default {
     confirmationLabel(value) { return { confirmed: '已确认', rejected: '已退回', pending: '待确认' }[value] || '待确认'; },
     paymentMethodLabel(value) { const key = { bank_transfer: 'legacy.t_789957b63e04', online_payment: 'legacy.t_61179c3c479b', reserve_account: 'legacy.t_c1b0ddc685b1', direct_payment: 'legacy.t_164917d2ce3b', cash: 'legacy.t_e3ca5905c270' }[value]; return key ? this.$t(key) : '—'; },
     vendorOptionLabel(vendor) { return vendor.contactName ? `${vendor.name} · ${vendor.contactName}` : vendor.name; },
-    statusClass(value) { if (['已付款', 'Paid'].includes(value)) return 'gray'; if (['待付款', 'Unpaid'].includes(value)) return 'red'; if (['已完成', 'Completed'].includes(value)) return 'green'; if (['已取消', 'Canceled', '已取消'].includes(value)) return 'red'; if (['處理中', '部分付款', '已指派', '待驗收', 'Processing…', 'Partially Paid', 'Assigned', 'Pending Inspection', '处理中…', '部分付款', '已指派', '待验收'].includes(value)) return 'orange'; return 'gray'; },
+    statusClass(value) { return { paid: 'gray', unpaid: 'red', pending: 'red', completed: 'green', cancelled: 'red', partial: 'orange', submitted: 'orange', assigned: 'orange', in_progress: 'orange', inspection: 'orange' }[value] || 'gray'; },
     money(value) { return Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
     displayDate(value) { return formatDate(value); },
     dateTime(value) { return formatDateTime(value); }
@@ -952,6 +1105,41 @@ export default {
 .maintenance-detail-panel { min-height: 590px; }
 .maintenance-detail-copy { margin: 0 0 12px; color: #536176; font-size: 11px; line-height: 1.65; }
 .money-gold { color: #b7791f; font-weight: 800; }
+.monthly-cashflow-dialog { width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+.monthly-cashflow-body { display: grid; grid-template-columns: 280px minmax(0,1fr); min-height: 610px; max-height: calc(100vh - 166px); overflow: hidden; background: #f6f9fb; }
+.monthly-unit-panel { display: flex; min-height: 0; flex-direction: column; gap: 12px; padding: 16px; border-right: 1px solid #dce6ed; background: #fff; }
+.monthly-unit-panel > label,.monthly-ledger-head label { display: grid; gap: 6px; color: #36546a; font-size: 12px; font-weight: 800; }
+.monthly-unit-panel input,.monthly-ledger-head input { box-sizing: border-box; width: 100%; height: 38px; padding: 0 10px; border: 1px solid #cbdbe5; border-radius: 8px; background: #fff; color: #153f60; font: inherit; }
+.monthly-unit-list { display: grid; gap: 8px; min-height: 0; padding-right: 3px; overflow-y: auto; }
+.monthly-unit-list button { display: grid; gap: 4px; width: 100%; padding: 11px 12px; border: 1px solid #d9e5ec; border-radius: 9px; background: #fbfdfe; color: #174867; text-align: left; cursor: pointer; }
+.monthly-unit-list button:hover { border-color: #83c9cc; background: #f0fafa; }
+.monthly-unit-list button.active { border-color: #078f96; background: #e9f8f7; box-shadow: inset 3px 0 #078f96; }
+.monthly-unit-list strong { font-size: 13px; }.monthly-unit-list small { color: #758b9b; font-size: 11px; }
+.monthly-ledger-panel { min-width: 0; min-height: 0; padding: 16px 18px 22px; overflow-y: auto; }
+.monthly-ledger-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid #dce7ed; }
+.monthly-ledger-head > div { display: grid; gap: 4px; }.monthly-ledger-head > div strong { color: #0e4268; font-size: 18px; }.monthly-ledger-head > div small { color: #7890a1; font-size: 11px; }
+.monthly-ledger-head label { width: 180px; }
+.monthly-cashflow-state { display: grid; place-items: center; gap: 8px; min-height: 80px; color: #778c9d; font-size: 12px; text-align: center; }
+.monthly-cashflow-state.large { min-height: 430px; }.monthly-cashflow-state.error { color: #b64843; }.monthly-cashflow-state.error span { max-width: 560px; }.monthly-cashflow-state.error button { height: 34px; padding: 0 14px; border: 1px solid #dfaaa6; border-radius: 7px; background: #fff; color: #a73f3a; cursor: pointer; }
+.monthly-summary-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin: 14px 0; }
+.monthly-summary-grid article { padding: 12px 14px; border: 1px solid #d9e5ec; border-radius: 9px; background: #fff; }
+.monthly-summary-grid span { display: block; color: #71889a; font-size: 11px; }.monthly-summary-grid strong { display: block; margin-top: 5px; color: #16466b; font-size: 18px; font-variant-numeric: tabular-nums; }.monthly-summary-grid .income { color: #108458; }.monthly-summary-grid .expense { color: #cf543f; }
+.monthly-summary-note { margin: -4px 0 12px; color: #6f8494; font-size: 10px; line-height: 1.5; }
+.monthly-cashflow-table-wrap { overflow-x: auto; border: 1px solid #d9e5ec; border-radius: 10px; background: #fff; }
+.monthly-cashflow-table-wrap table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 12px; }
+.monthly-cashflow-table-wrap th { height: 40px; padding: 0 11px; border-bottom: 1px solid #dbe6ec; background: #f1f6f8; color: #547083; text-align: left; }
+.monthly-cashflow-table-wrap td { padding: 10px 11px; border-bottom: 1px solid #e7eef2; color: #264b66; vertical-align: middle; }
+.monthly-cashflow-table-wrap tr:last-child td { border-bottom: 0; }.monthly-cashflow-table-wrap tbody tr:not(:only-child) { cursor: pointer; }.monthly-cashflow-table-wrap tbody tr:hover,.monthly-cashflow-table-wrap tbody tr.selected { background: #f0f9f9; }
+.monthly-cashflow-table-wrap td strong,.monthly-cashflow-table-wrap td small { display: block; }.monthly-cashflow-table-wrap td small { margin-top: 3px; color: #8194a2; font-size: 10px; }
+.monthly-empty { height: 120px; color: #8194a2 !important; text-align: center; }
+.monthly-direction,.monthly-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.monthly-direction.income,.monthly-status.confirmed { background: #e9f8ef; color: #168254; }.monthly-direction.expense { background: #fff0ec; color: #c8543d; }.monthly-status.pending { background: #fff6df; color: #9d6900; }.monthly-status.rejected { background: #fdeceb; color: #bd4640; }
+.monthly-amount { white-space: nowrap; font-variant-numeric: tabular-nums; }.monthly-amount.income { color: #168254; }.monthly-amount.expense { color: #c8543d; }
+.monthly-detail-button,.monthly-proof-button { height: 31px; padding: 0 11px; border: 1px solid #86c7cb; border-radius: 7px; background: #f1fbfb; color: #08747b; font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.monthly-cashflow-detail { margin-top: 14px; padding: 15px; border: 1px solid #bfdadf; border-radius: 10px; background: #fff; }
+.monthly-cashflow-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 11px; border-bottom: 1px solid #e1eaef; }.monthly-cashflow-detail > header div { display: grid; gap: 4px; }.monthly-cashflow-detail > header span { color: #71889a; font-size: 10px; }.monthly-cashflow-detail > header strong { color: #0e4268; font-size: 15px; }.monthly-cashflow-detail > header button { width: 28px; height: 28px; border: 1px solid #d1dfe7; border-radius: 7px; background: #fff; color: #60798b; font-size: 18px; cursor: pointer; }
+.monthly-detail-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px 22px; padding-top: 8px; }.monthly-detail-grid > div { display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 10px; padding: 8px 0; border-bottom: 1px dashed #e2eaef; }.monthly-detail-grid > div.wide { grid-column: 1/-1; }.monthly-detail-grid span { color: #748a9a; font-size: 11px; }.monthly-detail-grid b { overflow-wrap: anywhere; color: #234c68; font-size: 12px; font-weight: 700; }
+.monthly-proof-button { margin-top: 12px; }
 .maintenance-create-dialog { width: min(780px, calc(100vw - 32px)); }
 .maintenance-create-body { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 18px 20px; }
 .maintenance-create-body > label { display: grid; gap: 6px; color: #334155; font-size: 11px; font-weight: 800; }
@@ -1054,4 +1242,5 @@ export default {
 .maintenance-detail-modal .maintenance-detail-copy { margin-bottom: 14px; font-size: 14px; line-height: 1.7; }
 @media (max-width: 820px) { .maintenance-tabs button { padding-inline: 9px; }.maintenance-create-body,.expense-linked-fields { grid-template-columns: 1fr; }.maintenance-create-body .wide { grid-column: auto; }.expense-linked-fields header,.expense-linked-fields > p,.expense-account-summary { grid-column: auto; }.expense-account-summary { grid-template-columns: 1fr; }.create-unit-summary { grid-template-columns: 1fr; }.create-unit-summary span { border-right: 0; } }
 @media (max-width: 820px) { .maintenance-detail-modal { padding: 14px; }.maintenance-detail-modal .maintenance-detail-panel { width: min(100%,calc(100vw - 28px)); padding: 18px 16px; }.maintenance-table-wrap { overflow-x: auto; }.maintenance-table-wrap table { min-width: 980px; } }
+@media (max-width: 820px) { .monthly-cashflow-dialog { width: calc(100vw - 20px); }.monthly-cashflow-body { grid-template-columns: 1fr; max-height: calc(100vh - 145px); overflow-y: auto; }.monthly-unit-panel { max-height: 260px; border-right: 0; border-bottom: 1px solid #dce6ed; }.monthly-ledger-panel { overflow: visible; }.monthly-ledger-head { align-items: stretch; flex-direction: column; }.monthly-ledger-head label { width: 100%; }.monthly-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.monthly-detail-grid { grid-template-columns: 1fr; }.monthly-detail-grid > div.wide { grid-column: auto; } }
 </style>

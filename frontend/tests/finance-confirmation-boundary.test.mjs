@@ -1,3 +1,4 @@
+import { matchLocalizedSource } from './helpers/localizedSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -16,10 +17,10 @@ test('finance confirmations carry the finance-selected dates', () => {
   const property = read('components/AdminFinanceWorkspace.vue');
   const reserve = read('components/AdminReserveFinanceWorkspace.vue');
   const expense = read('components/AdminExpenseFinanceWorkspace.vue');
-  assert.match(api, /JSON\.stringify\(\{ transactionDate, receiptDate, note \}\)/);
-  assert.match(property, /实际收款日期[\s\S]*财务入账日期/);
-  assert.match(reserve, /财务入账日期[\s\S]*confirmAdminFinanceReview/);
-  assert.match(expense, /财务入账日期[\s\S]*confirmAdminFinanceReview/);
+  matchLocalizedSource(api, /JSON\.stringify\(\{ transactionDate, receiptDate, note \}\)/);
+  matchLocalizedSource(property, /实际收款日期[\s\S]*财务入账日期/);
+  matchLocalizedSource(reserve, /财务入账日期[\s\S]*confirmAdminFinanceReview/);
+  matchLocalizedSource(expense, /财务入账日期[\s\S]*confirmAdminFinanceReview/);
 });
 
 test('non-finance workspaces route users to the central finance module', () => {
@@ -27,9 +28,9 @@ test('non-finance workspaces route users to the central finance module', () => {
   const process = read('components/AdminPropertyProcessWorkspace.vue');
   const detail = read('components/AdminPropertyDetailWorkspace.vue');
   assert.doesNotMatch(deposit, /confirmAdminFinanceReview/);
-  assert.match(deposit, /selectModule\('adminFinance'\)/);
+  matchLocalizedSource(deposit, /selectModule\('adminFinance'\)/);
   assert.doesNotMatch(process, /await confirmAdminFinanceReview/);
-  assert.match(process, /goToCentralFinance/);
+  matchLocalizedSource(process, /goToCentralFinance/);
   assert.doesNotMatch(detail, /await confirmAdminRentCollection/);
-  assert.match(detail, /adminFinanceMode='rent'/);
+  matchLocalizedSource(detail, /adminFinanceMode='rent'/);
 });

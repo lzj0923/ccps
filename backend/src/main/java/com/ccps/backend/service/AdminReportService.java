@@ -257,7 +257,7 @@ public class AdminReportService {
         Document document = new Document(PageSize.A4.rotate(), 24, 24, 24, 24);
         try (OutputStream output = Files.newOutputStream(target)) {
             PdfWriter.getInstance(document, output); document.open();
-            BaseFont base = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+                BaseFont base = PdfFontResources.regular();
             com.lowagie.text.Font titleFont = new com.lowagie.text.Font(base, 16, com.lowagie.text.Font.BOLD);
             com.lowagie.text.Font bodyFont = new com.lowagie.text.Font(base, 8);
             Paragraph heading = new Paragraph(title, titleFont); heading.setAlignment(Element.ALIGN_CENTER); document.add(heading);

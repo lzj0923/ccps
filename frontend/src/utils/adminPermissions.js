@@ -1,17 +1,81 @@
 export const ADMIN_STAFF_ROLES = Object.freeze({
   SUPER_ADMIN: '超级管理员',
-  FINANCE: '财务管理员',
-  BUSINESS: '业务管理员',
-  CUSTOMER_SERVICE: '客服管理员',
-  ADMINISTRATION: '行政管理员'
+  FINANCE: '财务',
+  BUSINESS: '业务',
+  CUSTOMER_SERVICE: '客服',
+  ADMINISTRATION: '行政'
 });
 
-const roleModules = {
-  FINANCE: new Set(['adminSmartDashboard', 'adminDashboard', 'adminOwners', 'adminProperties', 'adminOffMarketProperties', 'adminData', 'adminDeposits', 'adminTenants', 'adminMaintenance', 'adminFinance', 'adminReserve', 'adminReports']),
-  BUSINESS: new Set(['adminSmartDashboard', 'adminDashboard', 'adminProjects', 'adminOwners', 'adminProperties', 'adminOffMarketProperties', 'adminData', 'adminProcess', 'adminRentalSigning', 'adminDeposits', 'adminTenantDirectory', 'adminTenants', 'adminRentalMandates', 'adminMaintenance', 'adminFinance', 'adminReserve', 'adminReports']),
-  CUSTOMER_SERVICE: new Set(['adminSmartDashboard', 'adminDashboard', 'adminOwners', 'adminProperties', 'adminOffMarketProperties', 'adminProcess', 'adminRentalSigning', 'adminDeposits', 'adminTenantDirectory', 'adminTenants', 'adminMaintenance', 'adminAlerts']),
-  ADMINISTRATION: new Set(['adminSmartDashboard', 'adminDashboard', 'adminProjects', 'adminOwners', 'adminProperties', 'adminOffMarketProperties', 'adminData', 'adminProcess', 'adminRentalSigning', 'adminDeposits', 'adminTenantDirectory', 'adminTenants', 'adminRentalMandates', 'adminMaintenance', 'adminFinance', 'adminReserve', 'adminAlerts', 'adminReports', 'adminAccounts', 'adminAudit', 'adminSystemBackup'])
+export const ADMIN_MODULE_IDS = Object.freeze([
+  'adminSmartDashboard',
+  'adminDashboard',
+  'adminProjects',
+  'adminOwners',
+  'adminProperties',
+  'adminData',
+  'adminProcess',
+  'adminRentalSigning',
+  'adminDeposits',
+  'adminTenantDirectory',
+  'adminTenants',
+  'adminRentalMandates',
+  'adminOffMarketProperties',
+  'adminMaintenance',
+  'adminFinance',
+  'adminReserve',
+  'adminAlerts',
+  'adminReports',
+  'adminAccounts',
+  'adminAudit',
+  'adminSystemBackup'
+]);
+
+const allModules = new Set(ADMIN_MODULE_IDS);
+const financeManagedModules = new Set([
+  'adminMaintenance',
+  'adminFinance',
+  'adminReserve',
+  'adminAlerts',
+  'adminReports',
+  'adminAccounts',
+  'adminAudit',
+  'adminSystemBackup'
+]);
+
+const rentalProcessTargetModules = new Set([
+  'adminProperties',
+  'adminRentalMandates',
+  'adminTenantDirectory',
+  'adminTenants'
+]);
+
+// 2026-09-03 CCPS 确认的岗位菜单及操作范围。
+const roleAccess = {
+  BUSINESS: {
+    visible: new Set(['adminSmartDashboard', 'adminDashboard', 'adminProperties', 'adminProcess', 'adminRentalSigning', 'adminTenantDirectory', 'adminTenants']),
+    managed: new Set(['adminProperties', 'adminProcess', 'adminRentalSigning', 'adminTenantDirectory'])
+  },
+  CUSTOMER_SERVICE: {
+    visible: new Set(['adminSmartDashboard', 'adminDashboard', 'adminProcess', 'adminRentalSigning', 'adminRentalMandates', 'adminReserve']),
+    managed: new Set(['adminProcess', 'adminRentalSigning', 'adminRentalMandates', 'adminReserve'])
+  },
+  FINANCE: {
+    visible: allModules,
+    managed: financeManagedModules
+  },
+  ADMINISTRATION: {
+    visible: allModules,
+    managed: allModules
+  }
 };
+
+const roleDefaultModule = Object.freeze({
+  BUSINESS: 'adminSmartDashboard',
+  CUSTOMER_SERVICE: 'adminSmartDashboard',
+  FINANCE: 'adminSmartDashboard',
+  ADMINISTRATION: 'adminSmartDashboard',
+  SUPER_ADMIN: 'adminSmartDashboard'
+});
 
 export function adminStaffRole(user) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
@@ -19,11 +83,21 @@ export function adminStaffRole(user) {
 }
 
 export function canAccessAdminModule(user, moduleId) {
-  if (moduleId === 'adminSmartDashboard') return true;
   const role = adminStaffRole(user);
   // Existing installations remain usable until the RBAC migration is run.
   if (!role || role === 'SUPER_ADMIN') return true;
-  return roleModules[role]?.has(moduleId) === true;
+  return roleAccess[role]?.visible.has(moduleId) === true;
+}
+
+export function canAccessAdminProcessTarget(user, moduleId, source) {
+  return source === 'rental-process'
+    && canManageAdminModule(user, 'adminProcess')
+    && rentalProcessTargetModules.has(moduleId);
+}
+
+export function defaultAdminModuleId(user) {
+  const role = adminStaffRole(user);
+  return roleDefaultModule[role] || 'adminSmartDashboard';
 }
 
 export function hasAdminPermission(user, permission) {
@@ -35,11 +109,7 @@ export function hasAdminPermission(user, permission) {
 
 export function canManageAdminModule(user, moduleId) {
   if (['adminSmartDashboard', 'adminDashboard'].includes(moduleId)) return false;
-  if (['adminAccounts', 'adminAudit', 'adminSystemBackup'].includes(moduleId)) return hasAdminPermission(user, 'SYSTEM_MANAGE');
-  if (moduleId === 'adminReports') return hasAdminPermission(user, 'REPORT_MANAGE');
-  if (['adminFinance', 'adminReserve', 'adminDeposits'].includes(moduleId)) return hasAdminPermission(user, 'FINANCE_MANAGE');
-  if (['adminMaintenance', 'adminAlerts'].includes(moduleId)) {
-    return hasAdminPermission(user, 'OPERATIONS_MANAGE') || hasAdminPermission(user, 'BUSINESS_MANAGE');
-  }
-  return hasAdminPermission(user, 'BUSINESS_MANAGE');
+  const role = adminStaffRole(user);
+  if (!role || role === 'SUPER_ADMIN') return true;
+  return roleAccess[role]?.managed.has(moduleId) === true;
 }

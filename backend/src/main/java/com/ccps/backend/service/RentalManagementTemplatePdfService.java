@@ -40,6 +40,7 @@ import com.lowagie.text.pdf.PdfStamper;
 @Service
 public class RentalManagementTemplatePdfService {
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final float MANAGEMENT_AUTHORIZATION_EMAIL_MIN_WIDTH = 87f;
     private static final Set<String> ALLOWED_FIELD_KEYS = Set.of("agreementDate", "agreementDate.day",
             "agreementDate.month", "agreementDate.year", "startDate.day", "startDate.month", "startDate.year",
             "endDate.day", "endDate.month", "endDate.year", "landlordName", "landlordIdentity",
@@ -50,10 +51,10 @@ public class RentalManagementTemplatePdfService {
     private static final Set<String> SIGNATURE_FIELD_KEYS = Set.of("signature.owner", "signature.company",
             "signature.customer_service");
     public enum TemplateType {
-        PROPERTY_MANAGEMENT_AGREEMENT("property-management-agreement", "/contract-templates/ccps-pma-v1.pdf", "CCPS-PMA"),
-        MANAGEMENT_AUTHORIZATION("management-authorization", "/contract-templates/ccps-management-authorization-v1.pdf", "CCPS-Management-Authorization"),
-        TERMINATION_LETTER("termination-letter", "/contract-templates/ccps-termination-letter-v1.pdf", "CCPS-Termination-Letter"),
-        RENTAL_REMITTANCE("rental-remittance", "/contract-templates/ccps-rental-remittance-v1.pdf", "CCPS-Rental-Remittance");
+        PROPERTY_MANAGEMENT_AGREEMENT("property-management-agreement", "/contract-templates/flattened/ccps-pma-v1.pdf", "CCPS-PMA"),
+        MANAGEMENT_AUTHORIZATION("management-authorization", "/contract-templates/flattened/ccps-management-authorization-v1.pdf", "CCPS-Management-Authorization"),
+        TERMINATION_LETTER("termination-letter", "/contract-templates/flattened/ccps-termination-letter-v1.pdf", "CCPS-Termination-Letter"),
+        RENTAL_REMITTANCE("rental-remittance", "/contract-templates/flattened/ccps-rental-remittance-v1.pdf", "CCPS-Rental-Remittance");
 
         private final String key;
         private final String resource;
@@ -80,13 +81,14 @@ public class RentalManagementTemplatePdfService {
     public byte[] generate(TemplateType type, Map<String, String> fields) {
         Map<String, String> values = fields == null ? Map.of() : fields;
         if (type == TemplateType.PROPERTY_MANAGEMENT_AGREEMENT) validatePma(values);
+        if (type == TemplateType.MANAGEMENT_AUTHORIZATION) validateManagementAuthorization(values);
         if (type == TemplateType.TERMINATION_LETTER) validateTerminationLetter(values);
         if (type == TemplateType.RENTAL_REMITTANCE) validateRentalRemittance(values);
         try (InputStream source = openTemplate(type); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PdfReader reader = new PdfReader(source);
             PdfStamper stamper = new PdfStamper(reader, output);
-            BaseFont latin = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
-            BaseFont cjk = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+            BaseFont latin = PdfFontResources.regular();
+            BaseFont cjk = latin;
             if (Files.isRegularFile(layoutPath(type))) fillConfigured(stamper, latin, cjk, values, currentLayout(type));
             else if (type == TemplateType.PROPERTY_MANAGEMENT_AGREEMENT) fillPma(stamper, latin, cjk, values);
             else if (type == TemplateType.TERMINATION_LETTER) fillTerminationLetter(stamper, latin, cjk, values);
@@ -131,8 +133,13 @@ public class RentalManagementTemplatePdfService {
             PdfReader reader = new PdfReader(Files.readAllBytes(target));
             int pages = reader.getNumberOfPages();
             reader.close();
-            if (pages < 1 || pages > 50) throw new IllegalArgumentException("Template page count must be between 1 and 50");
+            if (pages < expectedPages(type) || pages > 50) {
+                throw new IllegalArgumentException("Template must contain at least " + expectedPages(type) + " pages");
+            }
             return new TemplateVersion(version, pages, file.getOriginalFilename(), Files.size(target));
+        } catch (IllegalArgumentException exception) {
+            try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+            throw exception;
         } catch (Exception exception) {
             try { Files.deleteIfExists(target); } catch (IOException ignored) { }
             throw new IllegalStateException("Unable to store contract template", exception);
@@ -194,15 +201,25 @@ public class RentalManagementTemplatePdfService {
                     })
                     .toList();
         }
-        return withMissingSignatureFields(type, new TemplateLayout(saved.version(), saved.pages(), saved.pageSizes(), fields));
+        if (type == TemplateType.MANAGEMENT_AUTHORIZATION) {
+            fields = fields.stream().map(this::normalizeManagementAuthorizationField).toList();
+        }
+        return withMissingDefaultFields(type, new TemplateLayout(saved.version(), saved.pages(), saved.pageSizes(), fields));
     }
 
-    private TemplateLayout withMissingSignatureFields(TemplateType type, TemplateLayout layout) {
+    private TemplateFieldPosition normalizeManagementAuthorizationField(TemplateFieldPosition field) {
+        if (!"email-page-1".equals(field.id())) return field;
+        return new TemplateFieldPosition(field.id(), field.fieldKey(), field.label(), field.page(), field.x(), field.y(),
+                Math.max(8f, field.fontSize()), Math.max(MANAGEMENT_AUTHORIZATION_EMAIL_MIN_WIDTH, field.maxWidth()),
+                field.maxLines(), field.lineHeight());
+    }
+
+    private TemplateLayout withMissingDefaultFields(TemplateType type, TemplateLayout layout) {
         List<TemplateFieldPosition> existing = layout.fields() == null ? List.of() : layout.fields();
         Set<String> ids = existing.stream().map(TemplateFieldPosition::id).collect(java.util.stream.Collectors.toSet());
         List<TemplateFieldPosition> merged = new ArrayList<>(existing);
         normalizedDefaultFields(type, layout.pageSizes()).stream()
-                .filter(field -> isSignatureField(field) && !ids.contains(field.id()))
+                .filter(field -> !ids.contains(field.id()))
                 .forEach(merged::add);
         return new TemplateLayout(layout.version(), layout.pages(), layout.pageSizes(), List.copyOf(merged));
     }
@@ -234,6 +251,11 @@ public class RentalManagementTemplatePdfService {
             normalizedFields.add(new TemplateFieldPosition(field.id(), field.fieldKey(), field.label(), page, x, y,
                     fontSize, maxWidth, maxLines, lineHeight));
         }
+        Set<String> savedIds = normalizedFields.stream().map(TemplateFieldPosition::id)
+                .collect(java.util.stream.Collectors.toSet());
+        normalizedDefaultFields(type, pageSizes).stream()
+                .filter(field -> !savedIds.contains(field.id()))
+                .forEach(normalizedFields::add);
         TemplateLayout saved = new TemplateLayout(active.version(), active.pages(), pageSizes,
                 List.copyOf(normalizedFields));
         Path target = layoutPath(type);
@@ -316,7 +338,8 @@ public class RentalManagementTemplatePdfService {
                     multilineField("bank-address-page-2", "bankAddress", "银行地址", 2, 220, 526, 8, 320, 2, 11),
                     field("owner-signature-name-page-2", "landlordName", "业主姓名（签署页）", 2, 242, 239, 8, 295),
                     field("owner-signature-identity-page-2", "landlordIdentity", "业主证件号码（签署页）", 2, 242, 224, 8, 295),
-                    signatureField("signature-owner-page-2", "signature.owner", "业主签字", 2, 54, 250, 165, 32));
+                    signatureField("signature-owner-page-2", "signature.owner", "业主签字", 2, 54, 250, 165, 32),
+                    signatureField("signature-company-page-2", "signature.company", "物业管理公司授权代表签字", 2, 54, 139, 165, 32));
         }
         if (type == TemplateType.RENTAL_REMITTANCE) {
             return List.of(
@@ -339,7 +362,8 @@ public class RentalManagementTemplatePdfService {
                     field("unit-page-1", "unitNo", "单位号码", 1, 460, 601, 8, 73),
                     field("owner-page-1", "landlordName", "业主姓名", 1, 130, 531, 8, 76),
                     field("identity-page-1", "landlordIdentity", "护照号码", 1, 297, 531, 8, 75),
-                    field("email-page-1", "ownerEmail", "业主邮箱", 1, 448, 531, 8, 75),
+                    field("email-page-1", "ownerEmail", "业主邮箱", 1, 448, 531, 8,
+                            MANAGEMENT_AUTHORIZATION_EMAIL_MIN_WIDTH),
                     field("owner-page-3", "landlordName", "业主姓名（签署页）", 3, 190, 332, 9, 230),
                     field("identity-page-3", "landlordIdentity", "护照号码（签署页）", 3, 190, 298, 9, 230),
                     field("agreement-date-page-3", "agreementDate", "日期（签署页）", 3, 190, 264, 9, 230),
@@ -446,7 +470,7 @@ public class RentalManagementTemplatePdfService {
 
     private float minimumFontSize(TemplateFieldPosition field) {
         return switch (field.id()) {
-            case "project-page-1", "unit-page-1", "owner-page-1", "identity-page-1", "email-page-1" -> 4.5f;
+            case "project-page-1", "unit-page-1", "owner-page-1", "identity-page-1" -> 4.5f;
             default -> 6.2f;
         };
     }
@@ -454,7 +478,11 @@ public class RentalManagementTemplatePdfService {
     private String resolveFieldValue(Map<String, String> values, String key) {
         if ("unitNoOrAddress".equals(key)) return valueOr(values, "unitNo", "propertyAddress");
         int separator = key.indexOf('.');
-        if (separator < 0) return value(values, key);
+        if (separator < 0) {
+            String resolved = value(values, key);
+            return List.of("agreementDate", "startDate", "endDate").contains(key)
+                    ? displayDate(resolved) : resolved;
+        }
         DateParts parts = dateParts(values, key.substring(0, separator));
         return switch (key.substring(separator + 1)) {
             case "day" -> parts.day();
@@ -527,8 +555,19 @@ public class RentalManagementTemplatePdfService {
         dateParts(values, "endDate");
     }
 
+    private void validateManagementAuthorization(Map<String, String> values) {
+        List<String> missing = Stream.of("projectName", "unitNo", "landlordName", "landlordIdentity",
+                        "ownerEmail", "agreementDate")
+                .filter(key -> value(values, key).isBlank()).toList();
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException("Missing required management authorization fields: "
+                    + String.join(", ", missing));
+        }
+        dateParts(values, "agreementDate");
+    }
+
     private void validateTerminationLetter(Map<String, String> values) {
-        List<String> missing = Stream.of("agreementDate", "landlordName", "landlordIdentity", "ownerEmail", "projectName", "unitNo",
+        List<String> missing = Stream.of("agreementDate", "landlordName", "landlordIdentity", "projectName", "unitNo",
                         "authorizedAgentName", "authorizedAgentIdentity", "authorizedAgentPhone", "authorizedAgentEmail",
                         "bankName", "bankPayeeName", "bankAccountNo", "bankSwiftCode", "bankAddress")
                 .filter(key -> value(values, key).isBlank()).toList();
@@ -551,6 +590,15 @@ public class RentalManagementTemplatePdfService {
                     String.valueOf(date.getYear()));
         } catch (DateTimeParseException exception) {
             throw new IllegalArgumentException(key + " must use YYYY-MM-DD", exception);
+        }
+    }
+
+    private String displayDate(String value) {
+        if (value == null || value.isBlank()) return "";
+        try {
+            return LocalDate.parse(value.trim()).format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        } catch (DateTimeParseException ignored) {
+            return value.trim();
         }
     }
 
@@ -613,7 +661,7 @@ public class RentalManagementTemplatePdfService {
     private void fillAuthorization(PdfStamper stamper, BaseFont latin, BaseFont cjk, Map<String, String> values) throws IOException {
         String owner = value(values, "landlordName");
         String identity = value(values, "landlordIdentity");
-        String date = valueOr(values, "agreementDate", "startDate");
+        String date = displayDate(valueOr(values, "agreementDate", "startDate"));
         PdfContentByte page1 = stamper.getOverContent(1);
         text(page1, latin, cjk, date, 100, 760, 9, 105);
         text(page1, latin, cjk, value(values, "projectName"), 348, 601, 8, 58, 4.5f);
@@ -630,7 +678,7 @@ public class RentalManagementTemplatePdfService {
 
     private void fillTerminationLetter(PdfStamper stamper, BaseFont latin, BaseFont cjk, Map<String, String> values) throws IOException {
         PdfContentByte page1 = stamper.getOverContent(1);
-        text(page1, latin, cjk, value(values, "agreementDate"), 117, 624, 8, 130);
+        text(page1, latin, cjk, displayDate(value(values, "agreementDate")), 117, 624, 8, 130);
         text(page1, latin, cjk, value(values, "landlordName"), 64, 500, 8, 115);
         text(page1, latin, cjk, value(values, "projectName"), 348, 500, 8, 100);
         text(page1, latin, cjk, value(values, "unitNo"), 54, 485, 8, 98);

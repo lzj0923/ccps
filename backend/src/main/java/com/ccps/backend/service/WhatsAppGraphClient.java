@@ -1,6 +1,8 @@
 package com.ccps.backend.service;
 
 import java.net.InetSocketAddress;
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.net.URI;
 import java.util.LinkedHashMap;
@@ -8,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.OkHttp3ClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -15,6 +18,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import com.fasterxml.jackson.databind.JsonNode;
+
+import okhttp3.OkHttpClient;
 
 @Component
 public class WhatsAppGraphClient {
@@ -32,11 +37,22 @@ public class WhatsAppGraphClient {
             @Value("${ccps.whatsapp.access-token:}") String accessToken,
             @Value("${ccps.whatsapp.proxy-url:}") String proxyUrl) {
         RestClient.Builder clientBuilder = builder.baseUrl("https://graph.facebook.com");
-        Proxy proxy = proxy(proxyUrl);
-        if (proxy != Proxy.NO_PROXY) {
-            SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-            requestFactory.setProxy(proxy);
-            clientBuilder.requestFactory(requestFactory);
+        ProxySettings proxySettings = proxySettings(proxyUrl);
+        if (proxySettings.proxy() != Proxy.NO_PROXY) {
+            if (proxySettings.proxy().type() == Proxy.Type.SOCKS) {
+                // OkHttp keeps the target unresolved for SOCKS routes, so the proxy
+                // performs DNS resolution. This is required for mainland hosts where
+                // resolving graph.facebook.com locally can produce an unusable route.
+                OkHttpClient okHttpClient = new OkHttpClient.Builder()
+                        .proxy(proxySettings.proxy())
+                        .build();
+                clientBuilder.requestFactory(new OkHttp3ClientHttpRequestFactory(okHttpClient));
+            } else {
+                SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+                requestFactory.setProxy(proxySettings.proxy());
+                clientBuilder.requestFactory(requestFactory);
+            }
+            installProxyAuthenticator(proxySettings);
         }
         this.restClient = clientBuilder.build();
         this.enabled = enabled;
@@ -46,17 +62,65 @@ public class WhatsAppGraphClient {
     }
 
     static Proxy proxy(String value) {
-        if (value == null || value.isBlank()) return Proxy.NO_PROXY;
+        return proxySettings(value).proxy();
+    }
+
+    static ProxySettings proxySettings(String value) {
+        if (value == null || value.isBlank()) return ProxySettings.direct();
         try {
             URI uri = URI.create(value.trim());
             if (uri.getHost() == null || uri.getHost().isBlank()) {
                 throw new IllegalArgumentException("Proxy host is missing");
             }
+            String scheme = uri.getScheme() == null ? "http" : uri.getScheme().toLowerCase();
+            Proxy.Type type = switch (scheme) {
+                case "http", "https" -> Proxy.Type.HTTP;
+                case "socks", "socks5", "socks5h" -> Proxy.Type.SOCKS;
+                default -> throw new IllegalArgumentException("Unsupported proxy scheme: " + scheme);
+            };
             int port = uri.getPort();
-            if (port < 1) port = "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
-            return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(uri.getHost(), port));
+            if (port < 1) port = switch (scheme) {
+                case "https" -> 443;
+                case "socks", "socks5", "socks5h" -> 1080;
+                default -> 80;
+            };
+            String username = "";
+            String password = "";
+            String userInfo = uri.getUserInfo();
+            if (userInfo != null && !userInfo.isBlank()) {
+                int separator = userInfo.indexOf(':');
+                username = separator < 0 ? userInfo : userInfo.substring(0, separator);
+                password = separator < 0 ? "" : userInfo.substring(separator + 1);
+            }
+            return new ProxySettings(new Proxy(type, new InetSocketAddress(uri.getHost(), port)),
+                    uri.getHost(), port, username, password);
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException("Invalid WhatsApp proxy URL", exception);
+        }
+    }
+
+    private static void installProxyAuthenticator(ProxySettings settings) {
+        if (settings.username().isBlank()) return;
+        Authenticator.setDefault(new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                boolean proxyAuthentication = getRequestorType() == RequestorType.PROXY;
+                boolean socksAuthentication = getRequestorType() == RequestorType.SERVER
+                        && getRequestingProtocol() != null
+                        && getRequestingProtocol().toUpperCase().startsWith("SOCKS");
+                if ((proxyAuthentication || socksAuthentication)
+                        && settings.host().equalsIgnoreCase(getRequestingHost())
+                        && settings.port() == getRequestingPort()) {
+                    return new PasswordAuthentication(settings.username(), settings.password().toCharArray());
+                }
+                return null;
+            }
+        });
+    }
+
+    record ProxySettings(Proxy proxy, String host, int port, String username, String password) {
+        static ProxySettings direct() {
+            return new ProxySettings(Proxy.NO_PROXY, "", -1, "", "");
         }
     }
 

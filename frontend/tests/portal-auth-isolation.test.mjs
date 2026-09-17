@@ -24,9 +24,9 @@ test('frontend uses portal-specific session endpoints and never crosses portal r
     await api.logout('owner');
 
     assert.deepEqual(calls.map(call => [call.url, call.method]), [
-      ['http://localhost:8080/api/auth/admin/session', 'GET'],
-      ['http://localhost:8080/api/auth/owner/session', 'GET'],
-      ['http://localhost:8080/api/auth/owner/logout', 'POST']
+      ['/api/auth/admin/session', 'GET'],
+      ['/api/auth/owner/session', 'GET'],
+      ['/api/auth/owner/logout', 'POST']
     ]);
     assert.equal(routes.adminAuthInterceptor({ mode: 'admin' }, { role: 'OWNER' }), '/admin/login');
     assert.equal(routes.ownerAuthInterceptor({ mode: 'owner' }, { role: 'ADMIN' }), '/owner/login');

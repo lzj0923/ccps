@@ -25,7 +25,7 @@ public interface PaymentProgressMapper {
               pp.id AS payment_plan_id,
               pp.plan_name
             FROM owners o
-            JOIN owner_units ou ON ou.owner_id = o.id AND ou.status = 'active' AND ou.asset_stage = 'PRE_HANDOVER'
+            JOIN owner_units ou ON ou.owner_id = o.id AND ou.status = 'active'
             JOIN units u ON u.id = ou.unit_id
             JOIN projects p ON p.id = u.project_id AND p.status = 'active'
             LEFT JOIN purchase_contracts pc ON pc.owner_unit_id = ou.id AND pc.status = 'active'
@@ -68,7 +68,8 @@ public interface PaymentProgressMapper {
                 LIMIT 1
               ) AS rejection_reason,
               COUNT(DISTINCT pr.id) AS receipt_count,
-              MAX(CASE WHEN pr.proof_document_id IS NOT NULL THEN 1 ELSE 0 END) AS has_proof
+              MAX(CASE WHEN pr.proof_document_id IS NOT NULL THEN 1 ELSE 0 END) AS has_proof,
+              GROUP_CONCAT(DISTINCT pr.proof_document_id ORDER BY pr.proof_document_id) AS proof_document_ids
             FROM payment_installments pi
             LEFT JOIN payment_receipt_allocations pra ON pra.installment_id = pi.id
             LEFT JOIN payment_receipts pr ON pr.id = pra.receipt_id
@@ -150,6 +151,10 @@ public interface PaymentProgressMapper {
         private String rejectionReason;
         private Integer receiptCount;
         private Boolean hasProof;
+        private String proofDocumentIds;
+
+        public String getProofDocumentIds() { return proofDocumentIds; }
+        public void setProofDocumentIds(String value) { proofDocumentIds = value; }
 
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }

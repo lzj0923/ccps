@@ -100,6 +100,21 @@ class OwnerNotificationServiceTest {
         return row;
     }
 
+    @Test
+    void duplicateUnitNumbersMustPreferFullProjectAndAmbiguousNoticesStayUnlinked() {
+        var first = unit("团结小区", "Shah Alam", "102");
+        var second = unit("翻斗花园", "KL", "102");
+        when(mapper.findOwnerUnits(42L)).thenReturn(List.of(first, second));
+        when(mapper.findNotifications(42L)).thenReturn(List.of(
+                row(1L, "预备金提醒", "翻斗花园 102 的预备金余额不足", "high", "unread"),
+                row(2L, "预备金提醒", "102 的预备金余额不足", "high", "unread"),
+                row(3L, "预备金提醒", "翻斗花园 1102 的预备金余额不足", "high", "unread")));
+        var result = service.getNotifications(42L).notifications();
+        assertThat(result.get(0).projectName()).isEqualTo("翻斗花园");
+        assertThat(result.get(1).projectName()).isNull();
+        assertThat(result.get(2).projectName()).isNull();
+    }
+
     private OwnerNotificationMapper.UnitReference unit(String projectName, String city, String unitNo) {
         OwnerNotificationMapper.UnitReference unit = new OwnerNotificationMapper.UnitReference();
         unit.setProjectName(projectName);

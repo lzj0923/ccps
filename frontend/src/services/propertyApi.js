@@ -1,15 +1,29 @@
+import { ownerDocumentFilePath } from '../utils/ownerDocuments';
 import { localizeTenantApiErrorMessage } from './tenantApiErrorMessages';
+import { contentDispositionFilename } from '../utils/contentDisposition';
+import { translateLegacyText } from '../i18n';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 const API_ERROR_MESSAGES = new Map([
+  ['Owner profile not found', '未找到有效业主资料，请联系管理员'],
+  ['Owner profile changed; refresh and retry', '业主资料已变化，请刷新后重试'],
+  ['Current password is required', '请输入有效的当前密码'],
+  ['Current password is incorrect', '当前密码不正确'],
+  ['New password must contain letters and numbers, at least 10 characters and at most 72 bytes', '新密码至少10位，须包含字母和数字，不能超过72字节'],
+  ['New password must be different', '新密码不能与当前密码相同'],
+  ['Password changed; sign in again', '密码已变化，请重新登录'],
+  ['Invalid contact phone number', '请输入有效的联系电话'],
+  ['Contact information is too long or invalid', '联系资料过长或包含无效字符'],
   ['This contract document is already signed; replace it before starting a new request', '此合同文件已完成簽署，請先更換文件後再發起新的簽署'],
   ['This signing request is already closed', '此簽署邀請已關閉，不能再次操作'],
   ['Contract file is unavailable', '合同文件目前無法取得'],
   ['Signed contract is not available', '已簽署合同目前無法取得'],
   ['Email service is not configured', '電郵服務尚未設定，暫時無法發送簽署邀請'],
-  ['Incorrect verification code', '驗證碼不正確'],
-  ['Verification code has expired', '驗證碼已過期，請重新取得'],
+  ['Recipient email is required', '請先填寫郵件收件地址'],
+  ['Recipient email is invalid', '郵件收件地址格式不正確'],
+  ['Recipient email is too long', '郵件收件地址過長'],
+  ['Unable to save the signing email address', '無法保存郵件收件地址，請重試'],
   ['Consent is required before signing', '簽署前請先勾選同意'],
   ['Signer name does not match the request', '簽署人姓名與邀請資料不一致'],
   ['Only draft or pending mandates can be reviewed', '当前委托不是草稿或待审核状态，请刷新后再试'],
@@ -25,6 +39,10 @@ const API_ERROR_MESSAGES = new Map([
   ['Operating unit not found', '当前单位尚未进入可出租状态，请先完成房产交接'],
   ['Invalid rent calculation method', '租金计算方式无效，请刷新页面后重试'],
   ['Tenant deposit balance is insufficient', '租客押金余额不足，请减少本次抵扣金额或改用直接收款'],
+  ['Deposit transaction selection changed; reload and try again', '押金记录已发生变化，请刷新后重新选择'],
+  ['Only manual deposit account transactions can be deleted', '只能删除未关联财务的人工押金记录'],
+  ['Deleting these transactions would make the deposit balance negative', '所选记录删除后会导致押金余额为负，请调整选择'],
+  ['Delete the related tenant repayment before deleting its advance', '该代付款已有对应还款，请先一并选择还款记录'],
   ['Security deposit can only offset the current rent balance', '扣押金金额不能超过本期未缴租金'],
   ['Unable to deduct the tenant deposit balance', '租客押金扣款失败，押金余额可能已发生变化，请刷新后重试'],
   ['Project code already exists', '建案编码已存在，请更换后重试'],
@@ -36,7 +54,7 @@ const API_ERROR_MESSAGES = new Map([
   ['Project could not be deleted', '建案删除失败，请稍后再试'],
   ['Owner identity number already exists', '该身份证件号码已被其他业主使用，请核对后重试'],
   ['Owner phone already exists', '该手机号已作为业主登录账号使用，请更换手机号或直接选择已有业主'],
-  ['Owner phone number must use E.164 format', '请选择国家或地区，并填写有效的业主手机号码'],
+  ['Owner phone number must use E.164 format', '业主联系电话格式不正确，请输入带国家区号的号码，例如 +60123456789'],
   ['Tenant phone number must use E.164 format', '请选择国家或地区，并填写有效手机号码'],
   ['WhatsApp phone number must use a valid international format', '请选择国家或地区，并填写有效的 WhatsApp 手机号码'],
   ['WhatsApp phone number is required', '启用 WhatsApp 自动催收时必须填写手机号码'],
@@ -68,14 +86,19 @@ const API_ERROR_MESSAGES = new Map([
 
 export function localizeApiErrorMessage(message, status = '') {
   const value = String(message || '').trim();
-  const tenantMessage = localizeTenantApiErrorMessage(value);
-  if (tenantMessage) return tenantMessage;
-  if (API_ERROR_MESSAGES.has(value)) return API_ERROR_MESSAGES.get(value);
-  if (!value || /^API request failed/i.test(value)) return `服務請求失敗${status ? `（HTTP ${status}）` : ''}`;
-  if (/^[\x00-\x7F]*[A-Za-z][\x00-\x7F]*$/.test(value)) {
-    return `操作失败：${value}${status ? `（HTTP ${status}）` : ''}`;
+  const segments = [...new Set(value.split(/\s*:\s*/).map(item => item.trim()).filter(Boolean))];
+  const candidates = segments.length === 1 ? segments : [value, ...segments];
+  for (const candidate of candidates) {
+    const tenantMessage = localizeTenantApiErrorMessage(candidate);
+    if (tenantMessage) return translateLegacyText(tenantMessage);
+    if (API_ERROR_MESSAGES.has(candidate)) return translateLegacyText(API_ERROR_MESSAGES.get(candidate));
   }
-  return value;
+  const displayValue = segments.length === 1 ? segments[0] : value;
+  if (!displayValue || /^API request failed/i.test(displayValue)) return `${translateLegacyText('服務請求失敗')}${status ? `（HTTP ${status}）` : ''}`;
+  if (/^[\x00-\x7F]*[A-Za-z][\x00-\x7F]*$/.test(displayValue)) {
+    return `${translateLegacyText('操作失败')}：${displayValue}${status ? `（HTTP ${status}）` : ''}`;
+  }
+  return translateLegacyText(displayValue);
 }
 
 async function request(path, options = {}) {
@@ -98,7 +121,10 @@ async function request(path, options = {}) {
       const portal = path.startsWith('/admin/') || path.startsWith('/properties') ? 'admin' : 'owner';
       window.dispatchEvent(new CustomEvent('ccps-auth-expired', { detail: { portal } }));
     }
-    throw new Error(localizeApiErrorMessage(message, response.status));
+    const error = new Error(localizeApiErrorMessage(message, response.status));
+    error.apiMessage = message;
+    error.status = response.status;
+    throw error;
   }
 
   if (response.status === 204) return null;
@@ -109,7 +135,7 @@ async function request(path, options = {}) {
   try {
     return JSON.parse(responseText);
   } catch {
-    throw new Error('服务器返回的数据格式不正确');
+    throw new Error(translateLegacyText('服务器返回的数据格式不正确'));
   }
 }
 
@@ -305,10 +331,9 @@ export async function downloadAdminFinanceDocuments(financeRecordIds, documentTy
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
     body: JSON.stringify(financeRecordIds || [])
   });
-  if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+  if (!response.ok) throw new Error(localizeApiErrorMessage('', response.status));
   const disposition = response.headers.get('Content-Disposition') || '';
-  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
-  return { blob: await response.blob(), filename: decodeURIComponent(match?.[1] || match?.[2] || `${type}-documents.zip`) };
+  return { blob: await response.blob(), filename: contentDispositionFilename(disposition, `${type}-documents.zip`) };
 }
 
 export function fetchAdminReserveOverview() {
@@ -380,6 +405,40 @@ export function fetchAdminDepositAccounts(filters = {}) {
   return request(`/admin/tenancy/deposits${params.size ? `?${params}` : ''}`);
 }
 
+export function fetchAdminFundOperations() {
+  return request('/admin/reserve/fund-operations');
+}
+
+export function createAdminInternalTransfer(payload) {
+  return request('/admin/reserve/fund-operations/internal-transfers', {
+    method: 'POST', body: JSON.stringify(payload)
+  });
+}
+
+export function reviewAdminInternalTransfer(id, action, note = '') {
+  return request(`/admin/reserve/fund-operations/internal-transfers/${id}/${action}`, {
+    method: 'POST', body: JSON.stringify({ note: note || null })
+  });
+}
+
+export function saveAdminRemittanceSetting(accountId, payload) {
+  return request(`/admin/reserve/fund-operations/remittance-settings/${accountId}`, {
+    method: 'PUT', body: JSON.stringify(payload)
+  });
+}
+
+export function generateAdminRemittanceBatch(payload) {
+  return request('/admin/reserve/fund-operations/remittance-batches/generate', {
+    method: 'POST', body: JSON.stringify(payload)
+  });
+}
+
+export function reviewAdminRemittanceBatch(id, action, note = '') {
+  return request(`/admin/reserve/fund-operations/remittance-batches/${id}/${action}`, {
+    method: 'POST', body: JSON.stringify({ note: note || null })
+  });
+}
+
 export function updateAdminFinanceAllocationNote(financeRecordId, payload) {
   return request(`/admin/finance/reviews/${financeRecordId}/allocation-note`, {
     method: 'PUT', body: JSON.stringify(payload)
@@ -387,6 +446,7 @@ export function updateAdminFinanceAllocationNote(financeRecordId, payload) {
 }
 export function fetchAdminDepositAccount(leaseId) { return request(`/admin/tenancy/deposits/${leaseId}`); }
 export function createAdminTenantDepositTransaction(leaseId, payload) { return request(`/admin/tenancy/leases/${leaseId}/deposit-transactions`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function deleteAdminTenantDepositTransactions(leaseId, transactionIds) { return request(`/admin/tenancy/leases/${leaseId}/deposit-transactions/batch-delete`, { method: 'POST', body: JSON.stringify({ transactionIds }) }); }
 export function fetchAdminLeaseRentInvoices(leaseId) { return request(`/admin/tenancy/leases/${leaseId}/rent-invoices`); }
 export function fetchAdminRentalMandates(filters = {}) {
   const query = new URLSearchParams();
@@ -394,6 +454,8 @@ export function fetchAdminRentalMandates(filters = {}) {
   return request(`/admin/rental-mandates${query.toString() ? `?${query}` : ''}`);
 }
 export function fetchAdminRentalMandateOptions() { return request('/admin/rental-mandates/options'); }
+export function fetchAdminRentalMandate(mandateId) { return request(`/admin/rental-mandates/${mandateId}`); }
+export function updateAdminRentalMandate(mandateId, payload) { return request(`/admin/rental-mandates/${mandateId}`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function createAdminRentalMandate(payload) { return request('/admin/rental-mandates', { method: 'POST', body: JSON.stringify(payload) }); }
 export function submitAdminRentalMandate(mandateId) { return request(`/admin/rental-mandates/${mandateId}/submit`, { method: 'POST' }); }
 export function reviewAdminRentalMandate(mandateId, payload) { return request(`/admin/rental-mandates/${mandateId}/review`, { method: 'POST', body: JSON.stringify(payload) }); }
@@ -401,6 +463,8 @@ export function updateAdminRentalMandateStatus(mandateId, payload) { return requ
 export function fetchAdminRentalMandateHistory(mandateId) { return request(`/admin/rental-mandates/${mandateId}/history`); }
 export function fetchAdminRentalAppointmentDetails(mandateId) { return request(`/admin/rental-mandates/${mandateId}/appointment-details`); }
 export function saveAdminRentalAppointmentDetails(mandateId, fields) { return request(`/admin/rental-mandates/${mandateId}/appointment-details`, { method: 'PUT', body: JSON.stringify({ fields }) }); }
+export function fetchAdminLeaseAgreementDetails(leaseId) { return request(`/admin/tenancy/leases/${leaseId}/agreement-details`); }
+export function saveAdminLeaseAgreementDetails(leaseId, fields) { return request(`/admin/tenancy/leases/${leaseId}/agreement-details`, { method: 'PUT', body: JSON.stringify({ fields }) }); }
 export function fetchAdminPropertyHandover(mandateId) { return request(`/admin/rental-mandates/${mandateId}/handover`); }
 export function saveAdminPropertyHandover(mandateId, payload) { return request(`/admin/rental-mandates/${mandateId}/handover`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function fetchAdminRentalMandateDocuments(mandateId) { return request(`/admin/rental-mandates/${mandateId}/documents`); }
@@ -412,16 +476,6 @@ export function fetchAdminRentFinanceReviews(filters = {}) {
   return request(`/admin/tenancy/rent-reviews${query.toString() ? `?${query}` : ''}`);
 }
 export function fetchAdminRentFinanceProjects() { return request('/admin/tenancy/rent-reviews/projects'); }
-export async function fetchAdminRentReceipt(financeRecordId) {
-  const response = await fetch(`${API_BASE_URL}/admin/tenancy/rent-payments/${financeRecordId}/receipt`, { credentials: 'include' });
-  if (!response.ok) throw new Error(localizeApiErrorMessage('', response.status));
-  return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
-}
-
-export function getAdminRentReceiptUrl(financeRecordId) {
-  return `${API_BASE_URL}/admin/tenancy/rent-payments/${financeRecordId}/receipt`;
-}
-
 export function fetchAdminRentCollections(filters = {}) {
   const query = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== '') query.set(key, value); });
@@ -444,6 +498,7 @@ export function batchConfirmAdminRentCollections(payload) {
 }
 export function createAdminTenant(payload) { return request('/admin/tenancy/tenants', { method: 'POST', body: JSON.stringify(payload) }); }
 export function updateAdminTenant(tenantId, payload) { return request(`/admin/tenancy/tenants/${tenantId}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+export function updateAdminTenantStatus(tenantId, status) { return request(`/admin/tenancy/tenants/${tenantId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
 export function updateAdminTenantWhatsAppSubscription(tenantId, payload) { return request(`/admin/tenancy/tenants/${tenantId}/whatsapp-subscription`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function deleteAdminTenant(tenantId) { return request(`/admin/tenancy/tenants/${tenantId}`, { method: 'DELETE' }); }
 export function createAdminLease(payload) { return request('/admin/tenancy/leases', { method: 'POST', body: JSON.stringify(payload) }); }
@@ -465,7 +520,10 @@ export async function fetchAdminLeaseRenewalContract(leaseId, periodId, download
   if (!response.ok) {
     let message = `API request failed: ${response.status}`;
     try { message = (await response.json()).message || message; } catch { /* Keep status. */ }
-    throw new Error(localizeApiErrorMessage(message, response.status));
+    const error = new Error(localizeApiErrorMessage(message, response.status));
+    error.apiMessage = message;
+    error.status = response.status;
+    throw error;
   }
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
@@ -478,13 +536,27 @@ export function uploadAdminLeaseContract(leaseId, file) {
   const body = new FormData(); body.append('file', file);
   return request(`/admin/tenancy/leases/${leaseId}/contract`, { method: 'POST', body });
 }
+export function uploadAdminGeneratedLeaseContract(leaseId, file) {
+  const body = new FormData(); body.append('file', file);
+  return request(`/admin/tenancy/leases/${leaseId}/generated-contract`, { method: 'POST', body });
+}
 export function fetchAdminLeaseSignatureParticipants(leaseId) { return request(`/admin/e-signatures/leases/${leaseId}/participants`); }
 export function startAdminLeaseSignaturePackage(leaseId, payload) { return request(`/admin/e-signatures/leases/${leaseId}/package`, { method: 'POST', body: JSON.stringify(payload) }); }
 export function startAdminMandateDocumentSignature(mandateId, documentId, payload) { return request(`/admin/e-signatures/rental-mandates/${mandateId}/documents/${documentId}`, { method: 'POST', body: JSON.stringify(payload) }); }
 export function fetchAdminMandateSignatureParticipants(mandateId, documentId) { return request(`/admin/e-signatures/rental-mandates/${mandateId}/documents/${documentId}/participants`); }
 export function startAdminMandateSignaturePackage(mandateId, documentId, payload) { return request(`/admin/e-signatures/rental-mandates/${mandateId}/documents/${documentId}/package`, { method: 'POST', body: JSON.stringify(payload) }); }
+export function sendAdminElectronicSignatureInvitation(requestId, signingUrl, recipientEmail) {
+  const token = decodeURIComponent(new URL(String(signingUrl || ''), 'http://ccps.local').pathname.split('/').filter(Boolean).at(-1) || '');
+  return request(`/admin/e-signatures/requests/${requestId}/email`, { method: 'POST', body: JSON.stringify({ token, recipientEmail }) });
+}
+export function fetchAdminSignatureWhatsApp(requestId) {
+  return request(`/admin/e-signatures/requests/${requestId}/whatsapp`);
+}
+export function sendAdminSignatureWhatsApp(requestId, signingUrl, recipientPhone) {
+  const token = decodeURIComponent(new URL(String(signingUrl || ''), 'http://ccps.local').pathname.split('/').filter(Boolean).at(-1) || '');
+  return request(`/admin/e-signatures/requests/${requestId}/whatsapp`, { method: 'POST', body: JSON.stringify({ token, recipientPhone }) });
+}
 export function fetchPublicSignature(token) { return request(`/public/signatures/${token}`); }
-export function resendPublicSignatureCode(token) { return request(`/public/signatures/${token}/verification-code`, { method: 'POST' }); }
 export function signPublicSignature(token, payload) { return request(`/public/signatures/${token}/sign`, { method: 'POST', body: JSON.stringify(payload) }); }
 export async function fetchAdminLeaseContract(leaseId, download = false) {
   const response = await fetch(`${API_BASE_URL}/admin/tenancy/leases/${leaseId}/contract?download=${download}`, { credentials: 'include' });
@@ -506,9 +578,8 @@ export async function generateAdminContractTemplate(templateType, fields) {
     throw new Error(localizeApiErrorMessage(message, response.status));
   }
   const disposition = response.headers.get('Content-Disposition') || '';
-  const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
   const expectedExtension = '.pdf';
-  let filename = decodeURIComponent(match?.[1] || match?.[2] || `${templateType}${expectedExtension}`);
+  let filename = contentDispositionFilename(disposition, `${templateType}${expectedExtension}`);
   if (!filename.toLowerCase().endsWith(expectedExtension)) {
     filename = `${filename.replace(/\.[^.]+$/, '')}${expectedExtension}`;
   }
@@ -526,7 +597,10 @@ export async function fetchAdminContractTemplateFile(templateType) {
   if (!response.ok) {
     let message = `API request failed: ${response.status}`;
     try { message = (await response.json()).message || message; } catch { /* Keep status. */ }
-    throw new Error(localizeApiErrorMessage(message, response.status));
+    const error = new Error(localizeApiErrorMessage(message, response.status));
+    error.apiMessage = message;
+    error.status = response.status;
+    throw error;
   }
   return response.blob();
 }
@@ -563,8 +637,12 @@ export function rejectAdminFinanceReview(financeRecordId, note) {
   });
 }
 
-export function fetchAdminDashboard() {
-  return request('/admin/dashboard');
+export function fetchAdminDashboard(filters = {}) {
+  const query = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') query.set(key, value);
+  });
+  return request(`/admin/dashboard${query.size ? `?${query}` : ''}`);
 }
 
 export function createAdminReserveRefunds(payload) {
@@ -615,6 +693,10 @@ export async function fetchAdminFinanceProof(documentId, download = false) {
 
 export function fetchAdminAccounts() {
   return request('/admin/accounts');
+}
+
+export function fetchAdminOwnerStaffOptions() {
+  return request('/admin/owners/staff-options');
 }
 
 export function createAdminAccount(payload) {
@@ -743,13 +825,20 @@ export function deleteAdminPropertyContractRecord(ownerId, ownerUnitId, contract
 
 export async function downloadAdminPropertyContractRecord(ownerId, ownerUnitId, contractId) {
   const response = await fetch(`${API_BASE_URL}/admin/owners/${ownerId}/properties/${ownerUnitId}/contracts/${contractId}/file`, { credentials: 'include' });
-  if (!response.ok) throw new Error(`下載合約附件失敗：${response.status}`);
+  if (!response.ok) throw new Error(`${translateLegacyText('下載合約附件失敗')}：${response.status}`);
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
-export function fetchAdminPropertyPhotos(ownerId, ownerUnitId, leaseId = null) {
-  const query = leaseId == null ? '' : `?leaseId=${encodeURIComponent(leaseId)}`;
-  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/photos${query}`);
+export function fetchAdminPropertyPhotos(ownerId, ownerUnitId, leaseId = null, versionMonth = null) {
+  const query = new URLSearchParams();
+  if (leaseId != null) query.set('leaseId', leaseId);
+  if (versionMonth) query.set('versionMonth', versionMonth);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/photos${suffix}`);
+}
+
+export function fetchAdminPropertyPhotoVersions(ownerId, ownerUnitId) {
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/photos/versions`);
 }
 
 function propertyPhotoBody(payload, file) {
@@ -812,7 +901,7 @@ export function deleteAdminPropertyAttachment(ownerId, ownerUnitId, attachmentId
 
 export async function downloadAdminPropertyAttachment(ownerId, ownerUnitId, attachmentId) {
   const response = await fetch(`${API_BASE_URL}/admin/owners/${ownerId}/properties/${ownerUnitId}/attachments/${attachmentId}/file`, { credentials: 'include' });
-  if (!response.ok) throw new Error(`下載相關附件失敗：${response.status}`);
+  if (!response.ok) throw new Error(`${translateLegacyText('下載相關附件失敗')}：${response.status}`);
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
@@ -868,7 +957,7 @@ export function deleteAdminPropertyHandoverReport(ownerId, ownerUnitId, reportId
 
 export async function downloadAdminPropertyHandoverReport(ownerId, ownerUnitId, reportId) {
   const response = await fetch(`${API_BASE_URL}/admin/owners/${ownerId}/properties/${ownerUnitId}/handover-reports/${reportId}/file`, { credentials: 'include' });
-  if (!response.ok) throw new Error(`下載交屋報告附件失敗：${response.status}`);
+  if (!response.ok) throw new Error(`${translateLegacyText('下載交屋報告附件失敗')}：${response.status}`);
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
@@ -921,8 +1010,9 @@ function propertyCashflowBody(payload, file) {
   return body;
 }
 
-export function fetchAdminPropertyCashflows(ownerId, ownerUnitId) {
-  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/income-expenses`);
+export function fetchAdminMonthlyCashflowUnits() { return request('/admin/expenses/monthly-units'); }
+export function fetchAdminPropertyCashflows(ownerId, ownerUnitId, month = '') {
+  return request(`/admin/owners/${ownerId}/properties/${ownerUnitId}/income-expenses${month ? `?month=${encodeURIComponent(month)}` : ''}`);
 }
 
 export function createAdminPropertyCashflow(ownerId, ownerUnitId, payload, file) {
@@ -943,7 +1033,7 @@ export function deleteAdminPropertyCashflow(ownerId, ownerUnitId, cashflowId) {
 
 export async function downloadAdminPropertyCashflowProof(ownerId, ownerUnitId, cashflowId) {
   const response = await fetch(`${API_BASE_URL}/admin/owners/${ownerId}/properties/${ownerUnitId}/income-expenses/${cashflowId}/proof`, { credentials: 'include' });
-  if (!response.ok) throw new Error(`下載收支憑證失敗：${response.status}`);
+  if (!response.ok) throw new Error(`${translateLegacyText('下載收支憑證失敗')}：${response.status}`);
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
@@ -1131,7 +1221,7 @@ export async function fetchAdminMaintenanceAttachment(documentId, download = fal
   const response = await fetch(`${API_BASE_URL}/admin/expenses/attachments/${documentId}?download=${download}`, {
     credentials: 'include'
   });
-  if (!response.ok) throw new Error(`維修附件讀取失敗：${response.status}`);
+  if (!response.ok) throw new Error(`${translateLegacyText('維修附件讀取失敗')}：${response.status}`);
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
@@ -1249,8 +1339,22 @@ export function fetchOwnerDocuments() {
   return request('/owner/documents');
 }
 
-export async function fetchOwnerDocumentFile(documentId, download = false) {
-  const response = await fetch(`${API_BASE_URL}/owner/documents/${documentId}/file?download=${download}`, {
+export function fetchAdminSignatureOwnerRecipients(id) { return request(`/admin/e-signatures/requests/${id}/owner-recipients`); }
+export function dispatchAdminOwnerSignature(id, ownerId) { return request(`/admin/e-signatures/requests/${id}/owner-app`, { method: 'POST', body: JSON.stringify({ ownerId }) }); }
+export function fetchOwnerSignatures() { return request('/owner/signatures', { cache: 'no-store' }); }
+export function fetchOwnerSignature(id) { return request(`/owner/signatures/${id}`, { cache: 'no-store' }); }
+export function signOwnerSignature(id, payload) { return request(`/owner/signatures/${id}/sign`, { method: 'POST', body: JSON.stringify(payload) }); }
+export async function fetchOwnerSignatureFile(id, signed = false) {
+  const response = await fetch(`${API_BASE_URL}/owner/signatures/${id}/file?signed=${Boolean(signed)}`, { credentials: 'include', cache: 'no-store' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(localizeApiErrorMessage(body.message || `HTTP ${response.status}`, response.status));
+  }
+  return { blob: await response.blob() };
+}
+
+export async function fetchOwnerDocumentFile(documentId, download = false, source = 'document') {
+  const response = await fetch(`${API_BASE_URL}${ownerDocumentFilePath(documentId, download, source)}`, {
     credentials: 'include'
   });
   if (!response.ok) {
@@ -1266,6 +1370,10 @@ export async function fetchOwnerDocumentFile(documentId, download = false) {
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }
 
+export function fetchOwnerAccount() { return request('/owner/account'); }
+export function updateOwnerAccount(contact) { return request('/owner/account', { method: 'PUT', body: JSON.stringify(contact) }); }
+export function changeOwnerPassword(password) { return request('/owner/account/password', { method: 'PUT', body: JSON.stringify(password) }); }
+
 export function fetchOwnerPropertyHandoverReports(ownerUnitId) {
   return request(`/owner/properties/${ownerUnitId}/handover-reports`);
 }
@@ -1276,6 +1384,10 @@ export function fetchOwnerPropertyInformation(ownerUnitId) {
 
 export function fetchOwnerPropertyCashflows(ownerUnitId) {
   return request(`/owner/properties/${ownerUnitId}/cashflows`);
+}
+
+export function fetchOwnerPropertyDetail(ownerUnitId) {
+  return request(`/owner/properties/${ownerUnitId}/detail`);
 }
 
 export async function fetchOwnerPropertyHandoverReportFile(ownerUnitId, reportId, download = false) {
@@ -1290,7 +1402,10 @@ export async function fetchOwnerPropertyHandoverReportFile(ownerUnitId, reportId
     } catch {
       // Keep the HTTP status when the server does not return JSON.
     }
-    throw new Error(localizeApiErrorMessage(message, response.status));
+    const error = new Error(localizeApiErrorMessage(message, response.status));
+    error.apiMessage = message;
+    error.status = response.status;
+    throw error;
   }
   return { blob: await response.blob(), contentDisposition: response.headers.get('Content-Disposition') || '' };
 }

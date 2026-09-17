@@ -3,6 +3,7 @@ package com.ccps.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +41,7 @@ import com.ccps.backend.dto.ElectronicSignaturePackageRequest;
 import com.ccps.backend.dto.ElectronicSignatureParticipantRequest;
 import com.ccps.backend.dto.ElectronicSignatureStartResponse;
 import com.ccps.backend.mapper.ElectronicSignatureMapper;
+import com.ccps.backend.mapper.ElectronicSignatureMapper.NewDocument;
 import com.ccps.backend.mapper.ElectronicSignatureMapper.NewRequest;
 import com.ccps.backend.mapper.ElectronicSignatureMapper.NewNotification;
 import com.ccps.backend.mapper.ElectronicSignatureMapper.ParticipantRow;
@@ -57,6 +59,21 @@ class ElectronicSignatureServiceTest {
     @Mock private ElectronicSignatureMapper mapper;
     @Mock private JavaMailSender mailSender;
     @TempDir Path tempDir;
+
+    @org.junit.jupiter.api.BeforeEach
+    void pendingRequestLock() { org.mockito.Mockito.lenient().when(mapper.lockRequestStatus(any())).thenReturn("pending"); }
+
+    @Test void appRequestIdCannotResignAfterAnotherChannelCompleted() {
+        RequestRow pending = requestRow("pending", null, null);
+        when(mapper.findById(91L)).thenReturn(pending);
+        when(mapper.lockRequestStatus(91L)).thenReturn("signed");
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, null, "", "", "CCPS",
+            "http://localhost", tempDir.toString(),tempDir.toString(),tempDir.toString(),
+            Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
+        assertThatThrownBy(() -> service.signById(91L,new ElectronicSignatureSignRequest("Test", "invalid", null, true),"127.0.0.1","JUnit"))
+            .isInstanceOf(ResponseStatusException.class).hasMessageContaining("already closed");
+        verify(mapper, never()).insertSignedDocument(any());
+    }
 
     @Test void startsTheCompanyPmaStepFromTheOwnerSignedPdf() throws Exception {
         Path mandateRoot = tempDir.resolve("rental-mandates");
@@ -170,7 +187,60 @@ class ElectronicSignatureServiceTest {
                 .containsExactly("owner", "company", "customer_service");
         assertThat(stored).extracting(NewRequest::getStatus).containsOnly("pending");
         assertThat(stored).extracting(NewRequest::getSourceDocumentId).containsOnly(81L);
-        verify(mailSender, times(3)).send(any(org.springframework.mail.SimpleMailMessage.class));
+        verify(mailSender, never()).send(any(org.springframework.mail.SimpleMailMessage.class));
+    }
+
+    @Test void upgradesAOnePageHistoricalOtrBeforeReissuingSigningLinks() throws Exception {
+        Path mandateRoot = tempDir.resolve("rental-mandates");
+        Path oldOtr = mandateRoot.resolve("25/otr.pdf");
+        Path appointment = mandateRoot.resolve("25/appointment.pdf");
+        Files.createDirectories(oldOtr.getParent());
+        writeSinglePagePdf(oldOtr, "Historical offer page");
+        writeSinglePagePdf(appointment, "Appointment page");
+
+        ElectronicSignatureMapper.DocumentRow otr = new ElectronicSignatureMapper.DocumentRow();
+        otr.setId(18L); otr.setOriginalName("otr.pdf"); otr.setStorageKey("25/otr.pdf");
+        otr.setMimeType("application/pdf"); otr.setChecksumSha256("old-hash"); otr.setRelationType("otr");
+        ElectronicSignatureMapper.DocumentRow appointmentDocument = new ElectronicSignatureMapper.DocumentRow();
+        appointmentDocument.setId(1L); appointmentDocument.setOriginalName("authorization.pdf");
+        appointmentDocument.setStorageKey("25/appointment.pdf"); appointmentDocument.setMimeType("application/pdf");
+        appointmentDocument.setRelationType("rental_appointment_draft");
+        when(mapper.findMandateDocument(25L, 18L)).thenReturn(otr);
+        when(mapper.findCurrentMandateDocumentByRelation(25L, "rental_appointment_draft"))
+                .thenReturn(appointmentDocument);
+        AtomicReference<NewDocument> upgraded = new AtomicReference<>();
+        when(mapper.insertMandateSourceDocument(any(NewDocument.class), any(String.class))).thenAnswer(call -> {
+            NewDocument row = call.getArgument(0); row.setId(118L); upgraded.set(row); return 1;
+        });
+        when(mapper.insertMandateSourceDocumentLink(118L, 25L, "otr")).thenReturn(1);
+        when(mapper.supersedeMandateSourceDocument(18L)).thenReturn(1);
+        when(mapper.upsertParticipant(any(ParticipantRow.class))).thenReturn(1);
+        when(mapper.insertRequest(any(NewRequest.class))).thenAnswer(call -> {
+            NewRequest row = call.getArgument(0); row.setId(200L + row.getSigningOrder()); return 1;
+        });
+
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example",
+                "noreply@example.test", "CCPS", "http://localhost:5173",
+                tempDir.resolve("lease-contracts").toString(), mandateRoot.toString(),
+                tempDir.resolve("signatures").toString(),
+                Clock.fixed(Instant.parse("2026-08-28T07:45:00Z"), ZoneOffset.UTC));
+        service.startMandatePackage(7L, 25L, 18L, new ElectronicSignaturePackageRequest(List.of(
+                new ElectronicSignatureParticipantRequest("tenant", "租客", "tenant@example.test"),
+                new ElectronicSignatureParticipantRequest("tenant_witness", "租客见证人", ""),
+                new ElectronicSignatureParticipantRequest("owner", "业主", "owner@example.test"),
+                new ElectronicSignatureParticipantRequest("owner_witness", "业主见证人", "")
+        ), 7));
+
+        Path upgradedFile = mandateRoot.resolve(upgraded.get().getStorageKey());
+        try (PdfReader reader = new PdfReader(Files.readAllBytes(upgradedFile))) {
+            assertThat(reader.getNumberOfPages()).isEqualTo(2);
+            PdfTextExtractor extractor = new PdfTextExtractor(reader);
+            assertThat(extractor.getTextFromPage(1, true)).contains("Historical offer page");
+            assertThat(extractor.getTextFromPage(2, true)).contains("Appointment page");
+        }
+        verify(mapper).supersedeRequestsForRoot(18L);
+        verify(mapper).supersedeMandateSourceDocument(18L);
+        verify(mapper, times(4)).upsertParticipant(any(ParticipantRow.class));
     }
 
     @Test void startsLeasePackageForAllFourPartiesAtTheSameTime() throws Exception {
@@ -196,9 +266,9 @@ class ElectronicSignatureServiceTest {
                 tempDir.resolve("signatures").toString(), Clock.fixed(Instant.parse("2026-08-19T01:00:00Z"), ZoneOffset.UTC));
         ElectronicSignatureStartResponse response = service.startLeasePackage(7L, 18L, new ElectronicSignaturePackageRequest(List.of(
                 new ElectronicSignatureParticipantRequest("owner", "房主", "owner@example.test"),
-                new ElectronicSignatureParticipantRequest("owner_witness", "房主见证人", "owner-witness@example.test"),
+                new ElectronicSignatureParticipantRequest("owner_witness", "房主见证人", ""),
                 new ElectronicSignatureParticipantRequest("tenant", "租客", "tenant@example.test"),
-                new ElectronicSignatureParticipantRequest("tenant_witness", "租客见证人", "tenant-witness@example.test")
+                new ElectronicSignatureParticipantRequest("tenant_witness", "租客见证人", null)
         ), 7));
 
         verify(mapper).voidSignedDocumentsForRoot(81L);
@@ -209,46 +279,73 @@ class ElectronicSignatureServiceTest {
         assertThat(stored).extracting(NewRequest::getEntityType).containsOnly("lease");
         assertThat(stored).extracting(NewRequest::getEntityId).containsOnly(18L);
         assertThat(stored).extracting(NewRequest::getStatus).containsOnly("pending");
+        assertThat(stored).extracting(NewRequest::getSignerEmail)
+                .containsExactly("owner@example.test", "", "tenant@example.test", "");
         assertThat(response.signingLinks()).extracting("signerRole")
                 .containsExactly("owner", "owner_witness", "tenant", "tenant_witness");
         assertThat(response.signingLinks()).allSatisfy(link ->
                 assertThat(link.signingUrl()).startsWith("http://localhost:5173/sign/"));
-        verify(mailSender, times(4)).send(any(org.springframework.mail.SimpleMailMessage.class));
+        verify(mailSender, never()).send(any(org.springframework.mail.SimpleMailMessage.class));
     }
 
-    @Test void reportsUnavailableInsteadOfHttp500WhenLeaseInvitationEmailCannotConnect() throws Exception {
-        Path leaseRoot = tempDir.resolve("lease-contracts");
-        Path original = leaseRoot.resolve("18/lease.pdf");
-        Files.createDirectories(original.getParent());
-        try (var output = Files.newOutputStream(original)) {
-            Document pdf = new Document(); PdfWriter.getInstance(pdf, output); pdf.open();
-            pdf.add(new Paragraph("Tenancy agreement")); pdf.close();
-        }
-        ElectronicSignatureMapper.DocumentRow document = new ElectronicSignatureMapper.DocumentRow();
-        document.setId(81L); document.setOriginalName("lease.pdf"); document.setStorageKey("18/lease.pdf");
-        document.setMimeType("application/pdf"); document.setChecksumSha256("source-hash");
-        when(mapper.findLeaseDocument(18L)).thenReturn(document);
-        when(mapper.upsertParticipant(any(ParticipantRow.class))).thenReturn(1);
-        AtomicReference<Long> requestId = new AtomicReference<>(101L);
-        when(mapper.insertRequest(any())).thenAnswer(call -> {
-            call.<NewRequest>getArgument(0).setId(requestId.getAndSet(requestId.get() + 1)); return 1;
-        });
+    @Test void reportsUnavailableInsteadOfHttp500WhenExplicitInvitationEmailCannotConnect() {
+        RequestRow pending = requestRow("pending", null, null);
+        when(mapper.findByTokenHash(any())).thenReturn(pending);
+        when(mapper.updateRequestSignerEmail(91L, "delivery@example.test")).thenReturn(1);
         org.mockito.Mockito.doThrow(new org.springframework.mail.MailSendException("SMTP unavailable"))
                 .when(mailSender).send(any(org.springframework.mail.SimpleMailMessage.class));
         ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.qq.com", "noreply@example.test",
-                "CCPS", "http://localhost:5173", leaseRoot.toString(), tempDir.resolve("rental-mandates").toString(),
-                tempDir.resolve("signatures").toString(), Clock.systemUTC());
+                "CCPS", "http://localhost:5173", tempDir.resolve("lease-contracts").toString(), tempDir.resolve("rental-mandates").toString(),
+                tempDir.resolve("signatures").toString(), Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
 
-        assertThatThrownBy(() -> service.startLeasePackage(7L, 18L,
-                new ElectronicSignaturePackageRequest(List.of(
-                        new ElectronicSignatureParticipantRequest("owner", "房主", "owner@example.test"),
-                        new ElectronicSignatureParticipantRequest("owner_witness", "房主见证人", "owner-witness@example.test"),
-                        new ElectronicSignatureParticipantRequest("tenant", "租客", "tenant@example.test"),
-                        new ElectronicSignatureParticipantRequest("tenant_witness", "租客见证人", "tenant-witness@example.test")
-                ), 7)))
+        assertThatThrownBy(() -> service.sendInvitationEmail(7L, 91L,
+                "a-valid-one-time-token-with-more-than-thirty-two-chars", "delivery@example.test"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode())
                                 .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE));
+    }
+
+    @Test void sendsAGeneratedSigningLinkByEmailWithoutVerificationCode() {
+        RequestRow pending = requestRow("pending", null, null);
+        when(mapper.findByTokenHash(any())).thenReturn(pending);
+        when(mapper.updateRequestSignerEmail(91L, "delivery@example.test")).thenReturn(1);
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example", "noreply@example.test",
+                "CCPS", "http://localhost:5173", tempDir.resolve("lease-contracts").toString(),
+                tempDir.resolve("rental-mandates").toString(), tempDir.resolve("signatures").toString(),
+                Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
+
+        service.sendInvitationEmail(7L, 91L, "a-valid-one-time-token-with-more-than-thirty-two-chars",
+                "Delivery@Example.Test");
+
+        var message = org.mockito.ArgumentCaptor.forClass(org.springframework.mail.SimpleMailMessage.class);
+        verify(mailSender).send(message.capture());
+        assertThat(message.getValue().getTo()).containsExactly("delivery@example.test");
+        assertThat(message.getValue().getText()).contains("http://localhost:5173/sign/a-valid-one-time-token-with-more-than-thirty-two-chars");
+        assertThat(message.getValue().getText()).doesNotContain("验证码", "驗證碼", "123456");
+        verify(mapper).insertEvent(91L, "invitation_email_sent", "Signing invitation sent by email", null, null);
+        verify(mapper).updateRequestSignerEmail(91L, "delivery@example.test");
+    }
+
+    @Test
+    void rejectsBlankAndSingleLineImagesButAcceptsARealSignatureShape() throws Exception {
+        BufferedImage blank = new BufferedImage(180, 90, BufferedImage.TYPE_INT_ARGB);
+        ByteArrayOutputStream blankOutput = new ByteArrayOutputStream();
+        ImageIO.write(blank, "png", blankOutput);
+
+        BufferedImage line = new BufferedImage(180, 90, BufferedImage.TYPE_INT_ARGB);
+        var lineGraphics = line.createGraphics();
+        lineGraphics.setColor(Color.BLACK);
+        lineGraphics.setStroke(new BasicStroke(4f));
+        lineGraphics.drawLine(10, 45, 165, 45);
+        lineGraphics.dispose();
+        ByteArrayOutputStream lineOutput = new ByteArrayOutputStream();
+        ImageIO.write(line, "png", lineOutput);
+
+        byte[] realSignature = Base64.getDecoder().decode(
+                tallSignatureDataUrl().substring("data:image/png;base64,".length()));
+        assertThat(ElectronicSignatureService.hasMeaningfulSignatureInk(blankOutput.toByteArray())).isFalse();
+        assertThat(ElectronicSignatureService.hasMeaningfulSignatureInk(lineOutput.toByteArray())).isFalse();
+        assertThat(ElectronicSignatureService.hasMeaningfulSignatureInk(realSignature)).isTrue();
     }
 
     @Test void parallelOtrSignaturesMergeIntoTheLatestDocumentAndCompleteInAnyOrder() throws Exception {
@@ -280,10 +377,27 @@ class ElectronicSignatureServiceTest {
                 tempDir.resolve("rental-mandates").toString(), signatureRoot.toString(),
                 Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
         service.sign("a-valid-one-time-token-with-more-than-thirty-two-chars",
-                new ElectronicSignatureSignRequest("屋主见证人", "123456", signatureDataUrl(), null, true), "127.0.0.1", "JUnit");
+                new ElectronicSignatureSignRequest("屋主见证人", signatureDataUrl(), null, true), "127.0.0.1", "JUnit");
 
         verify(mapper).insertSignedMandateDocumentLink(94L, 21L, "otr_signed");
         assertThat(signatureRoot.resolve("91/signed-contract.pdf")).isRegularFile();
+    }
+
+    @Test void authenticatedAppSigningByIdProducesPdfWithoutPublicToken() throws Exception {
+        Path leaseRoot=tempDir.resolve("app-lease"); Path original=leaseRoot.resolve("12/original.pdf");
+        Files.createDirectories(original.getParent()); writeSinglePagePdf(original,"TEST ONLY - App request");
+        byte[] bytes=Files.readAllBytes(original);
+        RequestRow pending=requestRow("pending",null,null);
+        RequestRow signed=requestRow("signed","91/signed-contract.pdf",LocalDateTime.of(2026,7,23,8,0));
+        when(mapper.findById(91L)).thenReturn(pending,signed);
+        when(mapper.insertSignedDocument(any())).thenAnswer(call->{call.<NewDocument>getArgument(0).setId(92L);return 1;});
+        when(mapper.insertSignedDocumentLink(92L,"lease",12L)).thenReturn(1);
+        when(mapper.completeRequest(any(),any(),any(),any(),any(),any())).thenReturn(1);
+        ElectronicSignatureService service=new ElectronicSignatureService(mapper,null,"","","CCPS","http://localhost",leaseRoot.toString(),tempDir.toString(),tempDir.resolve("signed").toString(),Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"),ZoneOffset.UTC));
+        assertThat(service.signById(91L,new ElectronicSignatureSignRequest(pending.getSignerName(),signatureDataUrl(),null,true),"127.0.0.1","App Test").status()).isEqualTo("signed");
+        assertThat(Files.readAllBytes(original)).isEqualTo(bytes);
+        assertThat(tempDir.resolve("signed/91/signed-contract.pdf")).isRegularFile();
+        verify(mapper,never()).findByTokenHash(any());
     }
 
     @Test void signingCreatesSeparatePdfWithoutChangingTheOriginalContract() throws Exception {
@@ -302,12 +416,35 @@ class ElectronicSignatureServiceTest {
                 tempDir.resolve("signatures").toString(), Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
 
         var result = service.sign("a-valid-one-time-token-with-more-than-thirty-two-chars",
-                new ElectronicSignatureSignRequest("李建偉", "123456", signatureDataUrl(), null, true), "127.0.0.1", "JUnit");
+                new ElectronicSignatureSignRequest("李建偉", signatureDataUrl(), null, true), "127.0.0.1", "JUnit");
 
         assertThat(result.status()).isEqualTo("signed");
         assertThat(Files.readAllBytes(original)).isEqualTo(originalBytes);
         assertThat(Files.size(tempDir.resolve("signatures/91/signed-contract.pdf"))).isGreaterThan(0);
         verify(mapper).insertEvent(91L, "signed", "Contract signed", "127.0.0.1", "JUnit");
+    }
+
+    @Test void earlierSignerCanDownloadTheLatestCompletedPackageDocument() throws Exception {
+        Path signatureRoot = tempDir.resolve("signatures");
+        Path latestFile = signatureRoot.resolve("94/signed-contract.pdf");
+        Files.createDirectories(latestFile.getParent());
+        Files.writeString(latestFile, "latest signed package");
+        RequestRow signed = requestRow("signed", "91/signed-contract.pdf", LocalDateTime.of(2026, 7, 23, 16, 0));
+        signed.setRootDocumentId(81L);
+        signed.setSignedDocumentStatus("superseded");
+        ElectronicSignatureMapper.DocumentRow latest = new ElectronicSignatureMapper.DocumentRow();
+        latest.setStorageKey("94/signed-contract.pdf");
+        latest.setOriginalName("lease-package-已签署.pdf");
+        when(mapper.findByTokenHash(any())).thenReturn(signed);
+        when(mapper.findLatestActiveSignedDocument(81L)).thenReturn(latest);
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example", "noreply@example.test",
+                "CCPS", "http://localhost:5173", tempDir.resolve("lease-contracts").toString(),
+                tempDir.resolve("rental-mandates").toString(), signatureRoot.toString(), Clock.systemUTC());
+
+        var download = service.downloadSigned("a-valid-one-time-token-with-more-than-thirty-two-chars");
+
+        assertThat(download.path()).isEqualTo(latestFile);
+        assertThat(download.originalName()).isEqualTo("lease-package-已签署.pdf");
     }
 
     @Test void ownerSigningNotifiesTheAdminWhoStartedTheRequest() throws Exception {
@@ -341,7 +478,7 @@ class ElectronicSignatureServiceTest {
                 Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
 
         service.sign("a-valid-one-time-token-with-more-than-thirty-two-chars",
-                new ElectronicSignatureSignRequest("屋主甲", "123456", signatureDataUrl(), null, true),
+                new ElectronicSignatureSignRequest("屋主甲", signatureDataUrl(), null, true),
                 "127.0.0.1", "JUnit");
 
         var notification = org.mockito.ArgumentCaptor.forClass(NewNotification.class);
@@ -380,7 +517,38 @@ class ElectronicSignatureServiceTest {
         assertThat(placement.dateX()).isGreaterThan(placement.signatureX());
     }
 
-    @Test void placesOnlyTenantDirectlyAboveEveryPageNumberAndAllFourPartiesInTheirExecutionBoxes() throws Exception {
+    @Test void publicSigningResponseTargetsTheMainSignaturePageForEverySigner() throws Exception {
+        Path leaseRoot = tempDir.resolve("lease-contracts");
+        Path original = leaseRoot.resolve("12/original.pdf");
+        Files.createDirectories(original.getParent());
+        try (var output = Files.newOutputStream(original)) {
+            Document pdf = new Document();
+            PdfWriter.getInstance(pdf, output); pdf.open();
+            for (int page = 1; page <= 22; page++) {
+                pdf.add(new Paragraph("Lease page " + page));
+                if (page < 22) pdf.newPage();
+            }
+            pdf.close();
+        }
+        RequestRow pending = requestRow("pending", null, null);
+        pending.setDocumentKind("lease_contract");
+        pending.setSignerRole("tenant");
+        when(mapper.findByTokenHash(any())).thenReturn(pending);
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example",
+                "noreply@example.test", "CCPS", "http://localhost:5173", leaseRoot.toString(),
+                tempDir.resolve("rental-mandates").toString(), tempDir.resolve("signatures").toString(),
+                Clock.fixed(Instant.parse("2026-07-23T08:00:00Z"), ZoneOffset.UTC));
+
+        var response = service.publicView("a-valid-one-time-token-with-more-than-thirty-two-chars");
+
+        assertThat(response.signaturePage()).isEqualTo(12);
+        assertThat(ElectronicSignatureService.defaultSignaturePage("property_management_agreement_draft")).isEqualTo(7);
+        assertThat(ElectronicSignatureService.defaultSignaturePage("management_authorization_draft")).isEqualTo(3);
+        assertThat(ElectronicSignatureService.defaultSignaturePage("termination_letter_draft")).isEqualTo(2);
+        assertThat(ElectronicSignatureService.defaultSignaturePage("otr")).isEqualTo(1);
+    }
+
+    @Test void placesTenantInitialsInClearFooterSpaceAndAllFourPartiesInTheirExecutionBoxes() throws Exception {
         Path template = tempDir.resolve("lease-template.pdf");
         try (var output = Files.newOutputStream(template)) {
             Document pdf = new Document();
@@ -412,26 +580,28 @@ class ElectronicSignatureServiceTest {
                     (List<ElectronicSignatureService.SignaturePlacement>) method.invoke(service, "lease_contract", "tenant_witness", reader);
 
             assertThat(ownerPlacements).hasSize(1);
-            assertThat(tenantPlacements.stream().filter(placement -> placement.signatureY() == 28f)).hasSize(21)
+            assertThat(tenantPlacements.stream().filter(placement -> placement.signatureY() == 20f)).hasSize(19)
                     .extracting(ElectronicSignatureService.SignaturePlacement::page)
-                    .containsExactlyElementsOf(IntStream.rangeClosed(2, 22).boxed().toList());
-            assertThat(tenantPlacements.stream().filter(placement -> placement.signatureY() == 28f))
+                    .containsExactlyElementsOf(IntStream.rangeClosed(2, 22)
+                            .filter(page -> page != 12 && page != 19).boxed().toList());
+            assertThat(tenantPlacements.stream().filter(placement -> placement.signatureY() == 20f))
                     .allSatisfy(placement -> {
-                        assertThat(placement.signatureX()).isEqualTo(420f);
-                        assertThat(placement.signatureWidth()).isEqualTo(110f);
-                        assertThat(placement.signatureHeight()).isEqualTo(42f);
+                        assertThat(placement.signatureX()).isEqualTo(265f);
+                        assertThat(placement.signatureWidth()).isEqualTo(42f);
+                        assertThat(placement.signatureHeight()).isEqualTo(18f);
+                        assertThat(placement.signatureX() + placement.signatureWidth()).isLessThan(360f);
                     });
             assertThat(ownerPlacements.stream().filter(placement -> placement.page() == 12))
                     .singleElement().satisfies(placement -> {
                         assertThat(placement.signatureX()).isEqualTo(375f);
                         assertThat(placement.signatureY()).isEqualTo(640f);
                     });
-            assertThat(tenantPlacements.stream().filter(placement -> placement.page() == 12 && placement.signatureY() != 28f))
+            assertThat(tenantPlacements.stream().filter(placement -> placement.page() == 12))
                     .singleElement().satisfies(placement -> {
                         assertThat(placement.signatureX()).isEqualTo(375f);
                         assertThat(placement.signatureY()).isEqualTo(385f);
                     });
-            assertThat(tenantPlacements.stream().filter(placement -> placement.page() == 19 && placement.signatureY() != 28f))
+            assertThat(tenantPlacements.stream().filter(placement -> placement.page() == 19))
                     .singleElement().satisfies(placement -> {
                         assertThat(placement.signatureX()).isEqualTo(95f);
                         assertThat(placement.signatureY()).isEqualTo(585f);
@@ -445,7 +615,7 @@ class ElectronicSignatureServiceTest {
             assertThat(tenantWitnessPlacements).extracting(ElectronicSignatureService.SignaturePlacement::page)
                     .containsExactly(12, 19);
             assertThat(tenantPlacements.stream().filter(placement -> placement.page() == 22))
-                    .singleElement().satisfies(placement -> assertThat(placement.signatureY()).isEqualTo(28f));
+                    .singleElement().satisfies(placement -> assertThat(placement.signatureY()).isEqualTo(20f));
         }
     }
 
@@ -536,6 +706,18 @@ class ElectronicSignatureServiceTest {
                 assertThat(placement.dateX()).isZero();
                 assertThat(placement.dateY()).isZero();
             });
+            @SuppressWarnings("unchecked")
+            List<ElectronicSignatureService.SignaturePlacement> secondOwner =
+                    (List<ElectronicSignatureService.SignaturePlacement>) placementsMethod.invoke(
+                            service, "rental_appointment_draft", "second_owner", reader);
+            @SuppressWarnings("unchecked")
+            List<ElectronicSignatureService.SignaturePlacement> witness =
+                    (List<ElectronicSignatureService.SignaturePlacement>) placementsMethod.invoke(
+                            service, "rental_appointment_draft", "witness", reader);
+            assertThat(secondOwner).singleElement().satisfies(placement ->
+                    assertThat(placement.signatureX()).isEqualTo(245f));
+            assertThat(witness).singleElement().satisfies(placement ->
+                    assertThat(placement.signatureX()).isEqualTo(415f));
         }
 
         Method stampMethod = ElectronicSignatureService.class.getDeclaredMethod("stampSignedPdf",
@@ -556,14 +738,14 @@ class ElectronicSignatureServiceTest {
         }
     }
 
-    @Test void terminationLetterPlacesOnlyTheOwnerSignatureOnPageTwo() throws Exception {
+    @Test void terminationLetterPlacesOwnerAndCompanySignaturesOnPageTwo() throws Exception {
         ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example", "noreply@example.test",
                 "CCPS", "http://localhost:5173", tempDir.resolve("lease-contracts").toString(), tempDir.resolve("rental-mandates").toString(),
                 tempDir.resolve("signatures").toString(), Clock.systemUTC());
         Method placementsMethod = ElectronicSignatureService.class.getDeclaredMethod(
                 "signaturePlacements", String.class, String.class, PdfReader.class);
         placementsMethod.setAccessible(true);
-        try (var input = getClass().getResourceAsStream("/contract-templates/ccps-termination-letter-v1.pdf");
+        try (var input = getClass().getResourceAsStream("/contract-templates/flattened/ccps-termination-letter-v1.pdf");
                 PdfReader reader = new PdfReader(input)) {
             @SuppressWarnings("unchecked")
             List<ElectronicSignatureService.SignaturePlacement> placements =
@@ -578,6 +760,56 @@ class ElectronicSignatureServiceTest {
                 assertThat(placement.dateX()).isZero();
                 assertThat(placement.dateY()).isZero();
             });
+
+            @SuppressWarnings("unchecked")
+            List<ElectronicSignatureService.SignaturePlacement> companyPlacements =
+                    (List<ElectronicSignatureService.SignaturePlacement>) placementsMethod.invoke(
+                            service, "termination_letter_draft", "company", reader);
+            assertThat(companyPlacements).singleElement().satisfies(placement -> {
+                assertThat(placement.page()).isEqualTo(2);
+                assertThat(placement.signatureX()).isEqualTo(54f);
+                assertThat(placement.signatureY()).isEqualTo(139f);
+                assertThat(placement.signatureWidth()).isEqualTo(165f);
+                assertThat(placement.signatureHeight()).isEqualTo(32f);
+            });
+
+            Method rolesMethod = ElectronicSignatureService.class.getDeclaredMethod("multiSignerRoles", String.class);
+            rolesMethod.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<String> roles = (List<String>) rolesMethod.invoke(service, "termination_letter_draft");
+            assertThat(roles)
+                    .containsExactly("owner", "company");
+        }
+
+        Method relationMethod = ElectronicSignatureService.class.getDeclaredMethod(
+                "signedRelation", RequestRow.class, boolean.class);
+        relationMethod.setAccessible(true);
+        RequestRow row = new RequestRow();
+        row.setDocumentKind("termination_letter_draft");
+        assertThat(relationMethod.invoke(service, row, false)).isEqualTo("termination_letter_partial");
+        assertThat(relationMethod.invoke(service, row, true)).isEqualTo("termination_letter_signed");
+
+        Path source = tempDir.resolve("termination-letter.pdf");
+        Path ownerSigned = tempDir.resolve("termination-letter-owner-signed.pdf");
+        Path fullySigned = tempDir.resolve("termination-letter-fully-signed.pdf");
+        try (var input = getClass().getResourceAsStream("/contract-templates/flattened/ccps-termination-letter-v1.pdf")) {
+            Files.copy(Objects.requireNonNull(input), source);
+        }
+        Method stampMethod = ElectronicSignatureService.class.getDeclaredMethod("stampSignedPdf",
+                Path.class, Path.class, byte[].class, String.class, String.class, LocalDateTime.class,
+                String.class, String.class);
+        stampMethod.setAccessible(true);
+        byte[] ink = Base64.getDecoder().decode(tallSignatureDataUrl().substring("data:image/png;base64,".length()));
+        stampMethod.invoke(service, source, ownerSigned, ink, "张业主", "P1234567",
+                LocalDateTime.of(2026, 8, 27, 10, 0), "termination_letter_draft", "owner");
+        stampMethod.invoke(service, ownerSigned, fullySigned, ink, "CCPS 授权代表", "",
+                LocalDateTime.of(2026, 8, 27, 10, 5), "termination_letter_draft", "company");
+        assertThat(Files.size(fullySigned)).isGreaterThan(Files.size(source));
+        String qaOutput = System.getProperty("termination.signature.qa.output", "").trim();
+        if (!qaOutput.isEmpty()) {
+            Path qaTarget = Path.of(qaOutput).toAbsolutePath().normalize();
+            Files.createDirectories(qaTarget.getParent());
+            Files.copy(fullySigned, qaTarget, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -632,6 +864,9 @@ class ElectronicSignatureServiceTest {
         row.setDocumentKind("otr"); row.setSigningOrder(4);
         assertThat(relationMethod.invoke(service, row, false)).isEqualTo("otr_partial");
         assertThat(relationMethod.invoke(service, row, true)).isEqualTo("otr_signed");
+        row.setDocumentKind("rental_appointment_draft"); row.setSigningOrder(1);
+        assertThat(relationMethod.invoke(service, row, false)).isEqualTo("rental_appointment_partial");
+        assertThat(relationMethod.invoke(service, row, true)).isEqualTo("rental_appointment_signed");
 
         Method placementsMethod = ElectronicSignatureService.class.getDeclaredMethod(
                 "signaturePlacements", String.class, String.class, PdfReader.class);
@@ -639,8 +874,9 @@ class ElectronicSignatureServiceTest {
         try (PdfReader reader = new PdfReader(Files.readAllBytes(source))) {
             assertOtrPlacement(placementsMethod, service, reader, "tenant", 115f, 365f, 150f, 32f);
             assertOtrPlacement(placementsMethod, service, reader, "tenant_witness", 115f, 160f, 150f, 28f);
-            assertOtrPlacement(placementsMethod, service, reader, "owner", 340f, 365f, 150f, 32f);
-            assertOtrPlacement(placementsMethod, service, reader, "owner_witness", 340f, 160f, 150f, 28f);
+            assertOtrTwoPagePlacement(placementsMethod, service, reader, "owner", 340f, 365f, 150f, 32f, 75f, 260f, 130f, 38f);
+            assertOtrTwoPagePlacement(placementsMethod, service, reader, "owner_witness", 340f, 160f, 150f, 28f, 415f, 260f, 130f, 38f);
+            assertOtrPageTwoPlacement(placementsMethod, service, reader, "second_owner", 245f, 260f, 130f, 38f);
         }
 
         Method stampMethod = ElectronicSignatureService.class.getDeclaredMethod("stampSignedPdf",
@@ -664,6 +900,36 @@ class ElectronicSignatureServiceTest {
         if (!qaOutput.isEmpty()) Files.copy(target, Path.of(qaOutput), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
+    @Test
+    void otrSigningPackageRequiresItsOwnPageTwoWitnessAndAddsSecondOwnerOnlyWhenSubmitted() throws Exception {
+        ElectronicSignatureService service = new ElectronicSignatureService(mapper, mailSender, "smtp.example",
+                "noreply@example.test", "CCPS", "http://localhost:5173",
+                tempDir.resolve("lease-contracts").toString(), tempDir.resolve("rental-mandates").toString(),
+                tempDir.resolve("signatures").toString(), Clock.systemUTC());
+        Method rolesMethod = ElectronicSignatureService.class.getDeclaredMethod(
+                "signingPackageRoles", String.class, ElectronicSignaturePackageRequest.class);
+        rolesMethod.setAccessible(true);
+        List<ElectronicSignatureParticipantRequest> required = List.of(
+                signer("tenant"), signer("tenant_witness"), signer("owner"), signer("owner_witness"));
+
+        @SuppressWarnings("unchecked")
+        List<String> requiredRoles = (List<String>) rolesMethod.invoke(service, "otr",
+                new ElectronicSignaturePackageRequest(required, 7));
+        assertThat(requiredRoles)
+                .containsExactly("tenant", "tenant_witness", "owner", "owner_witness");
+        List<ElectronicSignatureParticipantRequest> withSecondOwner = new ArrayList<>(required);
+        withSecondOwner.add(4, signer("second_owner"));
+        @SuppressWarnings("unchecked")
+        List<String> secondOwnerRoles = (List<String>) rolesMethod.invoke(service, "otr",
+                new ElectronicSignaturePackageRequest(withSecondOwner, 7));
+        assertThat(secondOwnerRoles)
+                .containsExactly("tenant", "tenant_witness", "owner", "owner_witness", "second_owner");
+    }
+
+    private ElectronicSignatureParticipantRequest signer(String role) {
+        return new ElectronicSignatureParticipantRequest(role, role + " name", "");
+    }
+
     @SuppressWarnings("unchecked")
     private void assertOtrPlacement(Method placementsMethod, ElectronicSignatureService service, PdfReader reader,
             String role, float x, float y, float width, float height) throws Exception {
@@ -677,6 +943,43 @@ class ElectronicSignatureServiceTest {
             assertThat(placement.signatureHeight()).isEqualTo(height);
             assertThat(placement.dateX()).isZero();
             assertThat(placement.dateY()).isZero();
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertOtrTwoPagePlacement(Method placementsMethod, ElectronicSignatureService service, PdfReader reader,
+            String role, float pageOneX, float pageOneY, float pageOneWidth, float pageOneHeight,
+            float pageTwoX, float pageTwoY, float pageTwoWidth, float pageTwoHeight) throws Exception {
+        List<ElectronicSignatureService.SignaturePlacement> placements =
+                (List<ElectronicSignatureService.SignaturePlacement>) placementsMethod.invoke(service, "otr", role, reader);
+        assertThat(placements).hasSize(2);
+        assertThat(placements.get(0)).satisfies(placement -> {
+            assertThat(placement.page()).isEqualTo(1);
+            assertThat(placement.signatureX()).isEqualTo(pageOneX);
+            assertThat(placement.signatureY()).isEqualTo(pageOneY);
+            assertThat(placement.signatureWidth()).isEqualTo(pageOneWidth);
+            assertThat(placement.signatureHeight()).isEqualTo(pageOneHeight);
+        });
+        assertThat(placements.get(1)).satisfies(placement -> {
+            assertThat(placement.page()).isEqualTo(2);
+            assertThat(placement.signatureX()).isEqualTo(pageTwoX);
+            assertThat(placement.signatureY()).isEqualTo(pageTwoY);
+            assertThat(placement.signatureWidth()).isEqualTo(pageTwoWidth);
+            assertThat(placement.signatureHeight()).isEqualTo(pageTwoHeight);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertOtrPageTwoPlacement(Method placementsMethod, ElectronicSignatureService service, PdfReader reader,
+            String role, float x, float y, float width, float height) throws Exception {
+        List<ElectronicSignatureService.SignaturePlacement> placements =
+                (List<ElectronicSignatureService.SignaturePlacement>) placementsMethod.invoke(service, "otr", role, reader);
+        assertThat(placements).singleElement().satisfies(placement -> {
+            assertThat(placement.page()).isEqualTo(2);
+            assertThat(placement.signatureX()).isEqualTo(x);
+            assertThat(placement.signatureY()).isEqualTo(y);
+            assertThat(placement.signatureWidth()).isEqualTo(width);
+            assertThat(placement.signatureHeight()).isEqualTo(height);
         });
     }
 
@@ -834,10 +1137,10 @@ class ElectronicSignatureServiceTest {
 
     @Test void pmaRealTemplateKeepsWitnessDetailsInBothWitnessBlocks() throws Exception {
         Path source = Path.of(System.getProperty("user.dir"),
-                "src/main/resources/contract-templates/ccps-pma-v1.pdf");
+                "src/main/resources/contract-templates/flattened/ccps-pma-v1.pdf");
         if (!Files.isRegularFile(source)) {
             source = Path.of(System.getProperty("user.dir"),
-                    "backend/src/main/resources/contract-templates/ccps-pma-v1.pdf");
+                    "backend/src/main/resources/contract-templates/flattened/ccps-pma-v1.pdf");
         }
         assertThat(source).isRegularFile();
         Path ownerTarget = tempDir.resolve("pma-owner.pdf");
@@ -876,14 +1179,22 @@ class ElectronicSignatureServiceTest {
     private ElectronicSignatureMapper.RequestRow requestRow(String status, String signedStorageKey, LocalDateTime signedAt) {
         ElectronicSignatureMapper.RequestRow row = new ElectronicSignatureMapper.RequestRow(); row.setId(91L); row.setEntityType("lease"); row.setEntityId(12L);
         row.setSignerName("李建偉"); row.setSignerEmail("tenant@example.test"); row.setStatus(status); row.setOriginalName("lease.pdf"); row.setStorageKey("12/original.pdf"); row.setMimeType("application/pdf");
-        row.setVerificationCodeHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("123456")); row.setVerificationExpiresAt(LocalDateTime.of(2026, 7, 23, 8, 10)); row.setExpiresAt(LocalDateTime.of(2026, 7, 30, 8, 0));
+        row.setExpiresAt(LocalDateTime.of(2026, 7, 30, 8, 0));
         row.setSignedStorageKey(signedStorageKey); row.setSignedOriginalName("lease-已簽署.pdf"); row.setSignedAt(signedAt); return row;
     }
 
+    private void writeSinglePagePdf(Path target, String text) throws Exception {
+        try (var output = Files.newOutputStream(target)) {
+            Document pdf = new Document();
+            PdfWriter.getInstance(pdf, output);
+            pdf.open();
+            pdf.add(new Paragraph(text));
+            pdf.close();
+        }
+    }
+
     private String signatureDataUrl() throws Exception {
-        BufferedImage image = new BufferedImage(120, 40, BufferedImage.TYPE_INT_ARGB); image.createGraphics().drawLine(5, 20, 110, 20);
-        ByteArrayOutputStream output = new ByteArrayOutputStream(); ImageIO.write(image, "png", output);
-        return "data:image/png;base64," + Base64.getEncoder().encodeToString(output.toByteArray());
+        return tallSignatureDataUrl();
     }
 
     private String tallSignatureDataUrl() throws Exception {

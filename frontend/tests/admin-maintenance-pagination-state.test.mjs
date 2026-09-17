@@ -9,7 +9,8 @@ const source = readFileSync(
 
 test('maintenance pagination state is reactive and page changes use one method', () => {
   assert.match(source, /data\(\)[\s\S]*listPage:\s*1/);
-  assert.match(source, /data\(\)[\s\S]*listPageSize:\s*10/);
+  assert.match(source, /data\(\)[\s\S]*listPageSize:\s*5/);
+  assert.match(source, /<option :value="5">/);
   assert.match(source, /@click="goListPage\(listPage \+ 1\)"/);
   assert.match(source, /goListPage\(page\)\s*\{/);
 });

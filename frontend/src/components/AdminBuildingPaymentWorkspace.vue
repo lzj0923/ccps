@@ -7,7 +7,7 @@
       </div>
 
       <div v-if="errorMessage" class="admin-owner-state error" role="alert">
-        <strong>{{ $t('building.paymentDataLoadFailed') }}</strong><span>{{ errorMessage }}</span><button type="button" @click="loadData">{{ $t('ui.reload') }}</button>
+        <strong>{{ $t('building.paymentDataLoadFailed') }}</strong><span>{{ $lt(errorMessage) }}</span><button type="button" @click="loadData">{{ $t('ui.reload') }}</button>
       </div>
       <div v-else class="table-wrap">
         <table>
@@ -20,7 +20,7 @@
               <td :class="{ 'money-green': Number(row.amountPaid) > 0 }">{{ money(row.amountPaid) }}</td>
               <td :class="{ 'money-red': Number(row.unpaidAmount) > 0, 'money-green': Number(row.unpaidAmount) === 0 }">{{ money(row.unpaidAmount) }}</td>
               <td>{{ displayDate(row.paymentDate) }}</td>
-              <td><span class="tag" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span></td>
+              <td><span class="tag" :class="statusClass(row.status)">{{ $lt(statusLabel(row.status)) }}</span></td>
               <td>{{ row.receiptNo || '—' }}</td>
               <td><button type="button" class="row-actions" :title="$t('building.viewDetails')" @click.stop="selectRow(row)">…</button></td>
             </tr>
@@ -33,7 +33,7 @@
 
     <aside class="panel detail-panel">
       <div v-if="selectedRow" class="detail-card">
-        <div class="profile"><div class="big-avatar">{{ selectedRow.installmentNo }}</div><div><h3>{{ selectedRow.milestone || selectedRow.planName || $t('building.paymentInstallment') }}</h3><p>{{ selectedRow.projectName }} · {{ selectedRow.unitNo }}</p></div><span class="tag" :class="statusClass(selectedRow.status)">{{ statusLabel(selectedRow.status) }}</span></div>
+        <div class="profile"><div class="big-avatar">{{ selectedRow.installmentNo }}</div><div><h3>{{ selectedRow.milestone || selectedRow.planName || $t('building.paymentInstallment') }}</h3><p>{{ selectedRow.projectName }} · {{ selectedRow.unitNo }}</p></div><span class="tag" :class="statusClass(selectedRow.status)">{{ $lt(statusLabel(selectedRow.status)) }}</span></div>
         <div class="detail-actions installment-actions">
           <button v-if="canEditSelected" @click="openInstallmentEdit">{{ $t('building.editInstallment') }}</button>
           <button v-if="canRemindSelected" :disabled="reminderSending" @click="sendReminder">{{ reminderSending ? $t('building.sending') : reminderLabel }}</button>
@@ -66,7 +66,7 @@
           <label>{{ $t('building.purchaseDate') }}<input v-model="preHandoverPropertyForm.startDate" type="date"></label>
           <div class="pre-handover-stage-note wide"><strong>{{ $t('building.propertyStage') }}</strong><span>{{ $t('properties.preHandover') }}</span><small>{{ $t('building.preHandoverStageLocked') }}</small></div>
           <label class="property-primary-check wide"><input v-model="preHandoverPropertyForm.primary" type="checkbox">{{ $t('building.primaryProperty') }}</label>
-          <p v-if="preHandoverPropertyError" class="admin-property-error wide">{{ preHandoverPropertyError }}</p>
+          <p v-if="preHandoverPropertyError" class="admin-property-error wide">{{ $lt(preHandoverPropertyError) }}</p>
         </div>
         <menu><button type="button" @click="closePreHandoverPropertyDialog">{{ $t('ui.cancel') }}</button><button type="submit" class="primary-btn" :disabled="preHandoverPropertySaving || propertyOptionsLoading">{{ preHandoverPropertySaving ? $t('building.creating') : $t('building.confirmAddProperty') }}</button></menu>
       </form>
@@ -80,9 +80,8 @@
           <label>{{ $t('building.projectName') }}<input v-model.trim="projectForm.name" maxlength="160" required :placeholder="$t('building.projectName')"></label>
           <label class="wide">{{ $t('building.address') }}<input v-model.trim="projectForm.address" maxlength="255" :placeholder="$t('building.address')"></label>
           <label>{{ $t('building.city') }}<input v-model.trim="projectForm.city" maxlength="100" :placeholder="$t('building.cityExample')"></label>
-          <label>{{ $t('building.countryCode') }}<input v-model.trim="projectForm.countryCode" maxlength="2" required></label>
           <label>{{ $t('ui.status') }}<select v-model="projectForm.status"><option value="active">{{ $t('ui.enabled') }}</option><option value="inactive">{{ $t('ui.disabled') }}</option></select></label>
-          <p v-if="projectFormError" class="admin-property-error wide">{{ projectFormError }}</p>
+          <p v-if="projectFormError" class="admin-property-error wide">{{ $lt(projectFormError) }}</p>
         </div>
         <menu><button type="button" @click="closeProjectDialog">{{ $t('ui.cancel') }}</button><button type="submit" class="primary-btn" :disabled="projectSaving">{{ projectSaving ? $t('building.creating') : $t('building.confirmCreate') }}</button></menu>
       </form>
@@ -127,7 +126,7 @@
               <span :class="{ mismatch: planDifferenceCents !== 0, matched: planDifferenceCents === 0 }">{{ $t('building.difference') }} <b>{{ money(Math.abs(planDifferenceCents) / 100) }}</b></span>
             </div>
           </template>
-          <p v-if="paymentPlanError" class="admin-property-error">{{ paymentPlanError }}</p>
+          <p v-if="paymentPlanError" class="admin-property-error">{{ $lt(paymentPlanError) }}</p>
         </div>
         <menu><button type="button" @click="closePaymentPlanDialog">{{ $t('ui.cancel') }}</button><button type="submit" class="primary-btn" :disabled="paymentPlanSaving || contractsLoading || !eligibleContracts.length">{{ paymentPlanSaving ? $t('building.creating') : $t('building.confirmCreatePaymentPlan') }}</button></menu>
       </form>
@@ -140,7 +139,7 @@
           <label class="wide">{{ $t('building.milestoneDescription') }}<input v-model.trim="installmentEditForm.milestone" maxlength="160" :placeholder="$t('building.milestoneDescription')"></label>
           <label>{{ $t('building.dueDate') }}<input v-model="installmentEditForm.dueDate" type="date" required></label>
           <label>{{ $t('building.amountDue') }} {{ $t('building.currencyMyr') }}<input :value="money(selectedRow?.amountDue)" disabled><small>{{ $t('building.amountLockedHint') }}</small></label>
-          <p v-if="installmentActionError" class="admin-property-error wide">{{ installmentActionError }}</p>
+          <p v-if="installmentActionError" class="admin-property-error wide">{{ $lt(installmentActionError) }}</p>
         </div>
         <menu><button type="button" @click="closeInstallmentEdit">{{ $t('ui.cancel') }}</button><button type="submit" class="primary-btn" :disabled="installmentSaving">{{ installmentSaving ? $t('ui.saving') : $t('building.saveInstallment') }}</button></menu>
       </form>
@@ -152,8 +151,8 @@
         <div class="installment-record-grid">
           <div><span>{{ $t('building.receiptNo') }}</span><b>{{ selectedRow?.receiptNo || '—' }}</b></div>
           <div><span>{{ $t('building.paymentDate') }}</span><b>{{ displayDate(selectedRow?.paymentDate) }}</b></div>
-          <div><span>{{ $t('building.paymentMethod') }}</span><b>{{ paymentMethodLabel(selectedRow?.paymentMethod) }}</b></div>
-          <div><span>{{ $t('building.financeConfirmation') }}</span><b><i class="tag" :class="confirmationClass(selectedRow?.confirmationStatus)">{{ confirmationLabel(selectedRow?.confirmationStatus) }}</i></b></div>
+          <div><span>{{ $t('building.paymentMethod') }}</span><b>{{ $lt(paymentMethodLabel(selectedRow?.paymentMethod)) }}</b></div>
+          <div><span>{{ $t('building.financeConfirmation') }}</span><b><i class="tag" :class="confirmationClass(selectedRow?.confirmationStatus)">{{ $lt(confirmationLabel(selectedRow?.confirmationStatus)) }}</i></b></div>
           <div class="wide"><span>{{ $t('building.bankReference') }}</span><b>{{ selectedRow?.bankReference || '—' }}</b></div>
           <div class="wide"><span>{{ $t('building.submissionNote') }}</span><b>{{ selectedRow?.submissionNote || '—' }}</b></div>
           <div><span>{{ $t('building.submittedAmount') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow?.submittedAmount) }}</b></div>

@@ -41,14 +41,24 @@ public class AdminFinanceReviewService {
     private final AdminFinanceReviewMapper mapper;
     private final ReserveTopupService reserveTopupService;
     private final Path proofStorageRoot;
+    private final FinanceDocumentSettings financeDocumentSettings;
 
     @Autowired
     public AdminFinanceReviewService(AdminFinanceReviewMapper mapper,
             ReserveTopupService reserveTopupService,
-            @Value("${ccps.storage.payment-proofs:uploads/payment-proofs}") String proofStorageRoot) {
+            @Value("${ccps.storage.payment-proofs:uploads/payment-proofs}") String proofStorageRoot,
+            @Value("${ccps.finance-documents.company-name:CCPS PROPERTY MANAGEMENT SDN. BHD.}") String companyName,
+            @Value("${ccps.finance-documents.company-registration:}") String companyRegistration,
+            @Value("${ccps.finance-documents.address-line-1:}") String addressLine1,
+            @Value("${ccps.finance-documents.address-line-2:}") String addressLine2,
+            @Value("${ccps.finance-documents.bank-account-holder:CCPS PROPERTY MANAGEMENT SDN. BHD.}") String bankAccountHolder,
+            @Value("${ccps.finance-documents.bank-name:}") String bankName,
+            @Value("${ccps.finance-documents.bank-account-no:}") String bankAccountNo) {
         this.mapper = mapper;
         this.reserveTopupService = reserveTopupService;
         this.proofStorageRoot = Path.of(proofStorageRoot).toAbsolutePath().normalize();
+        this.financeDocumentSettings = new FinanceDocumentSettings(companyName, companyRegistration,
+                addressLine1, addressLine2, bankAccountHolder, bankName, bankAccountNo);
     }
 
     /** Kept for isolated unit tests that do not exercise reserve top-ups. */
@@ -57,6 +67,7 @@ public class AdminFinanceReviewService {
         this.mapper = mapper;
         this.reserveTopupService = null;
         this.proofStorageRoot = Path.of(proofStorageRoot).toAbsolutePath().normalize();
+        this.financeDocumentSettings = FinanceDocumentSettings.defaults();
     }
 
     @Transactional(readOnly = true)
@@ -208,6 +219,8 @@ public class AdminFinanceReviewService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund could not be completed");
             }
             mapper.postTenantDepositRefund(financeRecordId);
+            mapper.updateReserveRefundTransferStatus(financeRecordId, "completed");
+            mapper.refreshOwnerRemittanceBatchStatus(financeRecordId);
             mapper.insertNotification(refund.getUserId(), refund.getOwnerId(), financeRecordId,
                     "預備金已返還", "%s %s 預備金已返還 RM %s。".formatted(refund.getProjectName(), refund.getUnitNo(), refund.getAmount().setScale(2).toPlainString()), "normal");
             mapper.insertAudit(reviewerId, financeRecordId, "confirm_reserve_refund", "confirmed", note);
@@ -296,6 +309,8 @@ public class AdminFinanceReviewService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund has already been reviewed");
             }
             mapper.cancelTenantDepositRefund(financeRecordId);
+            mapper.updateReserveRefundTransferStatus(financeRecordId, "failed");
+            mapper.refreshOwnerRemittanceBatchStatus(financeRecordId);
             mapper.insertAudit(reviewerId, financeRecordId, "reject_reserve_refund", "rejected", reviewNote);
             return;
         }
@@ -363,6 +378,13 @@ public class AdminFinanceReviewService {
                     "This record has entered an export or sync batch and cannot be reopened");
         }
 
+        // Reversal removes derived postings and prepayment allocations. Preserve their
+        // original values before any mutation, in the same transaction as the reversal.
+        if (mapper.insertFinanceReopenSnapshot(reviewerId, financeRecordId, reopenNote) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "The original finance snapshot could not be saved; reopening was cancelled");
+        }
+
         switch (record.getRecordType()) {
             case "property_payment" -> reopenPropertyPayment(financeRecordId, reopenNote);
             case "rent_payment" -> {
@@ -396,6 +418,9 @@ public class AdminFinanceReviewService {
 
         if (mapper.reopenFinanceRecord(financeRecordId) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Finance record could not be returned to pending");
+        }
+        if ("reserve_refund".equals(record.getRecordType())) {
+            mapper.refreshOwnerRemittanceBatchStatus(financeRecordId);
         }
         mapper.insertReopenAudit(reviewerId, financeRecordId, reopenNote);
     }
@@ -483,6 +508,7 @@ public class AdminFinanceReviewService {
                         refund.getAmount(), balanceAfter, "撤销确认 · " + note, reviewerId) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund balance could not be restored");
         }
+        mapper.updateReserveRefundTransferStatus(financeRecordId, "pending");
         mapper.reopenTenantDepositRefund(financeRecordId);
     }
 
@@ -508,6 +534,7 @@ public class AdminFinanceReviewService {
         if (!"invoice".equals(type) && !"receipt".equals(type)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Document type must be invoice or receipt");
         }
+        validateFinanceDocumentSettings(type);
         FinanceReviewRow row = mapper.findDocumentRow(financeRecordId);
         if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Finance record not found");
         Path directory = proofStorageRoot.resolve("finance-documents").normalize();
@@ -536,6 +563,7 @@ public class AdminFinanceReviewService {
         if (!"invoice".equals(type) && !"receipt".equals(type)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Document type must be invoice or receipt");
         }
+        validateFinanceDocumentSettings(type);
         List<Long> ids = new LinkedHashSet<>(financeRecordIds == null ? List.of() : financeRecordIds).stream()
                 .filter(id -> id != null).toList();
         if (ids.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one finance record");
@@ -575,20 +603,30 @@ public class AdminFinanceReviewService {
 
     /** Prints every finance invoice/receipt through the shared reference layout. */
     private void writePrintableFinanceDocument(java.io.OutputStream output, FinanceReviewRow row, String documentType) throws Exception {
+        FinanceDocumentPdfRenderer.write(output, printableFinanceDocumentData(row, documentType));
+    }
+
+    FinanceDocumentPdfRenderer.Data printableFinanceDocumentData(FinanceReviewRow row, String documentType) {
         boolean invoice = "invoice".equals(documentType);
         String documentNo = (invoice ? "IV-" : "OR-") + text(row.getTransactionNo());
-        FinanceDocumentPdfRenderer.write(output, new FinanceDocumentPdfRenderer.Data(
+        List<String> paymentNotes = new java.util.ArrayList<>();
+        paymentNotes.add("Notes:");
+        paymentNotes.add("1. All cheques should be crossed and made payable to: "
+                + text(financeDocumentSettings.bankAccountHolder()) + ".");
+        if (hasText(financeDocumentSettings.bankName()) && hasText(financeDocumentSettings.bankAccountNo())) {
+            paymentNotes.add("2. All payments shall be remitted to the following bank account:");
+            paymentNotes.add("Account Holder: " + financeDocumentSettings.bankAccountHolder());
+            paymentNotes.add("Bank: " + financeDocumentSettings.bankName()
+                    + "    Account No.: " + financeDocumentSettings.bankAccountNo());
+        } else {
+            paymentNotes.add("2. Please confirm the official payment account with CCPS before remittance.");
+        }
+        return new FinanceDocumentPdfRenderer.Data(
                 invoice,
-                "HH CONSULTANTS (MM2H) SDN BHD",
-                "202301030304 (1542427-K)",
+                financeDocumentSettings.companyName(),
+                financeDocumentSettings.companyRegistration(),
+                List.of(financeDocumentSettings.addressLine1(), financeDocumentSettings.addressLine2()),
                 List.of(
-                        "SO-32-05, MENARA 1, KL ECO CITY, NO.3, JALAN BANGSAR,",
-                        "59200 KUALA LUMPUR    (License No.: MM2H814)    Tel: 03-6415 1485    Email: hay@hmm2h.com"),
-                List.of(
-                        "BIZCARE MANAGEMENT SDN BHD",
-                        "SO-32-05, MENARA 1, KL ECO CITY",
-                        "NO. 3, JALAN BANGSAR",
-                        "59200 KUALA LUMPUR",
                         text(row.getPayerName()),
                         text(row.getProjectName()) + " / " + text(row.getUnitNo())),
                 documentNo,
@@ -603,12 +641,44 @@ public class AdminFinanceReviewService {
                         new FinanceDocumentPdfRenderer.Detail("Status", text(row.getConfirmationStatus()))),
                 zero(row.getAmount()),
                 row.getCurrency(),
-                List.of(
-                        "Notes:",
-                        "1. All cheques should be crossed and made payable to: CCPS PROPERTY MANAGEMENT SDN. BHD.",
-                        "2. All payments shall be remitted to the following bank account:",
-                        "Account Holder: CCPS PROPERTY MANAGEMENT SDN. BHD.",
-                        "Bank: ____________________    Account No.: ____________________")));
+                paymentNotes);
+    }
+
+    private boolean hasText(String value) { return value != null && !value.isBlank(); }
+
+    void validateFinanceDocumentSettings(String documentType) {
+        List<String> missing = new java.util.ArrayList<>();
+        if (!hasText(financeDocumentSettings.companyRegistration())) missing.add("公司注册号");
+        if (!hasText(financeDocumentSettings.addressLine1())) missing.add("公司地址");
+        if ("invoice".equals(documentType)) {
+            if (!hasText(financeDocumentSettings.bankAccountHolder())) missing.add("收款账户名称");
+            if (!hasText(financeDocumentSettings.bankName())) missing.add("收款银行");
+            if (!hasText(financeDocumentSettings.bankAccountNo())) missing.add("收款账号");
+        }
+        if (!missing.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "财务文件公司资料未配置完整：" + String.join("、", missing));
+        }
+    }
+
+    record FinanceDocumentSettings(String companyName, String companyRegistration, String addressLine1,
+            String addressLine2, String bankAccountHolder, String bankName, String bankAccountNo) {
+        FinanceDocumentSettings {
+            companyName = companyName == null || companyName.isBlank()
+                    ? "CCPS PROPERTY MANAGEMENT SDN. BHD." : companyName.trim();
+            companyRegistration = companyRegistration == null ? "" : companyRegistration.trim();
+            addressLine1 = addressLine1 == null ? "" : addressLine1.trim();
+            addressLine2 = addressLine2 == null ? "" : addressLine2.trim();
+            bankAccountHolder = bankAccountHolder == null || bankAccountHolder.isBlank()
+                    ? companyName : bankAccountHolder.trim();
+            bankName = bankName == null ? "" : bankName.trim();
+            bankAccountNo = bankAccountNo == null ? "" : bankAccountNo.trim();
+        }
+
+        static FinanceDocumentSettings defaults() {
+            return new FinanceDocumentSettings("CCPS PROPERTY MANAGEMENT SDN. BHD.", "", "", "",
+                    "CCPS PROPERTY MANAGEMENT SDN. BHD.", "", "");
+        }
     }
 
     private ReviewActionContext requirePendingReview(Long financeRecordId) {

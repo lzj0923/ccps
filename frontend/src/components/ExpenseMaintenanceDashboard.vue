@@ -4,28 +4,28 @@
       <article v-for="card in summaryCards" :key="card.label" class="expense-summary-card">
         <div class="expense-summary-icon" v-html="icons[card.icon]"></div>
         <div>
-          <span>{{ card.label }}</span>
+          <span>{{ $lt(card.label) }}</span>
           <strong>{{ card.value }}</strong>
-          <small :class="card.tone">{{ card.note }} <b v-if="card.delta">{{ card.delta }}</b></small>
+          <small :class="card.tone">{{ $lt(card.note) }} <b v-if="card.delta">{{ card.delta }}</b></small>
         </div>
       </article>
     </div>
 
-    <div v-if="errorMessage" class="expense-api-message error">{{ errorMessage }}</div>
+    <div v-if="errorMessage" class="expense-api-message error">{{ $lt(errorMessage) }}</div>
     <div class="expense-workspace" :class="{ 'detail-hidden': !detailVisible || !maintenanceDetail }">
       <div class="expense-main-column">
         <form class="expense-filter-card" @submit.prevent="applyFilters">
           <label><span>{{ $t('legacy.t_598a81bde0d4') }}</span><select v-model="draftFilters.projectId"><option value="">{{ $t('legacy.t_9d65de4d5c85') }}</option><option v-for="item in properties" :key="item.id" :value="String(item.id)">{{ item.name }}</option></select></label>
-          <label><span>{{ $t('legacy.t_0cf468db12ee') }}</span><select v-model="draftFilters.category"><option value="">{{ $t('legacy.t_19817baeee19') }}</option><option v-for="item in categories" :key="item" :value="item">{{ categoryLabel(item) }}</option></select></label>
+          <label><span>{{ $t('legacy.t_0cf468db12ee') }}</span><select v-model="draftFilters.category"><option value="">{{ $t('legacy.t_19817baeee19') }}</option><option v-for="item in categories" :key="item" :value="item">{{ $lt(categoryLabel(item)) }}</option></select></label>
           <label class="expense-date-filter"><span>{{ $t('legacy.t_55f16d9c2319') }}</span><div class="expense-date-range"><input v-model="draftFilters.startDate" type="date" :aria-label="$t('legacy.t_7fd7a227e9ce')"><em>{{ $t('legacy.t_43401e739ef4') }}</em><input v-model="draftFilters.endDate" type="date" :aria-label="$t('legacy.t_27eefa5237a0')"></div></label>
-          <label><span>{{ $t('legacy.t_45293595eae3') }}</span><select v-model="draftFilters.status"><option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+          <label><span>{{ $t('legacy.t_45293595eae3') }}</span><select v-model="draftFilters.status"><option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ $lt(item.label) }}</option></select></label>
           <div class="expense-filter-actions"><button class="expense-query-button" type="submit" :disabled="loading">{{ loading ? $t('legacy.t_850f6f41e95c') : $t('legacy.t_505ba2176546') }}</button><button type="button" @click="resetFilters">{{ $t('legacy.t_3d81345303ab') }}</button></div>
           <button class="expense-export-button" type="button" @click="exportRecords"><span v-html="icons.download"></span>{{ $t('legacy.t_894aa2f237cc') }}</button>
         </form>
 
         <section class="expense-table-card">
           <div class="expense-tabs">
-            <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="changeTab(tab.key)">{{ tab.label }}</button>
+            <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="changeTab(tab.key)">{{ $lt(tab.label) }}</button>
           </div>
           <div class="expense-table-wrap">
             <table class="expense-record-table">
@@ -33,14 +33,14 @@
               <tbody>
                 <tr v-for="record in pagedRecords" :key="record.key" :class="{ selected: selectedKey === record.key }" @click="selectRecord(record)">
                   <td><span class="expense-radio" :class="{ checked: selectedKey === record.key }"><i></i></span></td>
-                  <td>{{ record.date }}</td>
+<td>{{ displayDate(record.date) }}</td>
                   <td><strong class="expense-unit-project">{{ record.project }}</strong><small class="expense-unit-no">{{ record.unit }}</small></td>
                   <td><span class="expense-category-icon" :class="record.tone" v-html="icons[record.icon]"></span>{{ record.category }}</td>
                   <td :title="record.description">{{ record.description }}</td>
                   <td>{{ record.amount }}</td>
-                  <td><span class="expense-deduct" :class="record.deduct ? 'yes' : 'no'">{{ record.deduct ? '✓' : '×' }}</span>{{ record.deduct ? `是 (${record.reserveAmount})` : $t('legacy.t_8bf5c10ad937') }}</td>
-                  <td><button v-if="record.attachmentCount" type="button" class="expense-attachment-button" :title="`查看 ${record.attachmentCount} 個附件`" @click.stop="selectRecord(record)"><span v-html="icons.image"></span>{{ $t('legacy.t_76a786dd72cb') }}{{ record.attachmentCount }}）</button><span v-else class="expense-no-attachment">—</span></td>
-                  <td><span class="expense-status" :class="statusClass(record.status)">{{ record.status }}</span></td>
+                  <td><span class="expense-deduct" :class="record.deduct ? 'yes' : 'no'">{{ record.deduct ? '✓' : '×' }}</span>{{ record.deduct ? $t('ui.reserveDeductedAmount', { amount: record.reserveAmount }) : $t('legacy.t_8bf5c10ad937') }}</td>
+                  <td><button v-if="record.attachmentCount" type="button" class="expense-attachment-button" :title="$t('ui.attachmentCountTitle', { count: record.attachmentCount })" @click.stop="selectRecord(record)"><span v-html="icons.image"></span>{{ $t('legacy.t_76a786dd72cb') }}{{ record.attachmentCount }}）</button><span v-else class="expense-no-attachment">—</span></td>
+                  <td><span class="expense-status" :class="statusClass(record.status)">{{ $lt(record.status) }}</span></td>
                 </tr>
                 <tr v-if="loading"><td colspan="9" class="expense-empty">{{ $t('legacy.t_f1cc1a3941d6') }}</td></tr>
                 <tr v-else-if="!pagedRecords.length"><td colspan="9" class="expense-empty">{{ $t('legacy.t_59e737cd9720') }}</td></tr>
@@ -57,19 +57,19 @@
       <aside v-if="detailVisible && maintenanceDetail" class="maintenance-detail-panel">
         <header><h2>{{ $t('legacy.t_8a30b68ec405') }}</h2><button :aria-label="$t('legacy.t_937920c85654')" @click="detailVisible = false">×</button></header>
         <div class="maintenance-detail-body">
-          <div class="maintenance-detail-title"><span v-html="icons.wrench"></span><h3>{{ maintenanceDetail.title }}</h3><b :class="statusClass(statusLabel(maintenanceDetail.status))">{{ statusLabel(maintenanceDetail.status) }}</b></div>
+          <div class="maintenance-detail-title"><span v-html="icons.wrench"></span><h3>{{ maintenanceDetail.title }}</h3><b :class="statusClass(statusLabel(maintenanceDetail.status))">{{ $lt(statusLabel(maintenanceDetail.status)) }}</b></div>
           <dl class="maintenance-info-grid">
             <div><dt>{{ $t('legacy.t_bd238174d47b') }}</dt><dd>{{ formatDateTime(maintenanceDetail.requestedAt) }}</dd></div>
             <div><dt>{{ $t('legacy.t_070276a68f73') }}</dt><dd>{{ maintenanceDetail.projectName }}<br>{{ maintenanceDetail.unitNo }}</dd></div>
             <div><dt>{{ $t('legacy.t_89f374f708cf') }}</dt><dd>{{ maintenanceDetail.workOrderNo }}</dd></div>
-            <div><dt>{{ $t('legacy.t_f2ec90c7d802') }}</dt><dd>{{ categoryLabel(maintenanceDetail.category) }}<br>{{ maintenanceDetail.vendorName || $t('legacy.t_4e4ceafa8ee3') }}</dd></div>
+            <div><dt>{{ $t('legacy.t_f2ec90c7d802') }}</dt><dd>{{ $lt(categoryLabel(maintenanceDetail.category)) }}<br>{{ maintenanceDetail.vendorName || $t('legacy.t_4e4ceafa8ee3') }}</dd></div>
           </dl>
 
           <section class="maintenance-progress-section">
             <h4>{{ $t('legacy.t_6c4c34e8852d') }}</h4>
             <div class="maintenance-progress-track">
               <div v-for="(step, index) in progressSteps" :key="step.status" :class="{ done: isStepDone(index), current: isCurrentStep(index) }">
-                <i>{{ isStepDone(index) ? '✓' : index + 1 }}</i><strong>{{ step.label }}</strong><small>{{ step.time }}</small>
+                <i>{{ isStepDone(index) ? '✓' : index + 1 }}</i><strong>{{ $lt(step.label) }}</strong><small>{{ step.time }}</small>
               </div>
             </div>
           </section>
@@ -86,7 +86,7 @@
             <h4>{{ $t('legacy.t_824cf414dfa3') }}</h4>
             <div class="maintenance-finance-grid">
               <dl><div><dt>{{ $t('legacy.t_6ad972081fc5') }}</dt><dd>{{ $t('legacy.t_5e7b60c626a4') }} {{ formatMoney(maintenanceAmount) }}</dd></div><div><dt>{{ $t('legacy.t_02ef3b2c49a3') }}</dt><dd>{{ Number(maintenanceDetail.reserveDeductedAmount) > 0 ? $t('legacy.t_30160a21b92a') : $t('legacy.t_8bf5c10ad937') }}</dd></div><div><dt>{{ $t('legacy.t_727af713738d') }}</dt><dd>{{ $t('legacy.t_5e7b60c626a4') }} {{ formatMoney(maintenanceDetail.reserveDeductedAmount) }}</dd></div></dl>
-              <dl><div><dt>{{ $t('legacy.t_607b3e1024c4') }}</dt><dd>{{ paymentStatusLabel(maintenanceDetail.paymentStatus, maintenanceDetail.confirmationStatus, maintenanceDetail.paymentMethod) }}</dd></div><div><dt>{{ $t('legacy.t_058f511c98cf') }}</dt><dd>{{ maintenanceDetail.paymentDate || '-' }}</dd></div><div><dt>{{ $t('legacy.t_c6b9a8cfdb21') }}</dt><dd>{{ paymentMethodLabel(maintenanceDetail.paymentMethod) }}</dd></div></dl>
+<dl><div><dt>{{ $t('legacy.t_607b3e1024c4') }}</dt><dd>{{ $lt(paymentStatusLabel(maintenanceDetail.paymentStatus, maintenanceDetail.confirmationStatus, maintenanceDetail.paymentMethod)) }}</dd></div><div><dt>{{ $t('legacy.t_058f511c98cf') }}</dt><dd>{{ displayDate(maintenanceDetail.paymentDate) }}</dd></div><div><dt>{{ $t('legacy.t_c6b9a8cfdb21') }}</dt><dd>{{ $lt(paymentMethodLabel(maintenanceDetail.paymentMethod)) }}</dd></div></dl>
             </div>
           </section>
         </div>
@@ -97,6 +97,7 @@
 </template>
 
 <script>
+import { formatDate } from '../utils/dateFormat';
 import pageBridge from '../pageBridge';
 import { fetchMaintenanceAttachment, fetchMaintenanceDetail, fetchOwnerExpenses, uploadMaintenanceAttachments } from '../services/propertyApi';
 import { downloadCsv } from '../utils/csvExporter';
@@ -194,6 +195,7 @@ export default {
   },
   mounted() { this.loadData(); },
   methods: {
+    displayDate(value) { return formatDate(value, '-'); },
     async loadData(notify = false) {
       this.loading = true;
       this.errorMessage = '';
@@ -208,7 +210,7 @@ export default {
         if (this.activeTab === 'maintenance' && !this.maintenanceDetail && this.response.maintenance?.length) {
           await this.loadMaintenance(this.response.maintenance[0].id);
         }
-        if (notify) this.showToast(`已查詢 ${this.records.length} 條記錄`);
+        if (notify) this.showToast(this.$ltf`已查詢 ${this.records.length} 條記錄`);
       } catch (error) {
         this.errorMessage = error.message || '支出與維修數據讀取失敗';
       } finally {

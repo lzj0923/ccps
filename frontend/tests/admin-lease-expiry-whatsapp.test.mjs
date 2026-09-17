@@ -10,9 +10,9 @@ test('lease expiry reminder keeps WhatsApp and targets business staff', () => {
   assert.match(source, /业务人员/);
 });
 
-test('lease expiry business reminder is shown as a system automatic rule without manual actions', () => {
-  assert.match(source, /rule\.systemManaged/);
-  assert.match(source, /系统自动规则/);
-  assert.match(source, /后端启动后立即扫描，并按每小时排程自动执行/);
+test('system-managed reminder rules stay hidden from the user rule-management list', () => {
+  assert.match(source, /visibleRules\(\)\s*\{\s*return this\.rules\.filter\(rule => !rule\.systemManaged\);\s*\}/);
+  assert.match(source, /\{\{ visibleRules\.length \}\}/);
+  assert.doesNotMatch(source, /automatic-rule-chip|automatic-rule-notice|系统自动规则/);
   assert.match(source, /if \(rule\.systemManaged\) return/);
 });

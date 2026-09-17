@@ -12,7 +12,7 @@
         <div><dt>{{ $t('legacy.t_cf4210e06be7') }}</dt><dd>{{ context.unitNo }}</dd></div>
         <div><dt>{{ $t('legacy.t_ad92d9755f76') }}</dt><dd>{{ installmentTitle }}<small>{{ context.milestone }}</small></dd></div>
         <div><dt>{{ $t('legacy.t_57cc0b38b602') }}</dt><dd class="gold">{{ money(context.amount) }}</dd></div>
-        <div><dt>{{ $t('legacy.t_11cb5e87977f') }}</dt><dd>{{ context.dueDate || '—' }}</dd></div>
+<div><dt>{{ $t('legacy.t_11cb5e87977f') }}</dt><dd>{{ displayDate(context.dueDate) }}</dd></div>
         <div><dt>{{ $t('legacy.t_045859e7926b') }}</dt><dd><span class="proof-status">{{ $t('legacy.t_9441216485cb') }}</span></dd></div>
       </dl>
     </section>
@@ -47,7 +47,7 @@
           </div>
         </section>
 
-        <p v-if="formError" class="proof-form-error" role="alert">{{ formError }}</p>
+        <p v-if="formError" class="proof-form-error" role="alert">{{ $lt(formError) }}</p>
         <div class="proof-form-actions">
           <button type="submit" class="proof-submit" :disabled="submitting || submitted"><Send />{{ submitting ? $t('legacy.t_17e519c5a6bd') : submitted ? $t('legacy.t_612157899b62') : $t('legacy.t_c87e1a999cb1') }}<span>→</span></button>
           <button type="button" class="proof-draft" @click="saveDraft"><Save />{{ $t('legacy.t_4cd30ef91e0b') }}</button>
@@ -84,7 +84,7 @@ import {
   Send, ShieldCheck, UploadCloud, X
 } from '@lucide/vue';
 import { submitPaymentProof } from '../services/propertyApi';
-import { formatDateTime } from '../utils/dateFormat';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
 
 const fileSize = size => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 const todayText = () => {
@@ -123,6 +123,7 @@ export default {
   },
   beforeUnmount() { this.files.forEach(file => file.previewUrl && URL.revokeObjectURL(file.previewUrl)); },
   methods: {
+    displayDate(value) { return formatDate(value); },
     money(value) { return `${this.currencyPrefix} ${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; },
     selectFiles(event) { this.acceptFiles(event.target.files); event.target.value = ''; },
     dropFiles(event) { this.acceptFiles(event.dataTransfer.files); },
@@ -174,7 +175,7 @@ export default {
         this.submitted = true;
         this.receiptNo = result.receiptNo;
         this.submittedAt = formatDateTime(result.submittedAt);
-        this.page.showToast(`付款凭证已提交：${result.receiptNo}`);
+        this.page.showToast(this.$ltf`付款凭证已提交：${result.receiptNo}`);
       } catch (error) {
         this.formError = error.message || '付款凭证提交失败，请稍后再试';
       } finally {

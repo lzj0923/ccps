@@ -1,9 +1,10 @@
 import { adminKpis } from '../data/dashboardData';
 import { moneyText, toNumber } from '../utils/dashboardFormatters';
 import { canAccessAdminModule, canManageAdminModule } from '../utils/adminPermissions';
+import { localizeLegacyTree } from '../i18n';
 
 const ADMIN_NAV_GROUPS = [
-  { id: 'assets', labelKey: 'navigation.assets', moduleIds: ['adminDashboard', 'adminProjects', 'adminOwners', 'adminProperties', 'adminData'] },
+  { id: 'assets', labelKey: 'navigation.assets', moduleIds: ['adminProjects', 'adminOwners', 'adminProperties', 'adminData'] },
   { id: 'rental', labelKey: 'navigation.rental', moduleIds: ['adminProcess', 'adminRentalSigning', 'adminDeposits', 'adminTenantDirectory', 'adminTenants', 'adminRentalMandates', 'adminOffMarketProperties'] },
   { id: 'finance', labelKey: 'navigation.finance', moduleIds: ['adminMaintenance', 'adminFinance', 'adminReserve'] },
   { id: 'operations', labelKey: 'navigation.operations', moduleIds: ['adminAlerts', 'adminReports'] },
@@ -12,9 +13,14 @@ const ADMIN_NAV_GROUPS = [
 
 export default {
   computed: {
-    currentModule() { return this.modules.find(module => module.id === this.currentId); },
+    currentModule() { return localizeLegacyTree(this.modules.find(module => module.id === this.currentId)); },
     ownerModules() { return this.modules.filter(module => module.shell === "owner-shell").sort((a, b) => Number(a.code) - Number(b.code)); },
-    adminPrimaryModules() { return this.modules.filter(module => module.shell === 'admin-shell' && module.id === 'adminSmartDashboard' && canAccessAdminModule(this.currentUser, module.id)); },
+    adminPrimaryModules() {
+      const order = ['adminSmartDashboard', 'adminDashboard'];
+      return this.modules
+        .filter(module => module.shell === 'admin-shell' && order.includes(module.id) && canAccessAdminModule(this.currentUser, module.id))
+        .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    },
     adminNavGroups() {
       const modulesById = new Map(this.modules.map(module => [module.id, module]));
       return ADMIN_NAV_GROUPS.map(group => ({
@@ -31,8 +37,8 @@ export default {
     currentReport() { return this.reportTabConfigs.find(tab => tab.key === this.activeReportKey) || this.reportTabConfigs[0]; },
     dateRange() { return `${this.dateStart} ~ ${this.dateEnd}`; },
     modalConfirmText() {
-      if (this.modalMode === "date") return "套用篩選";
-      if (this.modalMode === "alerts") return "全部標記已讀";
+      if (this.modalMode === "date") return this.$t('common.applyFilter');
+      if (this.modalMode === "alerts") return this.$t('common.viewAllNotifications');
       if (this.modalMode === "upload") return "確認上傳";
       return "保存";
     },

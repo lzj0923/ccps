@@ -4,9 +4,9 @@
       <article v-for="card in summaryCards" :key="card.label" class="owner-summary-card">
         <div class="summary-icon">{{ card.icon }}</div>
         <div class="summary-copy">
-          <span>{{ card.label }}</span>
+          <span>{{ $lt(card.label) }}</span>
           <strong>{{ card.value }}</strong>
-          <small>{{ card.note }}</small>
+          <small>{{ $lt(card.note) }}</small>
         </div>
         <span class="summary-mark">{{ card.mark }}</span>
       </article>
@@ -54,7 +54,7 @@
         <div v-if="page.databaseLoading" class="property-data-state">{{ $t('legacy.t_56f3ac475242') }}</div>
         <div v-else-if="page.databaseError" class="property-data-state error" role="alert">
           <strong>{{ $t('legacy.t_36c4e79dae5c') }}</strong>
-          <span>{{ page.databaseError }}</span>
+          <span>{{ $lt(page.databaseError) }}</span>
           <button @click="page.loadOwnerDashboard()">{{ $t('legacy.t_0c9157b5bfac') }}</button>
         </div>
         <div v-else class="property-list" :class="{ compact: viewMode === 'compact' }">
@@ -75,11 +75,11 @@
               <div><span>{{ $t('legacy.t_41319c3504fe') }}</span><strong>{{ property.progress }}</strong></div>
               <div><span>{{ $t('legacy.t_328f69d15811') }}</span><strong>{{ property.nextDue }}</strong></div>
               <div><span>{{ $t('legacy.t_61b693084754') }}</span><strong>{{ property.expectedHandover }}</strong></div>
-              <div class="metric-status"><span>{{ $t('legacy.t_607b3e1024c4') }}</span><b class="property-status" :class="property.statusClass"><i></i>{{ property.status }}</b></div>
+              <div class="metric-status"><span>{{ $t('legacy.t_607b3e1024c4') }}</span><b class="property-status" :class="property.statusClass"><i></i>{{ $lt(property.status) }}</b></div>
             </div>
             <div v-else class="property-operating-summary">
               <div class="operating-service-tags">
-                <span v-for="service in property.serviceBadges" :key="service.code" :class="service.code.toLowerCase()">{{ service.label }}</span>
+                <span v-for="service in property.serviceBadges" :key="service.code" :class="service.code.toLowerCase()">{{ $lt(service.label) }}</span>
                 <span v-if="!property.serviceBadges.length" class="empty">{{ $t('legacy.t_92fd34a9ca85') }}</span>
               </div>
               <div class="property-metric-grid operating-metrics">
@@ -124,8 +124,8 @@
           <div class="notice-list-new">
             <article v-for="item in notices" :key="item.id || item.title">
               <span class="notice-symbol" :class="item.tone">{{ item.icon }}</span>
-              <div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p></div>
-              <time>{{ item.date }}</time><i></i>
+              <div><strong>{{ $lt(item.title) }}</strong><p>{{ $lt(item.detail) }}</p></div>
+<time>{{ displayDate(item.date) }}</time><i></i>
             </article>
             <div v-if="!notices.length" class="side-card-empty">{{ $t('legacy.t_df56fa06bad2') }}</div>
           </div>
@@ -137,7 +137,7 @@
           <div class="pending-list">
             <article v-for="item in pendingItems" :key="item.type">
               <span class="pending-symbol">{{ item.icon }}</span>
-              <div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p></div>
+              <div><strong>{{ $lt(item.title) }}</strong><p>{{ $lt(item.detail) }}</p></div>
               <b>{{ item.count }}</b>
             </article>
             <div v-if="!pendingItems.length" class="side-card-empty">{{ $t('legacy.t_ccafc8486914') }}</div>
@@ -181,7 +181,7 @@
             </dl>
           </article>
           <article v-if="selectedProperty.hasManagement" class="management">
-            <header><div><b>{{ $t('legacy.t_4eaef1731e38') }}</b><span>{{ selectedProperty.pendingMaintenanceCount ? `${selectedProperty.pendingMaintenanceCount} 項維修待處理` : $t('legacy.t_46491a1a1e7c') }}</span></div><button @click="openServiceModule('ownerReserve')">{{ $t('legacy.t_f087734e0cf8') }}</button></header>
+            <header><div><b>{{ $t('legacy.t_4eaef1731e38') }}</b><span>{{ selectedProperty.pendingMaintenanceCount ? $t('ui.maintenancePendingCount', { count: selectedProperty.pendingMaintenanceCount }) : $t('legacy.t_46491a1a1e7c') }}</span></div><button @click="openServiceModule('ownerReserve')">{{ $t('legacy.t_f087734e0cf8') }}</button></header>
             <dl>
               <div><dt>{{ $t('legacy.t_ba4eb373df77') }}</dt><dd>{{ selectedProperty.reserveBalanceText }}</dd></div>
               <div><dt>{{ $t('legacy.t_0b73c01aa04e') }}</dt><dd>{{ selectedProperty.reserveMinimumText }}</dd></div>
@@ -211,11 +211,11 @@
           <label v-for="option in serviceOptions" :key="option.code" :class="{ selected: serviceSelection.includes(option.code) }">
             <input v-model="serviceSelection" type="checkbox" :value="option.code" :disabled="serviceSaving" />
             <span>{{ option.icon }}</span>
-            <div><strong>{{ option.label }}</strong><small>{{ option.description }}</small></div>
+            <div><strong>{{ $lt(option.label) }}</strong><small>{{ $lt(option.description) }}</small></div>
             <b>{{ serviceSelection.includes(option.code) ? $t('legacy.t_aeec0b67da9d') : $t('legacy.t_3fcc786925cc') }}</b>
           </label>
         </div>
-        <p v-if="serviceError" class="service-status-error">{{ serviceError }}</p>
+        <p v-if="serviceError" class="service-status-error">{{ $lt(serviceError) }}</p>
         <footer class="service-status-actions">
           <button :disabled="serviceSaving" @click="closeServiceStatusEditor">{{ $t('legacy.t_4d0b4688c787') }}</button>
           <button class="save" :disabled="serviceSaving || !serviceSelection.length" @click="saveServiceStatus">
@@ -230,6 +230,7 @@
 <script>
 import { updateOwnerPropertyServices } from '../services/propertyApi';
 import { navigate } from '../router';
+import { formatDate } from '../utils/dateFormat';
 
 const paymentStates = {
   paying: { label: '正常繳費中', css: 'green' },
@@ -251,6 +252,12 @@ const pendingIcons = {
   payment_proof: '⇧',
   rent_confirmation: '✉',
   document_signature: '▣'
+};
+
+const pendingCopyKeys = {
+  payment_proof: 'ui.ownerPendingPaymentProof',
+  rent_confirmation: 'ui.ownerPendingRentConfirmation',
+  document_signature: 'ui.ownerPendingDocumentSignature'
 };
 
 export default {
@@ -381,6 +388,7 @@ export default {
     pendingItems() {
       return (this.page.ownerDashboard?.pendingItems || []).map(item => ({
         ...item,
+        ...this.pendingItemCopy(item),
         icon: pendingIcons[item.type] || '•'
       }));
     }
@@ -395,6 +403,14 @@ export default {
     }
   },
   methods: {
+    pendingItemCopy(item) {
+      const count = Number(item.count || 0);
+      return {
+        title: pendingCopyKeys[item.type] ? this.$t(pendingCopyKeys[item.type]) : this.$lt(item.title),
+        detail: count > 0 ? this.$t('ui.ownerPendingCount', { count }) : this.$t('ui.ownerPendingEmpty')
+      };
+    },
+    displayDate(value) { return formatDate(value); },
     money(value) {
       return `RM ${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     },
@@ -413,7 +429,7 @@ export default {
     showProperty(property) { this.selectedProperty = property; },
     openPaymentProofs(property) {
       this.page.selectModule('ownerDocuments');
-      this.page.showToast(`請為 ${property.projectName} ${property.unit} 選擇並上傳繳費憑證`);
+      this.page.showToast(this.$ltf`請為 ${property.projectName} ${property.unit} 選擇並上傳繳費憑證`);
     },
     openServiceStatusEditor(property) {
       this.serviceDialogProperty = property;
@@ -438,7 +454,7 @@ export default {
         this.serviceDialogProperty = null;
         this.serviceSelection = [];
         await this.page.loadOwnerDashboard();
-        this.page.showToast(`${unit} 的服務狀態已更新`);
+        this.page.showToast(this.$ltf`${unit} 的服務狀態已更新`);
       } catch (error) {
         this.serviceError = error.message || '服務狀態更新失敗';
       } finally {

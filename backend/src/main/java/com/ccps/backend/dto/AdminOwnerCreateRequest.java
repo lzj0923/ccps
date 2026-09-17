@@ -1,5 +1,7 @@
 package com.ccps.backend.dto;
 
+import java.util.List;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -15,9 +17,17 @@ public record AdminOwnerCreateRequest(
         @Size(max = 40) String officePhone,
         @Size(max = 80) String passportNo,
         @Email @Size(max = 190) String email,
-        @NotBlank @Pattern(regexp = "active|inactive") String status) {
+        @NotBlank @Pattern(regexp = "active|inactive") String status,
+        List<Long> responsibleUserIds) {
 
     public AdminOwnerCreateRequest(String fullName, String identityNo, String phone, String email, String status) {
-        this(null, fullName, identityNo, phone, phone, null, null, null, email, status);
+        this(null, fullName, identityNo, phone, phone, null, null, null, email, status, null);
+    }
+
+    public AdminOwnerCreateRequest(String ownerNo, String fullName, String identityNo, String phone,
+            String mobilePhone, String homePhone, String officePhone, String passportNo, String email,
+            String status) {
+        this(ownerNo, fullName, identityNo, phone, mobilePhone, homePhone, officePhone, passportNo,
+                email, status, null);
     }
 }

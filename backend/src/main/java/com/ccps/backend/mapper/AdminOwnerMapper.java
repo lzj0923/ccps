@@ -15,9 +15,41 @@ import org.apache.ibatis.annotations.Update;
 
 import com.ccps.backend.dto.AdminProjectOption;
 import com.ccps.backend.dto.AdminOwnerSummaryResponse;
+import com.ccps.backend.dto.AdminOwnerStaffOption;
 
 @Mapper
 public interface AdminOwnerMapper {
+    @Select("""
+            SELECT u.id, u.username, u.display_name AS displayName
+            FROM users u
+            WHERE u.account_type = 'ADMIN' AND u.status = 'active'
+            ORDER BY u.display_name, u.username, u.id
+            """)
+    List<AdminOwnerStaffOption> findActiveAdminStaffOptions();
+
+    @Select("""
+            SELECT osa.owner_id AS ownerId, u.id, u.username, u.display_name AS displayName
+            FROM owner_staff_assignments osa
+            JOIN users u ON u.id = osa.staff_user_id
+            ORDER BY osa.owner_id, u.display_name, u.username, u.id
+            """)
+    List<OwnerStaffRow> findOwnerStaffAssignments();
+
+    @Select("""
+            SELECT osa.owner_id AS ownerId, u.id, u.username, u.display_name AS displayName
+            FROM owner_staff_assignments osa
+            JOIN users u ON u.id = osa.staff_user_id
+            WHERE osa.owner_id = #{ownerId}
+            ORDER BY u.display_name, u.username, u.id
+            """)
+    List<OwnerStaffRow> findOwnerStaffAssignmentsByOwnerId(@Param("ownerId") Long ownerId);
+
+    @Delete("DELETE FROM owner_staff_assignments WHERE owner_id = #{ownerId}")
+    int deleteOwnerStaffAssignments(@Param("ownerId") Long ownerId);
+
+    @Insert("INSERT INTO owner_staff_assignments (owner_id, staff_user_id) VALUES (#{ownerId}, #{staffUserId})")
+    int insertOwnerStaffAssignment(@Param("ownerId") Long ownerId, @Param("staffUserId") Long staffUserId);
+
     @Select("SELECT profile_json FROM property_basic_profiles WHERE owner_unit_id = #{ownerUnitId}")
     String findPropertyBasicProfile(@Param("ownerUnitId") Long ownerUnitId);
 
@@ -607,6 +639,22 @@ public interface AdminOwnerMapper {
         public void setRemainingAmount(BigDecimal remainingAmount) { this.remainingAmount = remainingAmount; }
         public String getPaymentStatus() { return paymentStatus; }
         public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
+    }
+
+    class OwnerStaffRow {
+        private Long ownerId;
+        private Long id;
+        private String username;
+        private String displayName;
+
+        public Long getOwnerId() { return ownerId; }
+        public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
     }
 
     class NewOwner {

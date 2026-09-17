@@ -17,7 +17,15 @@ public record AdminOwnerResponse(
         String email,
         String mailingAddress,
         String status,
+        List<AdminOwnerStaffOption> responsibleStaff,
         List<Property> properties) {
+
+    public AdminOwnerResponse(Long id, String ownerNo, String fullName, String identityNo, String phone,
+            String mobilePhone, String homePhone, String officePhone, String passportNo, String email,
+            String mailingAddress, String status, List<Property> properties) {
+        this(id, ownerNo, fullName, identityNo, phone, mobilePhone, homePhone, officePhone, passportNo,
+                email, mailingAddress, status, List.of(), properties);
+    }
 
     public record Property(
             Long ownerUnitId,

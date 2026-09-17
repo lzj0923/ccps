@@ -19,6 +19,11 @@ public record AdminReserveBatchRefundRequest(
         @Size(max = 500) String note) {
     public record Item(
             @NotNull Long accountId,
-            @NotNull Long bankAccountId,
-            @NotNull @DecimalMin("0.01") @Digits(integer = 16, fraction = 2) BigDecimal amount) { }
+            Long bankAccountId,
+            @NotNull @DecimalMin("0.01") @Digits(integer = 16, fraction = 2) BigDecimal amount,
+            @Size(max = 40) String paymentMethod) {
+        public Item(Long accountId, Long bankAccountId, BigDecimal amount) {
+            this(accountId, bankAccountId, amount, null);
+        }
+    }
 }

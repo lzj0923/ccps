@@ -51,19 +51,36 @@ public class AdminPropertyHandoverChecklistService {
     public List<Row> rowsForOwnerUnit(Long ownerUnitId){return mapper.list(ownerUnitId).stream().filter(Row::isEnabled).toList();}
 
     @Transactional
-    public List<Row> rowsForLease(Long leaseId){
+    public List<Row> rowsForLease(Long leaseId, String selectedItemIds){
         if (leaseId == null) return List.of();
         AdminPropertyHandoverChecklistMapper.LeaseOwnerUnitRow ownerUnit = mapper.findOwnerUnitForLease(leaseId);
         if (ownerUnit == null || ownerUnit.getOwnerUnitId() == null) return List.of();
         List<Row> rows = mapper.list(ownerUnit.getOwnerUnitId());
         if (rows.isEmpty()) rows = seedStandardItems(ownerUnit.getOwnerUnitId());
+        if (selectedItemIds != null) {
+            if (selectedItemIds.isBlank()) return List.of();
+            Map<Long, Row> rowsById = new LinkedHashMap<>();
+            rows.forEach(row -> rowsById.put(row.getId(), row));
+            List<Row> selected = new ArrayList<>();
+            for (String value : selectedItemIds.split(",")) {
+                try {
+                    Row row = rowsById.get(Long.valueOf(value.trim()));
+                    if (row != null && !selected.contains(row)) selected.add(row);
+                } catch (NumberFormatException ignored) { }
+            }
+            rows = selected;
+        } else {
+            rows = rows.stream().filter(Row::isEnabled).toList();
+        }
         Map<String, Row> unique = new LinkedHashMap<>();
         for (Row row : rows) {
-            if (!row.isEnabled() || row.getCategory() == null || row.getItemName() == null) continue;
+            if (row.getCategory() == null || row.getItemName() == null) continue;
             unique.putIfAbsent(row.getCategory().trim() + "\u0000" + row.getItemName().trim(), row);
         }
         return new ArrayList<>(unique.values());
     }
+
+    public List<Row> rowsForLease(Long leaseId){return rowsForLease(leaseId, null);}
 
     @Transactional
     public void syncCompletedReport(Long ownerUnitId,List<SyncItem> items){

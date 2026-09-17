@@ -45,6 +45,14 @@ ccps:
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:}}
     sender-name: ${MAIL_SENDER_NAME:CCPS 家慶佳業}
+  finance-documents:
+    company-name: ${FINANCE_DOCUMENT_COMPANY_NAME:CCPS PROPERTY MANAGEMENT SDN. BHD.}
+    company-registration: ${FINANCE_DOCUMENT_COMPANY_REGISTRATION:}
+    address-line-1: ${FINANCE_DOCUMENT_ADDRESS_LINE_1:}
+    address-line-2: ${FINANCE_DOCUMENT_ADDRESS_LINE_2:}
+    bank-account-holder: ${FINANCE_DOCUMENT_BANK_ACCOUNT_HOLDER:CCPS PROPERTY MANAGEMENT SDN. BHD.}
+    bank-name: ${FINANCE_DOCUMENT_BANK_NAME:}
+    bank-account-no: ${FINANCE_DOCUMENT_BANK_ACCOUNT_NO:}
   storage:
     payment-proofs: ${PAYMENT_PROOF_STORAGE:uploads/payment-proofs}
     maintenance-attachments: ${MAINTENANCE_ATTACHMENT_STORAGE:uploads/maintenance-attachments}

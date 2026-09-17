@@ -73,6 +73,11 @@ public class AdminExpenseMaintenanceController {
         return adminMaintenanceService.options();
     }
 
+    @GetMapping("/monthly-units")
+    public List<AdminMaintenanceOptionsResponse.UnitOption> monthlyUnits() {
+        return adminMaintenanceService.monthlyUnitOptions();
+    }
+
     @PostMapping("/records")
     public AdminRecordCreateResponse createExpense(@Valid @RequestBody AdminExpenseCreateRequest body,
             HttpServletRequest request) {

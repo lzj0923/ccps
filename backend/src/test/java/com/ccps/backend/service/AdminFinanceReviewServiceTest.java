@@ -1,5 +1,6 @@
 package com.ccps.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.mapper.AdminFinanceReviewMapper;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceAllocationNoteContext;
+import com.ccps.backend.mapper.AdminFinanceReviewMapper.FinanceReviewRow;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReviewActionContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReserveRefundContext;
 import com.ccps.backend.mapper.AdminFinanceReviewMapper.ReopenRecordContext;
@@ -45,6 +47,7 @@ class AdminFinanceReviewServiceTest {
     void setUp() {
         service = new AdminFinanceReviewService(mapper, storageRoot.toString());
         lenient().when(mapper.lockRecordType(anyLong())).thenReturn("property_payment");
+        lenient().when(mapper.insertFinanceReopenSnapshot(anyLong(), anyLong(), anyString())).thenReturn(1);
         lenient().when(mapper.setFinanceConfirmedDate(anyLong(), any(LocalDate.class), nullable(LocalDate.class)))
                 .thenReturn(1);
     }
@@ -82,6 +85,43 @@ class AdminFinanceReviewServiceTest {
         verify(mapper, never()).allocateConfirmedPayment(31L, new BigDecimal("2000.00"));
         verify(mapper).insertNotification(18L, 8L, 11L, "付款憑證退回補件",
                 "Pavilion Square A-01 第 2 期付款憑證需要補件：Reference is unreadable", "high");
+    }
+
+    @Test
+    void financeDocumentsUseCcpsIdentityAndNeverPrintBlankBankPlaceholders() {
+        FinanceReviewRow row = new FinanceReviewRow();
+        row.setTransactionNo("TXN-1");
+        row.setPayerName("Tenant");
+        row.setProjectName("Project");
+        row.setUnitNo("A-01");
+        row.setAmount(new BigDecimal("1000.00"));
+        row.setCurrency("MYR");
+        row.setTransactionDate(LocalDate.of(2026, 9, 1));
+
+        FinanceDocumentPdfRenderer.Data data = service.printableFinanceDocumentData(row, "invoice");
+
+        assertThat(data.companyName()).isEqualTo("CCPS PROPERTY MANAGEMENT SDN. BHD.");
+        assertThat(data.companyName()).doesNotContain("HH CONSULTANTS", "BIZCARE");
+        assertThat(data.partyLines()).doesNotContain("BIZCARE MANAGEMENT SDN BHD");
+        assertThat(String.join(" ", data.notes()))
+                .doesNotContain("____________________")
+                .contains("confirm the official payment account with CCPS");
+    }
+
+    @Test
+    void blocksExternalFinanceDocumentsUntilOfficialCompanyAndBankDetailsAreConfigured() {
+        assertThatThrownBy(() -> service.validateFinanceDocumentSettings("invoice"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("公司注册号")
+                .hasMessageContaining("公司地址")
+                .hasMessageContaining("收款银行")
+                .hasMessageContaining("收款账号");
+
+        AdminFinanceReviewService configured = new AdminFinanceReviewService(mapper, null, storageRoot.toString(),
+                "CCPS PROPERTY MANAGEMENT SDN. BHD.", "202601234567", "Kuala Lumpur", "Malaysia",
+                "CCPS PROPERTY MANAGEMENT SDN. BHD.", "Maybank", "1234567890");
+        configured.validateFinanceDocumentSettings("invoice");
+        configured.validateFinanceDocumentSettings("receipt");
     }
 
     @Test
@@ -253,6 +293,10 @@ class AdminFinanceReviewServiceTest {
 
         service.reopen(99L, 22L, "租金收款录入错误");
 
+        var historyOrder = org.mockito.Mockito.inOrder(mapper);
+        historyOrder.verify(mapper).insertFinanceReopenSnapshot(99L, 22L, "租金收款录入错误");
+        historyOrder.verify(mapper).reverseRentInvoicePayment(31L, new BigDecimal("1200.00"));
+        historyOrder.verify(mapper).deleteRentCreditAllocations(22L);
         verify(mapper).deleteRentCreditAllocations(22L);
         verify(mapper).cancelRentDepositDeduction(22L);
         verify(mapper).voidReopenedRentPayment(22L);

@@ -27,7 +27,12 @@ public interface OwnerPropertyCashflowMapper {
     @Select("""
             SELECT ce.id, ce.direction, ce.category, ce.description, fr.amount,
                    ce.occurred_on, fr.created_at AS occurred_at, fr.confirmation_status AS status,
-                   CASE WHEN fr.record_type = 'rent_payment' THEN 'rent' ELSE 'cashflow' END AS source
+                   CASE WHEN fr.record_type = 'rent_payment' THEN 'rent' ELSE 'cashflow' END AS source,
+                   (SELECT GROUP_CONCAT(DISTINCT d.id ORDER BY d.id)
+                    FROM document_links dl JOIN documents d ON d.id = dl.document_id
+                    WHERE ((dl.entity_type = 'finance' AND dl.entity_id = fr.id)
+                        OR (dl.entity_type = 'cashflow' AND dl.entity_id = ce.id))
+                      AND d.status NOT IN ('voided', 'superseded')) AS document_ids
             FROM cashflow_entries ce
             JOIN finance_records fr ON fr.id = ce.finance_record_id
             WHERE ce.unit_id = #{unitId}
@@ -50,7 +55,11 @@ public interface OwnerPropertyCashflowMapper {
                    DATE(rt.occurred_at) AS occurred_on,
                    rt.occurred_at,
                    'confirmed' AS status,
-                   'reserve' AS source
+                   'reserve' AS source,
+                   (SELECT GROUP_CONCAT(DISTINCT d.id ORDER BY d.id)
+                    FROM document_links dl JOIN documents d ON d.id = dl.document_id
+                    WHERE dl.entity_type = 'finance' AND dl.entity_id = rt.finance_record_id
+                      AND d.status NOT IN ('voided', 'superseded')) AS document_ids
             FROM reserve_accounts ra
             JOIN reserve_transactions rt ON rt.reserve_account_id = ra.id
             WHERE ra.owner_unit_id = #{ownerUnitId}
@@ -92,6 +101,10 @@ public interface OwnerPropertyCashflowMapper {
         private LocalDate occurredOn;
         private LocalDateTime occurredAt;
         private String status;
+        private String documentIds;
+
+        public String getDocumentIds() { return documentIds; }
+        public void setDocumentIds(String value) { documentIds = value; }
 
         public Long getId() { return id; }
         public void setId(Long value) { id = value; }

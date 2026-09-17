@@ -41,6 +41,15 @@ public class AdminRentalMandateController {
 
     @GetMapping("/options") public Options options() { return service.options(); }
 
+    @GetMapping("/{mandateId}")
+    public AdminRentalMandateResponse.Item detail(@PathVariable Long mandateId) { return service.detail(mandateId); }
+
+    @PutMapping("/{mandateId}")
+    public AdminRentalMandateResponse.Item update(@PathVariable Long mandateId,
+            @Valid @RequestBody AdminRentalMandateCreateRequest body, HttpServletRequest request) {
+        return service.update(AuthInterceptor.userId(request), mandateId, body);
+    }
+
     @GetMapping("/{mandateId}/history")
     public List<History> history(@PathVariable Long mandateId) { return service.history(mandateId); }
 

@@ -2,10 +2,13 @@ package com.ccps.backend.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.AdminDashboardResponse;
 import com.ccps.backend.mapper.AdminDashboardMapper;
@@ -18,7 +21,20 @@ public class AdminDashboardService {
 
     @Transactional(readOnly = true)
     public AdminDashboardResponse dashboard() {
-        List<AdminDashboardResponse.Region> regions = mapper.findRegions().stream().map(this::toRegion).toList();
+        return response(mapper.findRegions());
+    }
+
+    @Transactional(readOnly = true)
+    public AdminDashboardResponse dashboard(LocalDate startDate, LocalDate endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date must not be before start date");
+        }
+        if (startDate == null && endDate == null) return dashboard();
+        return response(mapper.findRegionsByDateRange(startDate, endDate));
+    }
+
+    private AdminDashboardResponse response(List<RegionRow> rows) {
+        List<AdminDashboardResponse.Region> regions = rows.stream().map(this::toRegion).toList();
         long units = regions.stream().mapToLong(AdminDashboardResponse.Region::unitCount).sum();
         long occupied = regions.stream().mapToLong(AdminDashboardResponse.Region::occupiedCount).sum();
         BigDecimal totalRent = regions.stream().map(AdminDashboardResponse.Region::totalRent).reduce(BigDecimal.ZERO, BigDecimal::add);

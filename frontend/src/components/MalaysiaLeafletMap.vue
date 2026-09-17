@@ -1,5 +1,5 @@
 <template>
-  <div ref="map" class="leaflet-map" aria-label="马来西亚州属经营实景地图"></div>
+  <div ref="map" class="leaflet-map" :aria-label="$t('legacy.t_3ae34d6fe7e0')"></div>
 </template>
 
 <script>

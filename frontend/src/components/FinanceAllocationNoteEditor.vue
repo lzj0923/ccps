@@ -1,15 +1,15 @@
 <template>
   <section class="allocation-note-editor">
     <div class="allocation-note-heading">
-      <div><strong>收支备注</strong><small>记录付款来源、承担情况或其他说明，不影响账单金额与余额。</small></div>
-      <button v-if="!editing" type="button" @click="beginEdit">{{ record?.allocationNote ? '修改备注' : '添加备注' }}</button>
+      <div><strong>{{ $t('legacy.t_bcceea7e796e') }}</strong><small>{{ $t('legacy.t_21da9b145f32') }}</small></div>
+      <button v-if="!editing" type="button" @click="beginEdit">{{ record?.allocationNote ? $t('legacy.t_6f9a8c4e1834') : $t('legacy.t_b82157bf5fb2') }}</button>
     </div>
-    <p v-if="!editing" :class="{ empty: !record?.allocationNote, success: saved }" aria-live="polite">{{ record?.allocationNote || '暂无备注记录' }}</p>
+    <p v-if="!editing" :class="{ empty: !record?.allocationNote, success: saved }" aria-live="polite">{{ record?.allocationNote || $t('legacy.t_9052d1d17cb2') }}</p>
     <form v-else @submit.prevent="save">
-      <textarea v-model.trim="note" rows="4" maxlength="500" :aria-invalid="Boolean(error)" placeholder="例如：本次由租户转账；费用已与业主确认；租户已付 RM 80"></textarea>
-      <label><input v-model="reuseEnabled" type="checkbox"> 后续同一房产、同一资金类型自动沿用此备注</label>
-      <span v-if="error" class="error" role="alert">{{ error }}</span>
-      <div><button type="button" @click="editing=false">取消</button><button class="primary" :disabled="saving">{{ saving ? '保存中…' : '保存备注' }}</button></div>
+      <textarea v-model.trim="note" rows="4" maxlength="500" :aria-invalid="Boolean(error)" :placeholder="$t('legacy.t_41e8757f4e11')"></textarea>
+      <label><input v-model="reuseEnabled" type="checkbox"> {{ $t('legacy.t_cf0a56053b25') }}</label>
+      <span v-if="error" class="error" role="alert">{{ $lt(error) }}</span>
+      <div><button type="button" @click="editing=false">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="primary" :disabled="saving">{{ saving ? $t('legacy.t_6644f06197a4') : $t('legacy.t_606e82096d63') }}</button></div>
     </form>
   </section>
 </template>

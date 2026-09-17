@@ -28,5 +28,7 @@ public record AdminPropertyCashflowResponse(
         Long attachmentSize,
         String createdByName,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt) {
+        LocalDateTime updatedAt,
+        LocalDate receiptDate,
+        LocalDate paymentDate) {
 }

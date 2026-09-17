@@ -2,7 +2,7 @@
   <label class="language-switcher" :title="$t('language.label')">
     <span>{{ $t('legacy.t_1d56b27a5e87') }}</span>
     <select v-model="locale" :aria-label="$t('language.label')">
-      <option v-for="option in locales" :key="option.code" :value="option.code">{{ option.label }}</option>
+      <option v-for="option in locales" :key="option.code" :value="option.code">{{ $lt(option.label) }}</option>
     </select>
   </label>
 </template>

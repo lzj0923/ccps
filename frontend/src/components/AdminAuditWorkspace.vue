@@ -10,12 +10,12 @@
         <label>{{ $t('legacy.t_7fd7a227e9ce') }}<input v-model="filters.startDate" type="date"></label>
         <label>{{ $t('legacy.t_27eefa5237a0') }}<input v-model="filters.endDate" type="date"></label>
         <label>{{ $t('legacy.t_00b52dc2284c') }}<select v-model="filters.actorId"><option value="">{{ $t('legacy.t_5da3e85f74ef') }}</option><option v-for="actor in options.actors" :key="actor.id" :value="String(actor.id)">{{ actor.name }}</option></select></label>
-        <label>{{ $t('legacy.t_4bb42f343241') }}<select v-model="filters.action"><option value="">{{ $t('legacy.t_1e97126f5862') }}</option><option v-for="action in options.actions" :key="action" :value="action">{{ actionLabel(action) }}</option></select></label>
+        <label>{{ $t('legacy.t_4bb42f343241') }}<select v-model="filters.action"><option value="">{{ $t('legacy.t_1e97126f5862') }}</option><option v-for="action in options.actions" :key="action" :value="action">{{ $lt(actionLabel(action)) }}</option></select></label>
         <label class="keyword">{{ $t('legacy.t_2990e991a238') }}<input v-model.trim="filters.keyword" type="search" :placeholder="$t('legacy.t_f166a87b37e6')"></label>
         <div class="audit-filter-actions"><button class="audit-primary" type="submit">{{ $t('legacy.t_505ba2176546') }}</button><button class="audit-secondary" type="button" @click="resetFilters">{{ $t('legacy.t_7b15e5e8e7bd') }}</button></div>
       </form>
 
-      <div v-if="errorMessage" class="audit-state error"><strong>{{ $t('legacy.t_4a5a291d9b7e') }}</strong><span>{{ errorMessage }}</span></div>
+      <div v-if="errorMessage" class="audit-state error"><strong>{{ $t('legacy.t_4a5a291d9b7e') }}</strong><span>{{ $lt(errorMessage) }}</span></div>
       <div v-else-if="loading" class="audit-state">{{ $t('legacy.t_5d5be43e065a') }}</div>
       <div v-else class="audit-table-wrap">
         <table>
@@ -23,10 +23,10 @@
           <tbody>
             <template v-for="item in records" :key="item.id">
               <tr :class="{ selected: expandedId === item.id }">
-                <td>{{ formatDateTime(item.createdAt) }}</td><td>{{ item.actorName || $t('legacy.t_4a4dae52e9fa') }}</td><td><span class="audit-action">{{ actionLabel(item.action) }}</span></td><td>{{ entityLabel(item.entityType) }}</td><td>{{ item.entityId || '—' }}</td>
+                <td>{{ formatDateTime(item.createdAt) }}</td><td>{{ item.actorName || $t('legacy.t_4a4dae52e9fa') }}</td><td><span class="audit-action">{{ $lt(actionLabel(item.action)) }}</span></td><td>{{ $lt(entityLabel(item.entityType)) }}</td><td>{{ item.entityId || '—' }}</td>
                 <td><button class="audit-detail" type="button" @click="toggleDetail(item.id)">{{ expandedId === item.id ? $t('legacy.t_5d5815647c76') : $t('legacy.t_f7acefd2d4cd') }}</button></td>
               </tr>
-              <tr v-if="expandedId === item.id" class="audit-detail-row"><td colspan="6"><div class="audit-detail-grid"><div><h3>{{ $t('legacy.t_c9a559451d96') }}</h3><dl><template v-for="field in snapshotFields(item.beforeData)" :key="field.key"><dt>{{ field.label }}</dt><dd>{{ field.value }}</dd></template><dd v-if="!snapshotFields(item.beforeData).length">{{ $t('legacy.t_eb848bc1b8e6') }}</dd></dl></div><div><h3>{{ $t('legacy.t_377ea3bf938a') }}</h3><dl><template v-for="field in snapshotFields(item.afterData)" :key="field.key"><dt>{{ field.label }}</dt><dd>{{ field.value }}</dd></template><dd v-if="!snapshotFields(item.afterData).length">{{ $t('legacy.t_ba1a35dd3d86') }}</dd></dl></div></div></td></tr>
+              <tr v-if="expandedId === item.id" class="audit-detail-row"><td colspan="6"><div class="audit-detail-grid"><div><h3>{{ $t('legacy.t_c9a559451d96') }}</h3><dl><template v-for="field in snapshotFields(item.beforeData)" :key="field.key"><dt>{{ $lt(field.label) }}</dt><dd>{{ field.value }}</dd></template><dd v-if="!snapshotFields(item.beforeData).length">{{ $t('legacy.t_eb848bc1b8e6') }}</dd></dl></div><div><h3>{{ $t('legacy.t_377ea3bf938a') }}</h3><dl><template v-for="field in snapshotFields(item.afterData)" :key="field.key"><dt>{{ $lt(field.label) }}</dt><dd>{{ field.value }}</dd></template><dd v-if="!snapshotFields(item.afterData).length">{{ $t('legacy.t_ba1a35dd3d86') }}</dd></dl></div></div></td></tr>
             </template>
             <tr v-if="!records.length"><td colspan="6" class="audit-empty">{{ $t('legacy.t_d47596765994') }}</td></tr>
           </tbody>

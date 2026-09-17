@@ -5,14 +5,17 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.lowagie.text.Document;
+import com.lowagie.text.Chunk;
 import com.lowagie.text.Element;
 import com.lowagie.text.Image;
-import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
+import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPageEventHelper;
@@ -21,35 +24,55 @@ import com.lowagie.text.pdf.PdfWriter;
 
 /** Generates the CCPS handover-report layout supplied by the customer. */
 public class HandoverReportPdfService {
+    private static final Rectangle REFERENCE_PAGE = new Rectangle(960, 540);
     private static final String KEY_PHOTOS = "鑰匙、通行卡和遙控器照片 / Keys, Access Card & Remote Control";
+    private static final List<String> UNIT_PHOTO_SECTIONS = List.of(
+            "客廳照片 / Living Room",
+            "飯廳照片 / Dining Room",
+            "廚房照片 / Kitchen",
+            "主臥室照片 / Master Bedroom",
+            "主浴室照片 / Master Bathroom");
     private static final String TENANT_PHOTOS = "瑕疵 (扣租客押金) / Defects (Deduct From Deposit)";
     private static final String OWNER_PHOTOS = "瑕疵 (询问屋主是否要维修) / Defects (Ask Owner If Repairs Are Needed)";
+    private static final Set<String> INTERNAL_PHOTO_SOURCE_NOTES = Set.of(
+            "从租赁合同补充资料新增",
+            "從租賃合約補充資料新增",
+            "Added from tenancy agreement details",
+            "由附件签约生成交接报告时新增",
+            "由附件簽約產生交接報告時新增",
+            "Added while generating a handover report from Files & Signing");
 
     public byte[] create(Report report) {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            Document document = new Document(PageSize.A4.rotate(), 36, 36, 36, 36);
+            Document document = new Document(REFERENCE_PAGE, 38, 38, 24, 42);
             PdfWriter writer = PdfWriter.getInstance(document, output);
             writer.setPageEvent(new CcpsLogoPageEvent());
             document.open();
-            BaseFont base = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
-            com.lowagie.text.Font cover = new com.lowagie.text.Font(base, 24, com.lowagie.text.Font.BOLD);
-            com.lowagie.text.Font title = new com.lowagie.text.Font(base, 17, com.lowagie.text.Font.BOLD);
-            com.lowagie.text.Font heading = new com.lowagie.text.Font(base, 12, com.lowagie.text.Font.BOLD);
-            com.lowagie.text.Font body = new com.lowagie.text.Font(base, 9);
+            BaseFont base = PdfFontResources.regular();
+            com.lowagie.text.Font cover = new com.lowagie.text.Font(base, 40, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font title = new com.lowagie.text.Font(base, 28, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font heading = new com.lowagie.text.Font(base, 22, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font body = new com.lowagie.text.Font(base, 14);
+            com.lowagie.text.Font caption = new com.lowagie.text.Font(base, 15, com.lowagie.text.Font.BOLD);
+            com.lowagie.text.Font recommendation = new com.lowagie.text.Font(base, 14,
+                    com.lowagie.text.Font.BOLD, java.awt.Color.RED);
 
-            Paragraph coverTitle = new Paragraph("交接报告\nHandover Report", cover);
+            Paragraph coverTitle = paragraph("交接报告\nHandover Report", cover);
             coverTitle.setAlignment(Element.ALIGN_CENTER);
-            coverTitle.setSpacingBefore(230);
-            coverTitle.setSpacingAfter(18);
+            coverTitle.setLeading(48);
+            coverTitle.setSpacingBefore(115);
+            coverTitle.setSpacingAfter(56);
             document.add(coverTitle);
-            Paragraph company = new Paragraph("BY CCPS PROPERTIES MANAGEMENT SDN BHD", heading);
+            Paragraph company = paragraph("BY CCPS PROPERTIES MANAGEMENT SDN BHD",
+                    new com.lowagie.text.Font(base, 21));
             company.setAlignment(Element.ALIGN_CENTER);
             document.add(company);
             document.newPage();
 
-            document.add(spacingHeading("Details 详情：", title));
             PdfPTable details = new PdfPTable(new float[] { .5f, 1.45f, 2.8f });
-            details.setWidthPercentage(100);
+            details.setWidthPercentage(82);
+            details.setHorizontalAlignment(Element.ALIGN_LEFT);
+            addSpanningTitle(details, "Details 详情：", title, 3);
             addDetail(details, "1", "业主名\nOwner Name", report.ownerName(), body);
             addDetail(details, "2", "项目名称\nProject Name", report.projectName(), body);
             addDetail(details, "3", "单元号\nUnit Nos", report.unitNo(), body);
@@ -59,33 +82,43 @@ public class HandoverReportPdfService {
             addDetail(details, "7", "交接日期\nHandover Date", date(report.handoverDate()), body);
             document.add(details);
 
-            addPartCover(document, "（一）钥匙, 通行卡和遥控器", "Keys, Access Card & Remote Control", title);
-            for (int i = 0; i < Math.min(3, report.sections().size()); i++) addInventoryPages(document, report.sections().get(i), body, heading, i == 0 ? 11 : 11);
-            addPhotoPages(document, KEY_PHOTOS, report.photos(), 1, body, heading);
+            addPartCover(document, "（一）. 钥匙,通行卡和遥控器", "Keys, Access Card & Remote Control", title);
+            for (Section section : report.sections()) {
+                if (isAccessSection(section.title())) addInventoryPages(document, section, body, heading, 11);
+            }
+            int keyPhotoPages = photoPageCount(KEY_PHOTOS, report.photos());
+            if (keyPhotoPages > 0) addPhotoPages(document, KEY_PHOTOS, report.photos(), keyPhotoPages, caption, heading);
 
-            addPartCover(document, "（二）单位和物品", "Unit & Item", title);
-            for (int i = 3; i < report.sections().size(); i++) {
-                Section section = report.sections().get(i);
-                addInventoryPages(document, section, body, heading, 11);
-                int pages = section.title().startsWith("客廳") || section.title().startsWith("廚房") || section.title().startsWith("主臥室") ? 2 : 1;
-                addPhotoPages(document, photoSection(section.title()), report.photos(), pages, body, heading);
+            addPartCover(document, "（二）. 单位和物品", "Unit & Item", title);
+            for (Section section : report.sections()) {
+                if (!isAccessSection(section.title())) addInventoryPages(document, section, body, heading, 11);
+            }
+            LinkedHashSet<String> unitPhotoSections = new LinkedHashSet<>(UNIT_PHOTO_SECTIONS);
+            if (report.photos() != null) {
+                report.photos().stream().map(Photo::section).filter(this::isUnitPhotoSection).forEach(unitPhotoSections::add);
+            }
+            for (String photoSection : unitPhotoSections) {
+                int pages = photoPageCount(photoSection, report.photos());
+                if (pages > 0) addPhotoPages(document, photoSection, report.photos(), pages, caption, heading);
             }
 
+            addPartCover(document, "（三）. 瑕疵（扣租客押金）", "Defects (Deduct From Deposit)", title);
             addTenantIssues(document, report.tenantIssues(), body, heading);
             int tenantPhotoPages = photoPageCount(TENANT_PHOTOS, report.photos());
-            if (tenantPhotoPages > 0) addPhotoPages(document, TENANT_PHOTOS, report.photos(), tenantPhotoPages, body, heading);
-            addPartCover(document, "（四）瑕疵 (询问屋主是否要维修)", "Defects (Ask Owner If Repairs Are Needed)", title);
-            addOwnerIssues(document, report.ownerIssues(), body, heading);
+            if (tenantPhotoPages > 0) addPhotoPages(document, TENANT_PHOTOS, report.photos(), tenantPhotoPages, caption, heading);
+            addPartCover(document, "（四）. 瑕疵（询问屋主是否要维修）", "Defects (Ask Owner If Repairs Are Needed)", title);
+            addOwnerIssues(document, report.ownerIssues(), body, heading, recommendation);
             int ownerPhotoPages = photoPageCount(OWNER_PHOTOS, report.photos());
-            if (ownerPhotoPages > 0) addPhotoPages(document, OWNER_PHOTOS, report.photos(), ownerPhotoPages, body, heading);
+            if (ownerPhotoPages > 0) addPhotoPages(document, OWNER_PHOTOS, report.photos(), ownerPhotoPages, caption, heading);
             if (report.remarks() != null && !report.remarks().isBlank()) {
                 document.add(spacingHeading("备注 / Remarks", heading));
-                document.add(new Paragraph(report.remarks(), body));
+                document.add(paragraph(report.remarks(), body));
             }
             document.newPage();
-            Paragraph thanks = new Paragraph("谢谢\nThank You", title);
+            Paragraph thanks = paragraph("谢谢\nThank You", title);
             thanks.setAlignment(Element.ALIGN_CENTER);
-            thanks.setSpacingBefore(28);
+            thanks.setLeading(36);
+            thanks.setSpacingBefore(175);
             document.add(thanks);
             document.close();
             return output.toByteArray();
@@ -96,8 +129,9 @@ public class HandoverReportPdfService {
 
     private void addPartCover(Document document, String chinese, String english, com.lowagie.text.Font title) throws Exception {
         document.newPage();
-        Paragraph heading = new Paragraph(chinese + "\n" + english, title);
-        heading.setSpacingBefore(220);
+        Paragraph heading = paragraph(chinese + "\n" + english, title);
+        heading.setLeading(36);
+        heading.setSpacingBefore(178);
         heading.setAlignment(Element.ALIGN_CENTER);
         document.add(heading);
     }
@@ -105,7 +139,11 @@ public class HandoverReportPdfService {
     private void addInventoryPages(Document document, Section section, com.lowagie.text.Font body,
             com.lowagie.text.Font heading, int rowsPerPage) throws Exception {
         List<Item> items = section.items() == null ? List.of() : section.items();
-        if (items.isEmpty()) { addInventory(document, section, List.of(), 0, body, heading); return; }
+        if (items.isEmpty()) {
+            document.newPage();
+            addInventory(document, section, List.of(), 0, body, heading);
+            return;
+        }
         for (int start = 0; start < items.size(); start += rowsPerPage) {
             document.newPage();
             addInventory(document, section, items.subList(start, Math.min(start + rowsPerPage, items.size())), start, body, heading);
@@ -114,74 +152,134 @@ public class HandoverReportPdfService {
 
     private void addInventory(Document document, Section section, List<Item> items, int startNumber, com.lowagie.text.Font body,
             com.lowagie.text.Font heading) throws Exception {
-        document.add(spacingHeading(section.title() + "：", heading));
+        document.add(spacingHeading(singleLineSection(section.title()) + "：", heading));
         PdfPTable table = new PdfPTable(new float[] { .45f, 2.5f, .75f, 1.55f });
         table.setWidthPercentage(100);
-        addHeader(table, "No.", body);
-        addHeader(table, "交接清单\nHandover List", body);
-        addHeader(table, "数量\nQuantity", body);
-        addHeader(table, "备注\nRemark", body);
+        addHeader(table, "No.", body, 43);
+        addHeader(table, "交接清单\nHandover List", body, 43);
+        addHeader(table, "数量\nQuantity", body, 43);
+        addHeader(table, "备注\nRemark", body, 43);
         int number = startNumber + 1;
         for (Item item : items) {
-            addCell(table, String.valueOf(number++), body, Element.ALIGN_CENTER);
-            addCell(table, text(item.name()), body, Element.ALIGN_LEFT);
-            addCell(table, text(item.quantity()), body, Element.ALIGN_CENTER);
+            addCell(table, String.valueOf(number++), body, Element.ALIGN_CENTER, 31);
+            addCell(table, text(item.name()), body, Element.ALIGN_LEFT, 31);
+            addCell(table, text(item.quantity()), body, Element.ALIGN_CENTER, 31);
             String remarks = item.remarks();
             if ((remarks == null || remarks.isBlank()) && item.condition() != null && !item.condition().isBlank()) remarks = item.condition();
-            addCell(table, text(remarks), body, Element.ALIGN_LEFT);
+            addCell(table, text(remarks), body, Element.ALIGN_LEFT, 31);
         }
         document.add(table);
     }
 
     private void addTenantIssues(Document document, List<Issue> issues, com.lowagie.text.Font body,
             com.lowagie.text.Font heading) throws Exception {
-        document.newPage();
-        document.add(spacingHeading("（三）瑕疵 (扣租客押金)\nDefects (Deduct From Deposit)：", heading));
-        PdfPTable table = new PdfPTable(new float[] { .45f, 4.55f });
-        table.setWidthPercentage(100);
-        addHeader(table, "No.", body);
-        addHeader(table, "维修与维护\nRepair & Maintenance", body);
-        int number = 1;
-        for (Issue issue : issues) {
-            addCell(table, String.valueOf(number++), body, Element.ALIGN_CENTER);
-            addCell(table, issueText(issue, false), body, Element.ALIGN_LEFT);
+        List<Issue> rows = issues == null ? List.of() : issues;
+        int pages = Math.max(1, (int) Math.ceil(rows.size() / 8.0));
+        for (int page = 0; page < pages; page++) {
+            document.newPage();
+            PdfPTable table = new PdfPTable(new float[] { .45f, 4.55f });
+            table.setWidthPercentage(68);
+            table.setHorizontalAlignment(Element.ALIGN_LEFT);
+            addSpanningTitle(table, "瑕疵（扣租客押金）\nDefects (Deduct From Deposit)：", heading, 2);
+            addHeader(table, "No.", body, 45);
+            addHeader(table, "维修与维护：\nRepair & Maintenance：", body, 45);
+            int from = page * 8;
+            int to = Math.min(from + 8, rows.size());
+            for (int index = from; index < to; index++) {
+                Issue issue = rows.get(index);
+                addCell(table, String.valueOf(index + 1), body, Element.ALIGN_CENTER, 42);
+                addCell(table, "问题 ： " + issueText(issue, false), body, Element.ALIGN_LEFT, 42);
+            }
+            document.add(table);
         }
-        document.add(table);
     }
 
     private void addOwnerIssues(Document document, List<Issue> issues, com.lowagie.text.Font body,
-            com.lowagie.text.Font heading) throws Exception {
-        document.newPage();
-        document.add(spacingHeading("瑕疵 (询问屋主是否要维修)\nDefects (Ask Owner If Repairs Are Needed)：", heading));
-        PdfPTable table = new PdfPTable(new float[] { .45f, 2.7f, 2.3f });
-        table.setWidthPercentage(100);
-        addHeader(table, "No.", body);
-        addHeader(table, "问题\nRepair & Maintenance", body);
-        addHeader(table, "建议\nRecommendation", body);
-        int number = 1;
-        for (Issue issue : issues) {
-            addCell(table, String.valueOf(number++), body, Element.ALIGN_CENTER);
-            addCell(table, issueText(issue, false), body, Element.ALIGN_LEFT);
-            addCell(table, text(issue.recommendation()), body, Element.ALIGN_LEFT);
+            com.lowagie.text.Font heading, com.lowagie.text.Font recommendation) throws Exception {
+        List<Issue> rows = issues == null ? List.of() : issues;
+        int pages = Math.max(1, (int) Math.ceil(rows.size() / 6.0));
+        for (int page = 0; page < pages; page++) {
+            document.newPage();
+            PdfPTable table = new PdfPTable(new float[] { .45f, 4.55f });
+            table.setWidthPercentage(68);
+            table.setHorizontalAlignment(Element.ALIGN_LEFT);
+            addSpanningTitle(table, "瑕疵（询问屋主是否要维修）\nDefects (Ask Owner If Repairs Are Needed)：", heading, 2);
+            addHeader(table, "No.", body, 45);
+            addHeader(table, "维修与维护：\nRepair & Maintenance：", body, 45);
+            int from = page * 6;
+            int to = Math.min(from + 6, rows.size());
+            for (int index = from; index < to; index++) {
+                Issue issue = rows.get(index);
+                addCell(table, String.valueOf(index + 1), body, Element.ALIGN_CENTER, 56);
+                PdfPCell issueCell = new PdfPCell();
+                issueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                issueCell.setMinimumHeight(56);
+                issueCell.setPadding(7);
+                Paragraph problem = paragraph("问题 ： " + issueText(issue, false), body);
+                problem.setLeading(18);
+                issueCell.addElement(problem);
+                Paragraph advice = new Paragraph();
+                advice.setLeading(18);
+                advice.add(mixedPhrase("建议 ： " + text(issue.recommendation()), recommendation));
+                issueCell.addElement(advice);
+                table.addCell(issueCell);
+            }
+            document.add(table);
         }
-        document.add(table);
     }
 
     private void addPhotoPages(Document document, String section, List<Photo> photos, int pageCount,
-            com.lowagie.text.Font body, com.lowagie.text.Font heading) throws Exception {
+            com.lowagie.text.Font caption, com.lowagie.text.Font heading) throws Exception {
         List<Photo> matching = photos == null ? List.of() : photos.stream().filter(photo -> section.equals(photo.section())
                 && photo.path() != null && Files.isRegularFile(photo.path())).toList();
         for (int page = 0; page < pageCount; page++) {
             document.newPage();
-            document.add(spacingHeading(section, heading));
+            Paragraph pageHeading = paragraph(photoSectionHeading(section), heading);
+            pageHeading.setAlignment(Element.ALIGN_CENTER);
+            pageHeading.setLeading(28);
+            pageHeading.setSpacingAfter(14);
+            document.add(pageHeading);
+            PdfPTable photoGrid = new PdfPTable(2);
+            photoGrid.setWidthPercentage(88);
+            photoGrid.setHorizontalAlignment(Element.ALIGN_CENTER);
             int from = page * 2;
-            for (Photo photo : matching.subList(Math.min(from, matching.size()), Math.min(from + 2, matching.size()))) {
-                if (photo.caption() != null && !photo.caption().isBlank()) document.add(new Paragraph(photo.caption(), body));
+            for (int slot = 0; slot < 2; slot++) {
+                int index = from + slot;
+                if (index >= matching.size()) {
+                    PdfPCell empty = new PdfPCell();
+                    empty.setBorder(Rectangle.NO_BORDER);
+                    photoGrid.addCell(empty);
+                    continue;
+                }
+                Photo photo = matching.get(index);
+                PdfPTable card = new PdfPTable(1);
                 Image image = Image.getInstance(photo.path().toAbsolutePath().toString());
-                image.scaleToFit(700, 390);
+                image.scaleToFit(368, 258);
                 image.setAlignment(Element.ALIGN_CENTER);
-                document.add(image);
+                PdfPCell imageCell = new PdfPCell();
+                imageCell.setFixedHeight(270);
+                imageCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                imageCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                imageCell.setPadding(0);
+                imageCell.addElement(image);
+                card.addCell(imageCell);
+
+                String photoCaption = visiblePhotoCaption(photo.caption());
+                PdfPCell captionCell = new PdfPCell(mixedPhrase(
+                        photoCaption.isBlank() ? "" : (index + 1) + ". " + photoCaption, caption));
+                captionCell.setFixedHeight(48);
+                captionCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                captionCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                captionCell.setPadding(6);
+                if (photoCaption.isBlank()) captionCell.setBorder(Rectangle.NO_BORDER);
+                card.addCell(captionCell);
+
+                PdfPCell cardCell = new PdfPCell(card);
+                cardCell.setBorder(Rectangle.NO_BORDER);
+                cardCell.setPadding(10);
+                photoGrid.addCell(cardCell);
             }
+            document.add(photoGrid);
         }
     }
 
@@ -191,13 +289,33 @@ public class HandoverReportPdfService {
         return (int) Math.ceil(count / 2.0);
     }
 
-    private String photoSection(String section) {
-        if (section.startsWith("客廳")) return "客廳照片 / Living Room";
-        if (section.startsWith("飯廳")) return "飯廳照片 / Dining Room";
-        if (section.startsWith("廚房")) return "廚房照片 / Kitchen";
-        if (section.startsWith("主臥室")) return "主臥室照片 / Master Bedroom";
-        if (section.startsWith("主浴室")) return "主浴室照片 / Master Bathroom";
-        return section;
+    private String visiblePhotoCaption(String caption) {
+        String value = caption == null ? "" : caption.trim();
+        return INTERNAL_PHOTO_SOURCE_NOTES.contains(value) ? "" : value;
+    }
+
+    private String photoSectionHeading(String section) {
+        if (section == null) return "";
+        int divider = section.indexOf(" / ");
+        return divider < 0 ? section : section.substring(0, divider) + "\n" + section.substring(divider + 3);
+    }
+
+    private String singleLineSection(String section) {
+        return section == null ? "" : section.replace(" / ", " ");
+    }
+
+    private boolean isAccessSection(String section) {
+        if (section == null) return false;
+        String value = section.trim().toLowerCase();
+        return value.startsWith("鑰匙") || value.startsWith("钥匙") || value.startsWith("門禁卡")
+                || value.startsWith("门禁卡") || value.startsWith("通行卡") || value.startsWith("遙控器")
+                || value.startsWith("遥控器") || value.startsWith("keys") || value.startsWith("access card")
+                || value.startsWith("remote control");
+    }
+
+    private boolean isUnitPhotoSection(String section) {
+        return section != null && !section.isBlank() && !KEY_PHOTOS.equals(section)
+                && !TENANT_PHOTOS.equals(section) && !OWNER_PHOTOS.equals(section);
     }
 
     private String issueText(Issue issue, boolean includeRecommendation) {
@@ -212,37 +330,85 @@ public class HandoverReportPdfService {
     }
 
     private void addDetail(PdfPTable table, String number, String label, String value, com.lowagie.text.Font body) {
-        addCell(table, number, body, Element.ALIGN_CENTER);
-        addCell(table, label, body, Element.ALIGN_LEFT);
-        addCell(table, text(value), body, Element.ALIGN_CENTER);
+        addCell(table, number, body, Element.ALIGN_CENTER, 45);
+        addCell(table, label, body, Element.ALIGN_LEFT, 45);
+        addCell(table, text(value), body, Element.ALIGN_CENTER, 45);
     }
 
     private Paragraph spacingHeading(String value, com.lowagie.text.Font font) {
-        Paragraph paragraph = new Paragraph(value, font);
-        paragraph.setSpacingBefore(14);
+        Paragraph paragraph = paragraph(value, font);
+        paragraph.setSpacingBefore(3);
         paragraph.setSpacingAfter(7);
         return paragraph;
     }
 
-    private void addHeader(PdfPTable table, String value, com.lowagie.text.Font font) {
-        PdfPCell cell = new PdfPCell(new Phrase(value, font));
-        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+    private void addSpanningTitle(PdfPTable table, String value, com.lowagie.text.Font font, int columns) {
+        PdfPCell cell = new PdfPCell(mixedPhrase(value, font));
+        cell.setColspan(columns);
         cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        cell.setBackgroundColor(new java.awt.Color(245, 245, 245));
-        cell.setPadding(6);
+        cell.setPadding(7);
+        cell.setMinimumHeight(45);
         table.addCell(cell);
     }
 
-    private void addCell(PdfPTable table, String value, com.lowagie.text.Font font, int alignment) {
-        PdfPCell cell = new PdfPCell(new Phrase(value, font));
+    private void addHeader(PdfPTable table, String value, com.lowagie.text.Font font, float minimumHeight) {
+        PdfPCell cell = new PdfPCell(mixedPhrase(value, font));
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setPadding(6);
+        cell.setMinimumHeight(minimumHeight);
+        table.addCell(cell);
+    }
+
+    private void addCell(PdfPTable table, String value, com.lowagie.text.Font font, int alignment, float minimumHeight) {
+        PdfPCell cell = new PdfPCell(mixedPhrase(value, font));
         cell.setHorizontalAlignment(alignment);
         cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
         cell.setPadding(6);
+        cell.setMinimumHeight(minimumHeight);
         table.addCell(cell);
     }
 
     private String text(String value) { return value == null || value.isBlank() ? "—" : value; }
-    private String date(LocalDate value) { return value == null ? "—" : String.format("%02d.%02d.%04d", value.getDayOfMonth(), value.getMonthValue(), value.getYear()); }
+    private String date(LocalDate value) { return value == null ? "—" : String.format("%02d/%02d/%04d", value.getDayOfMonth(), value.getMonthValue(), value.getYear()); }
+
+    private Paragraph paragraph(String value, com.lowagie.text.Font font) {
+        Paragraph paragraph = new Paragraph();
+        paragraph.add(mixedPhrase(value, font));
+        return paragraph;
+    }
+
+    private Phrase mixedPhrase(String value, com.lowagie.text.Font cjkFont) {
+        Phrase phrase = new Phrase();
+        com.lowagie.text.Font latinFont = latinFont(cjkFont);
+        String text = value == null ? "" : value;
+        StringBuilder run = new StringBuilder();
+        boolean latin = false;
+        boolean initialized = false;
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+            boolean nextLatin = character <= 0x7f;
+            if (initialized && nextLatin != latin) {
+                phrase.add(new Chunk(run.toString(), latin ? latinFont : cjkFont));
+                run.setLength(0);
+            }
+            run.append(character);
+            latin = nextLatin;
+            initialized = true;
+        }
+        if (!run.isEmpty()) phrase.add(new Chunk(run.toString(), latin ? latinFont : cjkFont));
+        return phrase;
+    }
+
+    private com.lowagie.text.Font latinFont(com.lowagie.text.Font source) {
+        try {
+            BaseFont latin = (source.getStyle() & com.lowagie.text.Font.BOLD) != 0
+                    ? PdfFontResources.bold() : PdfFontResources.regular();
+            return new com.lowagie.text.Font(latin, source.getSize(), source.getStyle(), source.getColor());
+        } catch (Exception ignored) {
+            return source;
+        }
+    }
 
     public record Report(String projectName, String unitNo, String ownerName, String unitType, String handoverFrom,
             String handoverTo, LocalDate handoverDate, List<Section> sections, List<Issue> tenantIssues,

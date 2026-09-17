@@ -28,6 +28,16 @@ public interface ElectronicSignatureMapper {
               AND d.status NOT IN ('superseded','voided')
             """)
     DocumentRow findMandateDocument(@Param("mandateId") Long mandateId, @Param("documentId") Long documentId);
+
+    @Select("""
+            SELECT d.id,d.original_name,d.storage_key,d.mime_type,d.file_size,d.checksum_sha256,dl.relation_type
+            FROM documents d JOIN document_links dl ON dl.document_id=d.id
+            WHERE dl.entity_type='rental_mandate' AND dl.entity_id=#{mandateId}
+              AND dl.relation_type=#{relationType} AND d.status NOT IN ('superseded','voided')
+            ORDER BY d.created_at DESC,d.id DESC LIMIT 1
+            """)
+    DocumentRow findCurrentMandateDocumentByRelation(@Param("mandateId") Long mandateId,
+            @Param("relationType") String relationType);
     @Select("SELECT status FROM rental_mandates WHERE id=#{mandateId}")
     String findMandateStatus(@Param("mandateId") Long mandateId);
 
@@ -151,6 +161,29 @@ public interface ElectronicSignatureMapper {
             """)
     RequestRow findByTokenHash(@Param("accessTokenHash") String accessTokenHash);
 
+    @Select("""
+            SELECT sr.id,sr.source_document_id,sr.root_document_id,sr.entity_type,sr.entity_id,sr.document_kind,
+                   sr.signer_role,sr.signing_order,sr.signer_name,sr.signer_email,sr.requested_by,
+                   sr.verification_code_hash,sr.verification_expires_at,sr.status,sr.expires_at,sr.signed_at,
+                   sr.signed_document_id,d.original_name,d.storage_key,d.mime_type,d.checksum_sha256,
+                   signed.original_name AS signed_original_name,signed.storage_key AS signed_storage_key,
+                   signed.status AS signed_document_status
+            FROM electronic_signature_requests sr JOIN documents d ON d.id=sr.source_document_id
+            LEFT JOIN documents signed ON signed.id=sr.signed_document_id
+            WHERE sr.id=#{requestId}
+            """)
+    RequestRow findById(@Param("requestId") Long requestId);
+
+    @Select("SELECT status FROM electronic_signature_requests WHERE id=#{requestId} FOR UPDATE")
+    String lockRequestStatus(@Param("requestId") Long requestId);
+
+    @Update("UPDATE electronic_signature_requests SET signer_email=#{signerEmail},updated_at=CURRENT_TIMESTAMP WHERE id=#{requestId} AND status='pending'")
+    int updateRequestSignerEmail(@Param("requestId") Long requestId, @Param("signerEmail") String signerEmail);
+
+    @Update("UPDATE electronic_signature_participants SET signer_email=#{signerEmail},updated_at=CURRENT_TIMESTAMP WHERE root_document_id=#{rootDocumentId} AND signer_role=#{signerRole}")
+    int updateParticipantSignerEmail(@Param("rootDocumentId") Long rootDocumentId,
+            @Param("signerRole") String signerRole, @Param("signerEmail") String signerEmail);
+
     @Select("SELECT id FROM documents WHERE id=#{documentId} FOR UPDATE")
     Long lockDocument(@Param("documentId") Long documentId);
 
@@ -204,13 +237,8 @@ public interface ElectronicSignatureMapper {
             """)
     int countSignedRolesForRoot(@Param("rootDocumentId") Long rootDocumentId);
 
-    @Update("""
-            UPDATE electronic_signature_requests
-            SET verification_code_hash=#{codeHash},verification_expires_at=#{expiresAt},updated_at=CURRENT_TIMESTAMP
-            WHERE id=#{requestId} AND status='pending'
-            """)
-    int updateVerificationCode(@Param("requestId") Long requestId, @Param("codeHash") String codeHash,
-            @Param("expiresAt") LocalDateTime expiresAt);
+    @Select("SELECT COUNT(*) FROM electronic_signature_participants WHERE root_document_id=#{rootDocumentId}")
+    int countParticipantsForRoot(@Param("rootDocumentId") Long rootDocumentId);
 
     @Insert("""
             INSERT INTO documents(document_no,original_name,storage_key,mime_type,file_size,checksum_sha256,
@@ -220,6 +248,29 @@ public interface ElectronicSignatureMapper {
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertSignedDocument(NewDocument row);
+
+    @Insert("""
+            INSERT INTO documents(document_no,original_name,storage_key,mime_type,file_size,checksum_sha256,
+              document_type,status,uploaded_by)
+            VALUES(#{row.documentNo},#{row.originalName},#{row.storageKey},'application/pdf',#{row.fileSize},
+              #{row.checksumSha256},#{documentType},'pending_review',#{row.uploadedBy})
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "row.id")
+    int insertMandateSourceDocument(@Param("row") NewDocument row,
+            @Param("documentType") String documentType);
+
+    @Insert("""
+            INSERT INTO document_links(document_id,entity_type,entity_id,relation_type)
+            VALUES(#{documentId},'rental_mandate',#{mandateId},#{relationType})
+            """)
+    int insertMandateSourceDocumentLink(@Param("documentId") Long documentId,
+            @Param("mandateId") Long mandateId, @Param("relationType") String relationType);
+
+    @Update("""
+            UPDATE documents SET status='superseded',updated_at=CURRENT_TIMESTAMP
+            WHERE id=#{documentId} AND status NOT IN ('superseded','voided')
+            """)
+    int supersedeMandateSourceDocument(@Param("documentId") Long documentId);
 
     @Insert("""
             INSERT INTO document_links(document_id,entity_type,entity_id,relation_type)

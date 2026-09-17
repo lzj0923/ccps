@@ -1,5 +1,15 @@
 -- MySQL 5.7 does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
 -- Use an information_schema guard so startup remains idempotent on 5.7 and 8.x.
+CREATE TABLE IF NOT EXISTS owner_staff_assignments (
+  owner_id BIGINT UNSIGNED NOT NULL,
+  staff_user_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (owner_id, staff_user_id),
+  KEY idx_owner_staff_user (staff_user_id, owner_id),
+  CONSTRAINT fk_owner_staff_owner FOREIGN KEY (owner_id) REFERENCES owners (id) ON DELETE CASCADE,
+  CONSTRAINT fk_owner_staff_user FOREIGN KEY (staff_user_id) REFERENCES users (id)
+) ENGINE=InnoDB;
+
 SET @requested_transaction_date_exists = (
   SELECT COUNT(*)
   FROM information_schema.COLUMNS
@@ -93,6 +103,20 @@ CREATE TABLE IF NOT EXISTS electronic_signature_requests (
   CONSTRAINT fk_e_signature_root_document FOREIGN KEY (root_document_id) REFERENCES documents (id),
   CONSTRAINT fk_e_signature_signed_document FOREIGN KEY (signed_document_id) REFERENCES documents (id),
   CONSTRAINT fk_e_signature_requester FOREIGN KEY (requested_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS owner_signature_tasks (
+  request_id BIGINT UNSIGNED NOT NULL,
+  owner_id BIGINT UNSIGNED NOT NULL,
+  recipient_user_id BIGINT UNSIGNED NOT NULL,
+  assigned_by BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (request_id),
+  KEY idx_owner_signature_recipient (recipient_user_id, created_at),
+  CONSTRAINT fk_owner_signature_request FOREIGN KEY (request_id) REFERENCES electronic_signature_requests (id),
+  CONSTRAINT fk_owner_signature_owner FOREIGN KEY (owner_id) REFERENCES owners (id),
+  CONSTRAINT fk_owner_signature_recipient FOREIGN KEY (recipient_user_id) REFERENCES users (id),
+  CONSTRAINT fk_owner_signature_assigner FOREIGN KEY (assigned_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS electronic_signature_participants (
@@ -465,3 +489,159 @@ CREATE TABLE IF NOT EXISTS whatsapp_delivery_attempts (
   KEY idx_whatsapp_attempt_status (status, status_at),
   CONSTRAINT fk_whatsapp_attempt_delivery FOREIGN KEY (delivery_id) REFERENCES notification_deliveries (id)
 ) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS staff_profiles (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  employee_no VARCHAR(50) NOT NULL,
+  department VARCHAR(120) NULL,
+  job_title VARCHAR(120) NULL,
+  hire_date DATE NULL,
+  leave_date DATE NULL,
+  employment_status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_staff_profiles_user (user_id),
+  UNIQUE KEY uk_staff_profiles_employee_no (employee_no),
+  CONSTRAINT fk_staff_profiles_user FOREIGN KEY (user_id) REFERENCES users (id),
+  CONSTRAINT chk_staff_profiles_dates CHECK (leave_date IS NULL OR hire_date IS NULL OR leave_date >= hire_date),
+  CONSTRAINT chk_staff_profiles_status CHECK (employment_status IN ('active','left'))
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS reserve_internal_transfers (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  transfer_no VARCHAR(60) NOT NULL,
+  source_reserve_account_id BIGINT UNSIGNED NOT NULL,
+  target_reserve_account_id BIGINT UNSIGNED NOT NULL,
+  amount DECIMAL(18,2) NOT NULL,
+  requested_date DATE NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  reviewed_by BIGINT UNSIGNED NULL,
+  reviewed_at DATETIME NULL,
+  reversed_by BIGINT UNSIGNED NULL,
+  reversed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_reserve_internal_transfers_no (transfer_no),
+  KEY idx_reserve_internal_transfers_status_date (status, requested_date),
+  CONSTRAINT fk_reserve_internal_transfer_source FOREIGN KEY (source_reserve_account_id) REFERENCES reserve_accounts (id),
+  CONSTRAINT fk_reserve_internal_transfer_target FOREIGN KEY (target_reserve_account_id) REFERENCES reserve_accounts (id),
+  CONSTRAINT fk_reserve_internal_transfer_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT fk_reserve_internal_transfer_reviewer FOREIGN KEY (reviewed_by) REFERENCES users (id),
+  CONSTRAINT fk_reserve_internal_transfer_reverser FOREIGN KEY (reversed_by) REFERENCES users (id),
+  CONSTRAINT chk_reserve_internal_transfer_amount CHECK (amount > 0),
+  CONSTRAINT chk_reserve_internal_transfer_accounts CHECK (source_reserve_account_id <> target_reserve_account_id),
+  CONSTRAINT chk_reserve_internal_transfer_status CHECK (status IN ('pending','approved','rejected','reversed'))
+) ENGINE=InnoDB;
+
+SET @internal_transfer_column_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='reserve_transactions' AND COLUMN_NAME='internal_transfer_id'
+);
+SET @add_internal_transfer_column_sql = IF(@internal_transfer_column_exists=0,
+  'ALTER TABLE reserve_transactions ADD COLUMN internal_transfer_id BIGINT UNSIGNED NULL AFTER maintenance_work_order_id, ADD KEY idx_reserve_transactions_internal_transfer (internal_transfer_id), ADD CONSTRAINT fk_reserve_transactions_internal_transfer FOREIGN KEY (internal_transfer_id) REFERENCES reserve_internal_transfers (id)',
+  'SELECT 1');
+PREPARE add_internal_transfer_column_stmt FROM @add_internal_transfer_column_sql;
+EXECUTE add_internal_transfer_column_stmt;
+DEALLOCATE PREPARE add_internal_transfer_column_stmt;
+
+CREATE TABLE IF NOT EXISTS owner_remittance_settings (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  reserve_account_id BIGINT UNSIGNED NOT NULL,
+  cycle VARCHAR(20) NOT NULL DEFAULT 'quarterly',
+  next_remittance_date DATE NULL,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  hold_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  hold_reason VARCHAR(500) NULL,
+  hold_until DATE NULL,
+  retained_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  tax_retained_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  default_bank_account_id BIGINT UNSIGNED NULL,
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_owner_remittance_settings_account (reserve_account_id),
+  KEY idx_owner_remittance_settings_due (enabled, next_remittance_date),
+  CONSTRAINT fk_owner_remittance_settings_account FOREIGN KEY (reserve_account_id) REFERENCES reserve_accounts (id),
+  CONSTRAINT fk_owner_remittance_settings_bank FOREIGN KEY (default_bank_account_id) REFERENCES property_bank_accounts (id),
+  CONSTRAINT fk_owner_remittance_settings_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT fk_owner_remittance_settings_updater FOREIGN KEY (updated_by) REFERENCES users (id),
+  CONSTRAINT chk_owner_remittance_settings_cycle CHECK (cycle IN ('monthly','quarterly','semiannual','manual')),
+  CONSTRAINT chk_owner_remittance_settings_retained CHECK (retained_amount >= 0 AND tax_retained_amount >= 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS owner_remittance_batches (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_no VARCHAR(60) NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'draft',
+  total_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  item_count INT UNSIGNED NOT NULL DEFAULT 0,
+  note VARCHAR(500) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  reviewed_by BIGINT UNSIGNED NULL,
+  reviewed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_owner_remittance_batches_no (batch_no),
+  KEY idx_owner_remittance_batches_status_date (status, scheduled_date),
+  CONSTRAINT fk_owner_remittance_batches_creator FOREIGN KEY (created_by) REFERENCES users (id),
+  CONSTRAINT fk_owner_remittance_batches_reviewer FOREIGN KEY (reviewed_by) REFERENCES users (id),
+  CONSTRAINT chk_owner_remittance_batches_status CHECK (status IN ('draft','submitted','rejected','completed','cancelled'))
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS owner_remittance_items (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_id BIGINT UNSIGNED NOT NULL,
+  reserve_account_id BIGINT UNSIGNED NOT NULL,
+  bank_account_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NULL,
+  amount DECIMAL(18,2) NOT NULL,
+  retained_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  tax_retained_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_owner_remittance_item_account (batch_id, reserve_account_id),
+  KEY idx_owner_remittance_item_finance (finance_record_id),
+  CONSTRAINT fk_owner_remittance_items_batch FOREIGN KEY (batch_id) REFERENCES owner_remittance_batches (id),
+  CONSTRAINT fk_owner_remittance_items_account FOREIGN KEY (reserve_account_id) REFERENCES reserve_accounts (id),
+  CONSTRAINT fk_owner_remittance_items_bank FOREIGN KEY (bank_account_id) REFERENCES property_bank_accounts (id),
+  CONSTRAINT fk_owner_remittance_items_finance FOREIGN KEY (finance_record_id) REFERENCES finance_records (id),
+  CONSTRAINT chk_owner_remittance_items_amount CHECK (amount > 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS owner_remittance_finance_links (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  remittance_item_id BIGINT UNSIGNED NOT NULL,
+  finance_record_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_owner_remittance_finance (finance_record_id),
+  KEY idx_owner_remittance_finance_item (remittance_item_id),
+  CONSTRAINT fk_owner_remittance_finance_item FOREIGN KEY (remittance_item_id) REFERENCES owner_remittance_items (id),
+  CONSTRAINT fk_owner_remittance_finance_record FOREIGN KEY (finance_record_id) REFERENCES finance_records (id)
+) ENGINE=InnoDB;
+
+SET @contract_status_check_exists = (
+  SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='property_contract_records'
+    AND CONSTRAINT_NAME='chk_property_contract_records_status' AND CONSTRAINT_TYPE='CHECK'
+);
+SET @drop_contract_status_check_sql = IF(@contract_status_check_exists > 0,
+  'ALTER TABLE property_contract_records DROP CHECK chk_property_contract_records_status', 'SELECT 1');
+PREPARE drop_contract_status_check_stmt FROM @drop_contract_status_check_sql;
+EXECUTE drop_contract_status_check_stmt;
+DEALLOCATE PREPARE drop_contract_status_check_stmt;
+
+ALTER TABLE property_contract_records
+  ADD CONSTRAINT chk_property_contract_records_status
+  CHECK (status IN ('draft','active','completed','cancelled','lost','voided','archived','returned'));

@@ -124,9 +124,6 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
   const firstReceiptReady = Boolean(firstInvoice && Number(firstInvoice.amountDue || 0) > 0
     && Number(firstInvoice.amountPaid || 0) >= Number(firstInvoice.amountDue || 0)
     && currentPayments.some(payment => statusOf(payment?.confirmationStatus) === 'confirmed'));
-  const handoverCompleted = workspace?.handover?.status === 'completed'
-    && (!currentMandate || sameId(workspace.handover.mandateId, currentMandate.id));
-  const moveInReady = handoverCompleted || Boolean(latestClosedLease);
   const finalHandoverReportReady = latestClosedLease
     ? asArray(workspace?.handovers).some(report => reportBelongsToLease(report, latestClosedLease.id ?? latestClosedLease.leaseId, 'move_out'))
     : false;
@@ -179,22 +176,11 @@ export function buildRentalWorkbench({ property = {}, mandates = [], workspace =
             : null,
     ),
     stage(
-      'moveInCollection',
-      !leaseReady ? 'pending' : moveInReady ? 'completed' : 'in_progress',
-      'business',
-      !leaseReady ? ['lease'] : !moveInReady ? ['handover'] : [],
-      !leaseReady
-        ? action('create_lease', { type: 'tenancy', action: 'lease-create' })
-        : !moveInReady
-          ? action('complete_move_in_handover', { type: 'property', tab: 'summary' })
-          : null,
-    ),
-    stage(
       'rentalOperations',
-      !moveInReady ? 'pending' : latestClosedLease ? 'completed' : currentLease ? 'in_progress' : 'pending',
+      !leaseReady ? 'pending' : latestClosedLease ? 'completed' : currentLease ? 'in_progress' : 'pending',
       'admin',
-      !moveInReady ? ['handover'] : [],
-      currentLease && moveInReady ? action('open_operations_center', { type: 'property', tab: 'operations' }) : null,
+      !leaseReady ? ['lease'] : [],
+      currentLease ? action('open_operations_center', { type: 'property', tab: 'operations' }) : null,
     ),
     stage(
       'leaseClosure',

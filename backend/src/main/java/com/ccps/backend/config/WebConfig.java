@@ -31,6 +31,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // Match the public signing route before the generic API rule. Do not expand admin origins.
+        registry.addMapping("/api/public/signatures/**")
+                .allowedOrigins("https://lzj.mydream.tw", "http://localhost:5173", "http://127.0.0.1:5173",
+                        "http://47.108.39.84", "http://47.108.39.84:8080")
+                .allowedMethods("GET", "POST", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true);
         registry.addMapping("/api/**")
                 .allowedOrigins("http://localhost:5173", "http://127.0.0.1:5173", "http://47.108.39.84", "http://47.108.39.84:8080")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")

@@ -36,8 +36,9 @@ public class OwnerDocumentController {
 
     @GetMapping("/{documentId}/file")
     public ResponseEntity<FileSystemResource> file(@PathVariable Long documentId,
-            @RequestParam(defaultValue = "false") boolean download, HttpServletRequest request) {
-        Download document = service.download(AuthInterceptor.userId(request), documentId);
+            @RequestParam(defaultValue = "false") boolean download,
+            @RequestParam(defaultValue = "document") String source, HttpServletRequest request) {
+        Download document = service.download(AuthInterceptor.userId(request), documentId, source);
         MediaType mediaType;
         try { mediaType = MediaType.parseMediaType(document.mimeType()); }
         catch (IllegalArgumentException ignored) { mediaType = MediaType.APPLICATION_OCTET_STREAM; }

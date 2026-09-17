@@ -1,3 +1,4 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: project-resources/documentation/design.md · designed-as-app · nav: N3 extended grouped side rail · footer: none · pre-emit critique: P5 H5 E5 S5 R5 V5 · contrast: pass (40–41) · slop: pass (42–49) · mobile: pass (34,49–56) */
 .admin-shell .sidebar,.admin-shell .brand,.admin-shell .project-card{background:#063f52}
 .admin-shell .sidebar{background:linear-gradient(180deg,#073f4e 0%,#062d3a 100%);border-right:1px solid rgba(143,203,207,.14);box-shadow:10px 0 26px rgba(2,25,34,.2)}
 .admin-shell .brand{background:rgba(5,40,51,.72)}
@@ -53,7 +54,7 @@
 .admin-shell .property-list-workspace .tag{font-size:13px!important;padding:5px 9px!important}
 .admin-shell .property-list-workspace .owners-pager{font-size:14px}
 .admin-shell .property-list-workspace .owners-pager button,.admin-shell .property-list-workspace .owners-pager select{font-size:14px!important}
-.admin-shell .admin-owner-detail-modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px;background:rgba(6,35,48,.44);backdrop-filter:blur(3px)}
+.admin-shell .admin-owner-detail-modal{position:fixed;inset:0;z-index:var(--z-admin-overlay);display:grid;place-items:center;padding:24px;background:rgba(6,35,48,.44);backdrop-filter:blur(3px)}
 .admin-shell .admin-owner-detail-modal .admin-owner-detail{width:min(680px,calc(100vw - 48px));max-height:calc(100vh - 40px);padding:22px 24px 20px;overflow:auto;border:1px solid #d7e2eb;border-radius:14px;box-shadow:0 24px 70px rgba(4,28,40,.28);background:#fff}
 .admin-shell .admin-owner-detail-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px;padding-bottom:14px;border-bottom:1px solid #e5edf2;color:#0d1b3e;font-size:17px}
 .admin-shell .admin-owner-detail-close{width:32px;height:32px;border:1px solid #d7e2eb;border-radius:8px;background:#fff;color:#526679;font-size:22px;line-height:1;cursor:pointer}
@@ -86,7 +87,7 @@
 @media(max-width:900px){.admin-shell .main{width:auto;max-width:none}.admin-shell .admin-owner-workspace{margin-left:14px;margin-right:14px}.admin-shell .property-list-workspace table{table-layout:auto}.admin-shell .property-list-workspace .owners-table-wrap{overflow-x:auto}}
 .admin-shell .maintenance-table-wrap,.admin-shell .tenancy-table-wrap,.admin-shell .finance-review-table-wrap,.admin-shell .reminder-table-wrap,.admin-shell .ops-table,.admin-shell .reserve-table-wrap,.admin-shell .report-table{max-height:calc(100vh - 285px);overflow:auto}
 .admin-shell .maintenance-table-wrap table,.admin-shell .tenancy-table-wrap table,.admin-shell .finance-review-table-wrap table,.admin-shell .reminder-table-wrap table,.admin-shell .ops-table table,.admin-shell .reserve-table-wrap table,.admin-shell .report-table table{min-width:0;max-width:100%}
-.admin-shell .admin-tenancy-workspace{width:100%;max-width:100%;min-width:0;height:calc(100vh - 190px);min-height:0;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(280px,32%)!important}
+.admin-shell .admin-tenancy-workspace{width:100%;max-width:100%;min-width:0;height:calc(100vh - 190px);min-height:0;overflow:hidden;grid-template-columns:minmax(0,1fr)!important}
 .admin-shell .admin-tenancy-workspace .tenancy-list-panel,.admin-shell .admin-tenancy-workspace .tenancy-detail-panel{min-width:0;max-width:100%}
 .admin-shell .admin-tenancy-workspace .tenancy-list-panel{min-height:0;display:flex;flex-direction:column}
 .admin-shell .admin-tenancy-workspace .tenancy-detail-panel{align-self:start;max-height:calc(100vh - 190px);overflow-y:auto;overflow-x:hidden}
@@ -159,6 +160,10 @@
 .admin-shell .nav button .ico{width:30px;height:30px;flex-basis:30px;border-radius:8px;background:rgba(255,255,255,.05);color:#aac4ca}
 .admin-shell .nav .nav-group-items button:hover{background:rgba(111,194,198,.1);color:#fff}
 .admin-shell .nav .nav-group-items button.active{background:linear-gradient(90deg,rgba(10,151,157,.46),rgba(10,151,157,.17));color:#fff;box-shadow:inset 3px 0 #56d7d5,0 7px 16px rgba(0,0,0,.1)}
+.admin-shell .sidebar-status{display:grid;gap:6px;margin:8px 14px 16px;padding:13px 14px;border-top:1px solid rgba(155,205,208,.18);color:#d4e4e7}
+.admin-shell .sidebar-status span{display:flex;align-items:center;gap:8px;color:#92b3ba;font-size:11px;font-weight:700}
+.admin-shell .sidebar-status i{width:7px;height:7px;border-radius:999px;background:#56d7d5;box-shadow:0 0 0 4px rgba(86,215,213,.1)}
+.admin-shell .sidebar-status strong{overflow:hidden;color:#fff;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
 .admin-shell .portal-switch{height:42px;min-height:42px;margin:8px 12px 10px;border-radius:9px;border-color:rgba(190,224,226,.2);background:rgba(255,255,255,.055);font-size:14px}
 
 @media (min-width:821px) and (max-height:899px){
@@ -169,7 +174,7 @@
 
 /* Header */
 .admin-shell .topbar{position:sticky;z-index:25;top:0;height:68px;padding:0 22px;gap:18px;border-bottom:1px solid rgba(207,221,229,.9);background:rgba(255,255,255,.94);box-shadow:0 5px 16px rgba(24,60,76,.045);backdrop-filter:blur(12px)}
-.admin-shell .topbar>div:first-child{flex:0 1 220px;min-width:0}
+.admin-shell .topbar-copy{flex:0 1 220px;min-width:0}
 .admin-shell .topbar h1{overflow:hidden;margin:0;color:#123550;font-size:24px;line-height:1.2;letter-spacing:-.025em;text-overflow:ellipsis;white-space:nowrap}
 .admin-shell .top-actions{flex:1 1 auto;justify-content:flex-end;gap:9px;min-width:0}
 .admin-shell .top-actions .global-search,.admin-shell .top-actions .date-btn,.admin-shell .top-actions .icon-btn,.admin-shell .top-actions .user-btn{height:40px;border-color:#d5e1e8;border-radius:9px;background:#fff;color:#183c58;box-shadow:0 1px 2px rgba(18,53,80,.025)}
@@ -196,6 +201,8 @@
 .admin-shell .admin-account-menu>button:hover{background:#fff0ee;border-color:transparent;box-shadow:none}
 .admin-shell .admin-account-menu>button:disabled{cursor:not-allowed;opacity:.55}
 .admin-shell .top-actions button:hover,.admin-shell .top-actions .global-search:focus-within{border-color:#9fc9cc;background:#f8fcfc;box-shadow:0 3px 10px rgba(8,96,104,.08)}
+.admin-shell .dashboard-topbar .top-actions{flex:1 1 auto;width:100%;justify-content:flex-end}
+.admin-shell .dashboard-topbar .global-search{width:clamp(320px,46vw,560px);margin-right:auto}
 
 /* Page rhythm and common controls */
 .admin-shell .page-view>.metrics{height:auto!important;min-height:0;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));grid-auto-rows:minmax(102px,auto);align-content:start;gap:14px;padding:14px 28px 16px}
@@ -311,4 +318,1154 @@
   .admin-shell .top-actions>*{width:100%!important}
   .admin-shell .top-actions .icon-btn{width:42px!important}
   .admin-shell :is(.page-view,.admin-finance-shell)>.toolbar>*{flex:1 1 100%!important;width:100%!important}
+}
+
+/* Administrator workbench v2 — shared presentation system for every admin module. */
+.admin-shell{
+  --admin-ink:var(--color-admin-ink);
+  --admin-muted:var(--color-admin-muted);
+  --admin-line:var(--color-admin-rule);
+  --admin-soft:var(--color-admin-surface);
+  --admin-accent:var(--color-admin-accent);
+  --admin-accent-dark:var(--color-admin-accent-hover);
+  --admin-gold:var(--color-admin-alert);
+  color:var(--color-admin-ink);
+  font-family:var(--font-admin-body);
+}
+.admin-shell,.admin-shell *{box-sizing:border-box}
+.admin-shell .sidebar{
+  width:var(--admin-sidebar-width);
+  min-width:var(--admin-sidebar-width);
+  flex:0 0 var(--admin-sidebar-width);
+}
+.admin-shell .nav button{white-space:nowrap}
+.admin-shell .main{background:var(--color-admin-canvas);font-variant-numeric:tabular-nums}
+
+.admin-shell .topbar{
+  position:sticky;
+  z-index:var(--z-admin-nav);
+  top:0;
+  min-height:var(--admin-topbar-height);
+  height:var(--admin-topbar-height);
+  padding:0 var(--space-admin-lg);
+  border-bottom:1px solid var(--color-admin-rule);
+  background:var(--color-admin-paper);
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.admin-shell .topbar-copy{display:grid;flex:0 1 17.5rem;gap:.125rem}
+.admin-shell .topbar-context{color:var(--color-admin-accent);font-size:.6875rem;font-weight:800;letter-spacing:.08em}
+.admin-shell .topbar h1{min-width:0;overflow-wrap:anywhere;color:var(--color-admin-ink-strong);font-family:var(--font-admin-display);font-size:var(--text-admin-title);font-weight:700;letter-spacing:-.02em}
+.admin-shell .topbar p{display:none}
+.admin-shell .top-actions{gap:var(--space-admin-xs)}
+.admin-shell .top-actions .global-search,.admin-shell .top-actions .date-btn,.admin-shell .top-actions .icon-btn,.admin-shell .top-actions .user-btn{
+  height:2.5rem;
+  border:1px solid var(--color-admin-rule);
+  border-radius:var(--radius-admin-control);
+  background:var(--color-admin-paper);
+  color:var(--color-admin-ink);
+  box-shadow:none;
+}
+.admin-shell .global-search{width:clamp(15rem,24vw,23rem)}
+.admin-shell .global-search input::placeholder{color:var(--color-admin-muted)}
+.admin-shell .top-action-icon{color:var(--color-admin-muted)}
+.admin-shell .icon-btn b{background:var(--color-admin-alert);color:var(--color-admin-on-accent)}
+.admin-shell .user-btn>span{background:var(--color-admin-sidebar);color:var(--color-admin-sidebar-ink)}
+.admin-shell .admin-account-menu{border-color:var(--color-admin-rule);border-radius:var(--radius-admin-panel);background:var(--color-admin-paper);box-shadow:var(--shadow-admin-panel)}
+.admin-shell .admin-account-summary{border-color:var(--color-admin-rule)}
+.admin-shell .admin-account-summary span{color:var(--color-admin-ink)}
+.admin-shell .admin-account-summary small{color:var(--color-admin-muted)}
+
+.admin-shell .page-view>.metrics{
+  grid-template-columns:repeat(auto-fit,minmax(11.5rem,1fr));
+  gap:var(--space-admin-sm);
+  padding:var(--space-admin-md) var(--space-admin-lg);
+}
+.admin-shell .metric{
+  min-height:6.75rem;
+  padding:var(--space-admin-md);
+  border:1px solid var(--color-admin-rule);
+  border-radius:var(--radius-admin-panel);
+  background:var(--color-admin-paper);
+  box-shadow:none;
+}
+.admin-shell .metric::before{display:none}
+.admin-shell .metric .admin-metric-icon{
+  width:2.5rem;
+  height:2.5rem;
+  flex-basis:2.5rem;
+  border:1px solid var(--color-admin-rule);
+  border-radius:var(--radius-admin-control);
+  background:var(--color-admin-accent-soft);
+  color:var(--color-admin-accent);
+}
+.admin-shell .metric span{color:var(--color-admin-muted);font-size:var(--text-admin-caption)}
+.admin-shell .metric strong{margin:.375rem 0 .125rem;color:var(--color-admin-ink-strong);font-size:1.375rem}
+.admin-shell .metric small{color:var(--color-admin-muted);font-size:.6875rem}
+.admin-shell .metric-alert .admin-metric-icon,.admin-shell .metric-negative .admin-metric-icon{background:var(--color-admin-alert-soft);color:var(--color-admin-alert)}
+
+.admin-shell :is(.page-view,.admin-finance-shell)>.toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:var(--space-admin-sm);
+  margin:0 var(--space-admin-lg) var(--space-admin-md);
+  padding:var(--space-admin-sm);
+  border:1px solid var(--color-admin-rule);
+  border-radius:var(--radius-admin-panel);
+  background:var(--color-admin-paper);
+  box-shadow:none;
+}
+.admin-shell .toolbar-query,.admin-shell .toolbar-actions{display:flex;align-items:center;gap:var(--space-admin-xs);min-width:0}
+.admin-shell .toolbar-query{flex:1 1 auto}
+.admin-shell .toolbar-actions{flex:0 0 auto;justify-content:flex-end}
+.admin-shell .toolbar-query .search-box{height:var(--admin-control-height);min-width:13rem;max-width:26rem;flex:1 1 18rem;border-color:var(--color-admin-rule);border-radius:var(--radius-admin-control);background:var(--color-admin-surface)}
+.admin-shell .toolbar-query .search-box svg{flex:0 0 auto;color:var(--color-admin-muted)}
+.admin-shell .toolbar-query select{height:var(--admin-control-height);min-width:9rem;max-width:12rem;border-color:var(--color-admin-rule);border-radius:var(--radius-admin-control);background:var(--color-admin-paper);color:var(--color-admin-ink)}
+.admin-shell .toolbar-actions :is(.primary-btn,.ghost-btn){min-height:var(--admin-control-height);height:var(--admin-control-height);padding:0 var(--space-admin-md);border-radius:var(--radius-admin-control);font-weight:800;white-space:nowrap;box-shadow:none}
+.admin-shell .toolbar-actions .primary-btn{border-color:var(--color-admin-accent);background:var(--color-admin-accent);color:var(--color-admin-on-accent)}
+.admin-shell .toolbar-actions .primary-btn.muted,.admin-shell .toolbar-actions .ghost-btn{border-color:var(--color-admin-rule-strong);background:var(--color-admin-paper);color:var(--color-admin-accent)}
+
+.admin-shell :is(.panel,.table-card,.history-panel,.owners-table-panel,.finance-review-panel,.tenancy-list-panel,.tenancy-detail-panel,.maintenance-list-panel,.reserve-list-panel,.reserve-detail-panel,.reminder-list-panel,.audit-panel,.backup-panel,.deposit-panel,.mandate-panel,.signing-panel,.archive-panel){
+  min-width:0;
+  border:1px solid var(--color-admin-rule);
+  border-radius:var(--radius-admin-panel);
+  background:var(--color-admin-paper);
+  box-shadow:var(--shadow-admin-panel);
+}
+.admin-shell :is(.panel-head,.owners-panel-head,.finance-panel-head,.tenancy-panel-head,.maintenance-panel-head,.reserve-panel-head,.reminder-panel-head,.deposit-panel-head,.archive-panel-head,.ops-panel-head){
+  min-height:4rem;
+  padding:var(--space-admin-sm) var(--space-admin-md);
+  border-bottom:1px solid var(--color-admin-rule);
+  background:var(--color-admin-paper);
+}
+.admin-shell :is(.panel-head,.owners-panel-head,.finance-panel-head,.tenancy-panel-head,.maintenance-panel-head,.reserve-panel-head,.reminder-panel-head,.deposit-panel-head,.archive-panel-head,.ops-panel-head) h2{min-width:0;overflow-wrap:anywhere;color:var(--color-admin-ink-strong);font-family:var(--font-admin-display);font-size:var(--text-admin-heading)}
+.admin-shell :is(.panel-head,.owners-panel-head,.finance-panel-head,.tenancy-panel-head,.maintenance-panel-head,.reserve-panel-head,.reminder-panel-head,.deposit-panel-head,.archive-panel-head,.ops-panel-head) :is(span,p,small){color:var(--color-admin-muted)}
+.admin-shell .content-grid{grid-template-columns:minmax(0,1fr) minmax(18rem,26rem);gap:var(--space-admin-md);padding:0 var(--space-admin-lg) var(--space-admin-xl)}
+.admin-shell .admin-owner-workspace{margin:0 var(--space-admin-lg) var(--space-admin-xl)}
+.admin-shell .admin-dashboard-workspace{margin:var(--space-admin-md) var(--space-admin-lg) var(--space-admin-xl)}
+.admin-shell .audit-workspace{margin:var(--space-admin-md) var(--space-admin-lg) var(--space-admin-xl)}
+.admin-shell .admin-finance-navigation{margin-left:var(--space-admin-lg);margin-right:var(--space-admin-lg)}
+.admin-shell :is(.table-wrap,.owners-table-wrap,.finance-review-table-wrap,.tenancy-table-wrap,.maintenance-table-wrap,.reserve-table-wrap,.reminder-table-wrap,.ops-table,.report-table){max-width:100%;overflow:auto;overscroll-behavior:contain}
+.admin-shell table{font-size:var(--text-admin-body);font-variant-numeric:tabular-nums}
+.admin-shell th{position:static;height:2.75rem;padding:0 var(--space-admin-sm);border-bottom:1px solid var(--color-admin-rule);background:var(--color-admin-surface);color:var(--color-admin-muted);font-size:var(--text-admin-caption);font-weight:800}
+.admin-shell td{height:3rem;padding:.5rem var(--space-admin-sm);border-bottom:1px solid var(--color-admin-rule);color:var(--color-admin-ink);font-size:var(--text-admin-body);line-height:1.4}
+.admin-shell tbody tr.selected td{background:var(--color-admin-accent-soft)}
+.admin-shell tbody tr.selected td:first-child{box-shadow:inset .1875rem 0 var(--color-admin-accent)}
+.admin-shell .tag{min-height:1.625rem;padding:.25rem .5rem;border-radius:.375rem;font-size:var(--text-admin-caption);font-weight:800}
+.admin-shell :is(.row-actions,.detail-button,.maintenance-detail-btn,.finance-detail-button){min-width:2.25rem;min-height:2.25rem;border:1px solid var(--color-admin-rule-strong);border-radius:var(--radius-admin-control);background:var(--color-admin-paper);color:var(--color-admin-accent)}
+.admin-shell :is(.pager,.owners-pager){min-height:3.5rem;padding:var(--space-admin-sm) var(--space-admin-md);border-top:1px solid var(--color-admin-rule);background:var(--color-admin-paper);color:var(--color-admin-muted)}
+.admin-shell :is(.pager,.owners-pager) button{min-width:2.25rem;min-height:2.25rem;border-color:var(--color-admin-rule);border-radius:var(--radius-admin-control);background:var(--color-admin-paper);color:var(--color-admin-ink)}
+.admin-shell :is(.pager,.owners-pager) button.active{border-color:var(--color-admin-accent);background:var(--color-admin-accent);color:var(--color-admin-on-accent)}
+.admin-shell :is(.empty-state,.empty-cell,.admin-owner-empty){color:var(--color-admin-muted)}
+
+.admin-shell :where(button,input,select,textarea,a){outline:2px solid transparent;outline-offset:1px}
+.admin-shell :where(button,a[role="button"]){max-width:100%;white-space:nowrap}
+.admin-shell :where(button,input,select,textarea,a):focus-visible{outline-color:var(--color-admin-focus);outline-offset:2px}
+.admin-shell :where(button,a[role="button"]):active{filter:brightness(.96)}
+.admin-shell :where(button,input,select,textarea):disabled{cursor:not-allowed;opacity:.55}
+.admin-shell :where(button,input,select,textarea){font:inherit}
+.admin-shell dialog,.admin-shell .modal-backdrop .modal,.admin-shell [class$="-detail-modal"]>[class*="detail"]{border-color:var(--color-admin-rule);border-radius:var(--radius-admin-dialog);background:var(--color-admin-paper);box-shadow:var(--shadow-admin-dialog)}
+.admin-shell dialog::backdrop,.admin-shell .modal-backdrop,.admin-shell [class$="-detail-modal"]{background:var(--color-admin-overlay)}
+.admin-shell dialog :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea){min-height:var(--admin-control-height);border-color:var(--color-admin-rule-strong);border-radius:var(--radius-admin-control);background:var(--color-admin-paper);color:var(--color-admin-ink)}
+.admin-shell dialog menu{border-top:1px solid var(--color-admin-rule);background:var(--color-admin-surface)}
+
+@media (hover:hover){
+  .admin-shell .nav button:hover{border-color:var(--color-admin-accent);background:var(--color-admin-sidebar);color:var(--color-admin-sidebar-ink)}
+  .admin-shell .nav>.nav-group>.nav-group-heading:hover{border-color:transparent;background:var(--color-admin-sidebar);color:var(--color-admin-sidebar-ink)}
+  .admin-shell .top-actions button:hover,.admin-shell .top-actions .global-search:focus-within{border-color:var(--color-admin-accent);background:var(--color-admin-paper);box-shadow:none}
+  .admin-shell .toolbar-actions .primary-btn:hover{border-color:var(--color-admin-accent-hover);background:var(--color-admin-accent-hover);transform:none;box-shadow:none}
+  .admin-shell .toolbar-actions :is(.primary-btn.muted,.ghost-btn):hover{border-color:var(--color-admin-accent);background:var(--color-admin-accent-soft);color:var(--color-admin-accent);transform:none;box-shadow:none}
+  .admin-shell tbody tr:hover td{background:var(--color-admin-surface)}
+  .admin-shell :is(.row-actions,.detail-button,.maintenance-detail-btn,.finance-detail-button):hover{border-color:var(--color-admin-accent);background:var(--color-admin-accent-soft);color:var(--color-admin-accent)}
+}
+
+@media (max-width:1180px){
+  .admin-shell .content-grid,.admin-shell .admin-building-workspace,.admin-shell .reserve-layout{grid-template-columns:minmax(0,1fr)!important;height:auto}
+  .admin-shell .toolbar{align-items:stretch;flex-direction:column}
+  .admin-shell .toolbar-query,.admin-shell .toolbar-actions{width:100%}
+  .admin-shell .toolbar-query .search-box{max-width:none}
+  .admin-shell .toolbar-actions{justify-content:flex-start;flex-wrap:wrap}
+  .admin-shell .admin-tenancy-workspace,.admin-shell .reserve-layout{height:auto;overflow:visible}
+}
+@media (max-width:900px){
+  .admin-shell .topbar{height:auto;min-height:var(--admin-topbar-height);align-items:flex-start;flex-direction:column;padding:var(--space-admin-sm) var(--space-admin-md)}
+  .admin-shell .topbar-copy{flex:none;width:100%}
+  .admin-shell .top-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
+  .admin-shell .global-search{width:min(100%,24rem)}
+  .admin-shell .page-view>.metrics{padding-left:var(--space-admin-md);padding-right:var(--space-admin-md)}
+  .admin-shell :is(.page-view,.admin-finance-shell)>.toolbar{margin-left:var(--space-admin-md);margin-right:var(--space-admin-md)}
+  .admin-shell .content-grid{padding-left:var(--space-admin-md);padding-right:var(--space-admin-md)}
+  .admin-shell .admin-dashboard-workspace,.admin-shell .admin-owner-workspace,.admin-shell .audit-workspace{margin-left:var(--space-admin-md);margin-right:var(--space-admin-md)}
+  .admin-shell :is(.table-wrap,.owners-table-wrap,.finance-review-table-wrap,.tenancy-table-wrap,.maintenance-table-wrap,.reserve-table-wrap,.reminder-table-wrap,.ops-table,.report-table) table{min-width:45rem}
+}
+@media (max-width:820px){
+  .admin-shell{display:block;height:auto;min-height:100vh;overflow:visible}
+  .admin-shell .sidebar{position:relative;width:100%;min-width:0;height:auto;max-height:none}
+  .admin-shell .brand{height:4rem;min-height:4rem}
+  .admin-shell .nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:none;overflow:visible}
+  .admin-shell .nav-section-label,.admin-shell .nav-primary-items{grid-column:1/-1}
+  .admin-shell .nav-primary-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin-shell .nav-group{align-self:start}
+  .admin-shell .sidebar-status{display:none}
+  .admin-shell .main{height:auto;min-height:100vh;overflow:visible}
+  .admin-shell .topbar{position:relative}
+  .admin-shell :is(button,.primary-btn,.ghost-btn,.row-actions,.detail-button,.maintenance-detail-btn,.finance-detail-button){min-height:2.75rem}
+}
+@media (max-width:620px){
+  .admin-shell .nav{grid-template-columns:minmax(0,1fr)}
+  .admin-shell .nav-section-label,.admin-shell .nav-primary-items{grid-column:auto}
+  .admin-shell .nav-primary-items{grid-template-columns:minmax(0,1fr)}
+  .admin-shell .page-view>.metrics{grid-template-columns:minmax(0,1fr)}
+  .admin-shell .toolbar-query,.admin-shell .toolbar-actions{display:grid;grid-template-columns:minmax(0,1fr)}
+  .admin-shell .toolbar-query :is(.search-box,select),.admin-shell .toolbar-actions :is(button,.primary-btn,.ghost-btn){width:100%;max-width:none}
+  .admin-shell .top-actions>*{width:100%!important}
+  .admin-shell .top-actions .icon-btn{width:2.75rem!important}
+}
+@media (prefers-reduced-motion:reduce){
+  .admin-shell *{scroll-behavior:auto!important;transition-duration:var(--dur-native-reduced)!important;animation-duration:var(--dur-native-reduced)!important;animation-iteration-count:1!important}
+}
+
+/* Hallmark · genre: modern-minimal · macrostructure: unified operations workbench · design-system: project-resources/documentation/design.md · designed-as-app · pre-emit critique: P5 H5 E4 S5 R5 V4 */
+/* Administrator workbench v3 — one page grammar for all previously built admin functions. */
+.admin-shell .admin-page{
+  min-width:0;
+  padding-bottom:var(--space-admin-2xs);
+  background:var(--color-admin-canvas);
+}
+
+.admin-shell .topbar{
+  justify-content:space-between;
+  gap:var(--space-admin-lg);
+  border-bottom-color:var(--color-admin-rule);
+}
+.admin-shell .topbar-copy{min-width:12rem;max-width:25rem;flex:1 1 20rem}
+.admin-shell .topbar-context{
+  width:max-content;
+  padding:.1875rem .4375rem;
+  border-radius:.375rem;
+  background:var(--color-admin-accent-soft);
+  color:var(--color-admin-accent-hover);
+  line-height:1;
+}
+.admin-shell .topbar h1{margin-top:.125rem;font-size:1.375rem}
+.admin-shell .top-actions{min-width:0;margin-left:auto;flex:0 1 auto;justify-content:flex-end}
+.admin-shell .top-actions .global-search{flex:1 1 17rem;min-width:12rem;max-width:24rem}
+.admin-shell .top-actions .date-btn{max-width:13rem}
+.admin-shell .top-actions .user-btn{max-width:13rem}
+.admin-shell .top-actions .user-btn strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.admin-shell .admin-page>:is(
+  .smart-board,
+  .admin-dashboard-workspace,
+  .project-management,
+  .property-process-center,
+  .rental-signing-page,
+  .deposit-page,
+  .property-detail-page,
+  .archive-workspace,
+  .admin-owner-workspace,
+  .admin-finance-shell,
+  .tenant-directory,
+  .admin-tenancy-workspace,
+  .mandate-workspace,
+  .admin-maintenance-workspace,
+  .admin-building-workspace,
+  .reserve-layout,
+  .reminder-layout,
+  .admin-accounts-workspace,
+  .audit-workspace,
+  .backup-workspace,
+  .report-layout
+){
+  width:calc(100% - (var(--space-admin-lg) * 2));
+  max-width:var(--admin-content-max);
+  min-width:0;
+  margin:var(--space-admin-md) auto var(--space-admin-xl)!important;
+}
+
+.admin-shell .admin-page>:is(
+  .project-management,
+  .property-process-center,
+  .rental-signing-page,
+  .deposit-page,
+  .property-detail-page,
+  .archive-workspace,
+  .admin-owner-workspace,
+  .tenant-directory,
+  .mandate-workspace,
+  .backup-workspace
+){padding:0!important}
+
+.admin-shell .admin-page>.content-grid,
+.admin-shell .admin-page>.admin-tenancy-workspace,
+.admin-shell .admin-page>.admin-maintenance-workspace,
+.admin-shell .admin-page>.admin-building-workspace{
+  padding:0!important;
+}
+
+.admin-shell .admin-page>:is(.metrics){
+  width:calc(100% - (var(--space-admin-lg) * 2));
+  max-width:var(--admin-content-max);
+  margin:0 auto;
+  padding:var(--space-admin-md) 0!important;
+}
+.admin-shell .admin-page>.toolbar{
+  width:calc(100% - (var(--space-admin-lg) * 2));
+  max-width:var(--admin-content-max);
+  margin:0 auto var(--space-admin-md)!important;
+}
+
+.admin-shell :is(
+  .workbench-heading,
+  .workspace-head,
+  .page-heading,
+  .directory-heading,
+  .backup-hero,
+  .archive-head,
+  .project-management-head,
+  .property-process-head,
+  .rental-signing-head,
+  .audit-head,
+  .report-head,
+  .vendor-head
+){
+  min-height:4.75rem;
+  margin:0 0 var(--space-admin-md)!important;
+  padding:0 0 var(--space-admin-md)!important;
+  border:0!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.admin-shell :is(
+  .workbench-heading,
+  .workspace-head,
+  .page-heading,
+  .directory-heading,
+  .backup-hero,
+  .archive-head,
+  .project-management-head,
+  .property-process-head,
+  .rental-signing-head,
+  .audit-head,
+  .report-head,
+  .vendor-head
+) :is(h1,h2,h3){
+  margin:0;
+  color:var(--color-admin-ink-strong)!important;
+  font-family:var(--font-admin-display);
+  font-size:var(--text-admin-title)!important;
+  font-style:normal;
+  line-height:1.2;
+  overflow-wrap:anywhere;
+}
+.admin-shell :is(
+  .workspace-head,
+  .page-heading,
+  .directory-heading,
+  .backup-hero,
+  .archive-head,
+  .project-management-head,
+  .property-process-head,
+  .rental-signing-head,
+  .audit-head,
+  .report-head,
+  .vendor-head
+) :is(p,small,span:not(.tag):not(.status-pill)){
+  color:var(--color-admin-muted);
+}
+.admin-shell .eyebrow{
+  color:var(--color-admin-accent)!important;
+  font-size:.6875rem!important;
+  font-weight:800;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.admin-shell :is(
+  .summary-grid,
+  .dashboard-summary-grid,
+  .directory-metrics,
+  .process-summary-grid,
+  .project-summary-grid,
+  .signing-summary-grid,
+  .archive-summary-grid,
+  .reserve-summary-grid
+){
+  gap:var(--space-admin-sm)!important;
+  margin-bottom:var(--space-admin-md)!important;
+}
+.admin-shell :is(
+  .summary-grid,
+  .dashboard-summary-grid,
+  .directory-metrics,
+  .process-summary-grid,
+  .project-summary-grid,
+  .signing-summary-grid,
+  .archive-summary-grid,
+  .reserve-summary-grid
+)>article{
+  min-height:6.75rem!important;
+  padding:var(--space-admin-md)!important;
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-panel)!important;
+  background:var(--color-admin-paper)!important;
+  background-image:none!important;
+  box-shadow:none!important;
+}
+.admin-shell :is(
+  .summary-grid,
+  .dashboard-summary-grid,
+  .directory-metrics,
+  .process-summary-grid,
+  .project-summary-grid,
+  .signing-summary-grid,
+  .archive-summary-grid,
+  .reserve-summary-grid
+)>article:before{display:none!important}
+.admin-shell :is(
+  .summary-grid,
+  .dashboard-summary-grid,
+  .directory-metrics,
+  .process-summary-grid,
+  .project-summary-grid,
+  .signing-summary-grid,
+  .archive-summary-grid,
+  .reserve-summary-grid
+)>article>span{
+  color:var(--color-admin-muted)!important;
+  font-size:var(--text-admin-caption)!important;
+}
+.admin-shell :is(
+  .summary-grid,
+  .dashboard-summary-grid,
+  .directory-metrics,
+  .process-summary-grid,
+  .project-summary-grid,
+  .signing-summary-grid,
+  .archive-summary-grid,
+  .reserve-summary-grid
+)>article>strong{
+  color:var(--color-admin-ink-strong);
+  font-size:1.5rem!important;
+  font-variant-numeric:tabular-nums;
+}
+
+.admin-shell :is(
+  .filter-card,
+  .directory-filter,
+  .audit-filters,
+  .vendor-toolbar,
+  .archive-filters,
+  .project-filters,
+  .process-filters,
+  .signing-filters,
+  .reminder-filters,
+  .reserve-filters,
+  .finance-filters,
+  .report-filters,
+  .toolbar
+){
+  gap:var(--space-admin-sm)!important;
+  min-height:4.25rem;
+  padding:var(--space-admin-sm)!important;
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-panel)!important;
+  background:var(--color-admin-paper)!important;
+  box-shadow:none!important;
+}
+.admin-shell :is(
+  .filter-card,
+  .directory-filter,
+  .audit-filters,
+  .vendor-toolbar,
+  .archive-filters,
+  .project-filters,
+  .process-filters,
+  .signing-filters,
+  .reminder-filters,
+  .reserve-filters,
+  .finance-filters,
+  .report-filters,
+  .toolbar
+) :is(input:not([type=checkbox]):not([type=radio]),select){
+  min-height:var(--admin-control-height);
+  border:1px solid var(--color-admin-rule-strong)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-surface)!important;
+  color:var(--color-admin-ink)!important;
+}
+
+.admin-shell :is(
+  .panel,
+  .workbench-panel,
+  .region-overview-panel,
+  .account-card,
+  .directory-card,
+  .action-card,
+  .history-panel,
+  .process-panel,
+  .signing-panel,
+  .archive-panel,
+  .reminder-main,
+  .reminder-detail,
+  .reserve-list-panel,
+  .reserve-detail-panel,
+  .audit-panel,
+  .backup-panel,
+  .report-panel
+){
+  min-width:0;
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-panel)!important;
+  background:var(--color-admin-paper)!important;
+  background-image:none!important;
+  box-shadow:var(--shadow-admin-panel)!important;
+}
+.admin-shell :is(
+  .panel-head,
+  .owners-panel-head,
+  .workbench-panel-head,
+  .panel-heading,
+  .finance-panel-head,
+  .reserve-panel-head,
+  .reminder-head,
+  .section-head,
+  .account-card-head
+){
+  min-height:4rem;
+  padding:var(--space-admin-sm) var(--space-admin-md)!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+}
+.admin-shell :is(
+  .panel-head,
+  .owners-panel-head,
+  .workbench-panel-head,
+  .panel-heading,
+  .finance-panel-head,
+  .reserve-panel-head,
+  .reminder-head,
+  .section-head,
+  .account-card-head
+) :is(h2,h3,h4){
+  color:var(--color-admin-ink-strong)!important;
+  font-family:var(--font-admin-display);
+  font-style:normal;
+}
+
+.admin-shell :is(
+  .table-wrap,
+  .directory-table-wrap,
+  .owners-table-wrap,
+  .finance-review-table-wrap,
+  .tenancy-table-wrap,
+  .maintenance-table-wrap,
+  .reserve-table-wrap,
+  .reminder-table-wrap,
+  .audit-table-wrap,
+  .vendor-table-wrap,
+  .report-table-wrap
+){
+  max-width:100%;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-color:var(--color-admin-rule-strong) var(--color-admin-surface);
+}
+.admin-shell table{width:100%;border-collapse:collapse;background:var(--color-admin-paper)}
+.admin-shell th{
+  height:3rem!important;
+  padding:0 var(--space-admin-sm)!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-surface)!important;
+  color:var(--color-admin-muted)!important;
+  font-size:var(--text-admin-caption)!important;
+  font-weight:800!important;
+  letter-spacing:.01em!important;
+  text-align:left;
+  white-space:nowrap;
+}
+.admin-shell td{
+  height:var(--admin-table-row-height)!important;
+  padding:var(--space-admin-xs) var(--space-admin-sm)!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper);
+  color:var(--color-admin-ink)!important;
+  font-size:var(--text-admin-body)!important;
+  line-height:1.4!important;
+  vertical-align:middle;
+}
+.admin-shell tbody tr:last-child td{border-bottom:0!important}
+.admin-shell tbody tr.selected td{background:var(--color-admin-accent-soft)!important}
+.admin-shell tbody tr.selected td:first-child{box-shadow:none!important}
+.admin-shell td strong{color:var(--color-admin-ink-strong)}
+.admin-shell td small{color:var(--color-admin-muted)!important;font-size:var(--text-admin-caption)!important}
+
+.admin-shell :is(.tag,.status,.status-pill,.reserve-tag,.vendor-status,.lease-pill,.type-badge,.result-count){
+  min-height:1.625rem;
+  padding:.25rem .5rem!important;
+  border-radius:.375rem!important;
+  font-size:var(--text-admin-caption)!important;
+  font-weight:800;
+  line-height:1.25;
+  white-space:nowrap;
+}
+
+.admin-shell :is(
+  .row-actions,
+  .detail-button,
+  .maintenance-detail-btn,
+  .finance-detail-button,
+  .tenancy-row-action,
+  .audit-detail,
+  .download-button,
+  .property-open-action
+){
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:var(--space-admin-2xs);
+  min-height:2.25rem;
+  padding:0 var(--space-admin-sm);
+  border:1px solid var(--color-admin-rule-strong)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-paper)!important;
+  color:var(--color-admin-accent)!important;
+  font-size:var(--text-admin-caption)!important;
+  font-weight:800;
+  white-space:nowrap;
+  box-shadow:none!important;
+}
+
+.admin-shell :is(
+  .primary-btn,
+  .primary-button,
+  .audit-primary,
+  .vendor-primary,
+  .save-button,
+  .confirm,
+  .refresh-button
+){
+  min-height:var(--admin-control-height);
+  padding:0 var(--space-admin-md);
+  border:1px solid var(--color-admin-accent)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-accent)!important;
+  background-image:none!important;
+  color:var(--color-admin-on-accent)!important;
+  font-weight:800;
+  white-space:nowrap;
+  box-shadow:none!important;
+}
+.admin-shell :is(.danger,.danger-button,.danger-action){
+  border-color:var(--color-admin-danger)!important;
+  background:var(--color-admin-danger-soft)!important;
+  color:var(--color-admin-danger)!important;
+}
+.admin-shell :is(.pager,.owners-pager,.audit-pager){
+  min-height:3.75rem!important;
+  padding:var(--space-admin-sm) var(--space-admin-md)!important;
+  border-top:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+  color:var(--color-admin-muted)!important;
+}
+
+.admin-shell :is(dialog,.modal,.tenant-dialog,.vendor-dialog,.admin-owner-detail){
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-dialog)!important;
+  background:var(--color-admin-paper)!important;
+  box-shadow:var(--shadow-admin-dialog)!important;
+}
+.admin-shell :is(dialog,.modal,.tenant-dialog,.vendor-dialog,.admin-owner-detail)>:is(header,.modal-head),
+.admin-shell dialog :is(header,.modal-head){
+  min-height:4.5rem;
+  padding:var(--space-admin-md) var(--space-admin-lg)!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+}
+.admin-shell :is(dialog,.modal,.tenant-dialog,.vendor-dialog,.admin-owner-detail) :is(h2,h3){
+  color:var(--color-admin-ink-strong)!important;
+  font-family:var(--font-admin-display);
+  font-style:normal;
+}
+.admin-shell :is(dialog,.modal,.tenant-dialog,.vendor-dialog,.admin-owner-detail) :is(input:not([type=checkbox]):not([type=radio]),select,textarea){
+  min-height:var(--admin-control-height);
+  border:1px solid var(--color-admin-rule-strong)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-paper)!important;
+  color:var(--color-admin-ink)!important;
+}
+
+.admin-shell .admin-dashboard-workspace{gap:var(--space-admin-md)}
+.admin-shell .admin-dashboard-workspace :is(.workbench-top-grid,.workbench-bottom-grid){grid-template-columns:minmax(0,1.6fr) minmax(20rem,1fr);gap:var(--space-admin-md)}
+.admin-shell .admin-dashboard-workspace .dashboard-attention-list article{
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+}
+.admin-shell .admin-dashboard-workspace .dashboard-attention-list article:last-child{border-bottom:0!important}
+
+.admin-shell .admin-owner-workspace:not(.property-list-workspace),
+.admin-shell .admin-tenancy-workspace,
+.admin-shell .admin-maintenance-workspace,
+.admin-shell .admin-building-workspace,
+.admin-shell .reserve-layout{
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:var(--space-admin-md)!important;
+  height:auto!important;
+  overflow:visible!important;
+}
+.admin-shell .admin-owner-workspace .owners-table-panel,
+.admin-shell .admin-tenancy-workspace .tenancy-list-panel,
+.admin-shell .admin-maintenance-workspace .maintenance-list-panel,
+.admin-shell .admin-building-workspace .table-panel,
+.admin-shell .reserve-layout .reserve-list-panel{width:100%;min-width:0}
+
+.admin-shell .admin-finance-shell{gap:var(--space-admin-md)}
+.admin-shell .admin-finance-navigation{
+  width:calc(100% - (var(--space-admin-lg) * 2));
+  max-width:var(--admin-content-max);
+  margin:var(--space-admin-md) auto 0!important;
+}
+.admin-shell .expense-review-layout,.admin-shell .rent-collection-shell{min-width:0}
+
+.admin-shell .backup-workspace .action-grid{gap:var(--space-admin-md)}
+.admin-shell .backup-workspace .action-card{min-height:14rem;padding:var(--space-admin-lg)!important}
+.admin-shell .backup-workspace .history-panel{margin-top:var(--space-admin-md)}
+
+@media (hover:hover){
+  .admin-shell :is(
+    .row-actions,
+    .detail-button,
+    .maintenance-detail-btn,
+    .finance-detail-button,
+    .tenancy-row-action,
+    .audit-detail,
+    .download-button,
+    .property-open-action
+  ):hover{
+    border-color:var(--color-admin-accent)!important;
+    background:var(--color-admin-accent-soft)!important;
+    color:var(--color-admin-accent-hover)!important;
+  }
+  .admin-shell :is(
+    .primary-btn,
+    .primary-button,
+    .audit-primary,
+    .vendor-primary,
+    .save-button,
+    .confirm,
+    .refresh-button
+  ):hover{
+    border-color:var(--color-admin-accent-hover)!important;
+    background:var(--color-admin-accent-hover)!important;
+  }
+}
+
+@media (max-width:80rem){
+  .admin-shell .admin-dashboard-workspace :is(.workbench-top-grid,.workbench-bottom-grid){grid-template-columns:minmax(0,1fr)}
+  .admin-shell .top-actions .global-search{flex-basis:13rem;max-width:18rem}
+  .admin-shell :is(.summary-grid,.dashboard-summary-grid,.directory-metrics,.process-summary-grid,.project-summary-grid,.signing-summary-grid,.archive-summary-grid,.reserve-summary-grid){grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+
+@media (max-width:64rem){
+  .admin-shell .topbar{height:auto;min-height:var(--admin-topbar-height);align-items:flex-start;flex-direction:column;padding:var(--space-admin-sm) var(--space-admin-md)}
+  .admin-shell .topbar-copy{width:100%;max-width:none;flex:none}
+  .admin-shell .top-actions{width:100%;margin-left:0;justify-content:flex-start;flex-wrap:wrap}
+  .admin-shell .top-actions .global-search{max-width:none}
+  .admin-shell .admin-page>:is(.smart-board,.admin-dashboard-workspace,.project-management,.property-process-center,.rental-signing-page,.deposit-page,.property-detail-page,.archive-workspace,.admin-owner-workspace,.admin-finance-shell,.tenant-directory,.admin-tenancy-workspace,.mandate-workspace,.admin-maintenance-workspace,.admin-building-workspace,.reserve-layout,.reminder-layout,.admin-accounts-workspace,.audit-workspace,.backup-workspace,.report-layout),
+  .admin-shell .admin-page>:is(.metrics),
+  .admin-shell .admin-page>.toolbar,
+  .admin-shell .admin-finance-navigation{
+    width:calc(100% - (var(--space-admin-md) * 2));
+  }
+}
+
+@media (max-width:50rem){
+  .admin-shell :is(.summary-grid,.dashboard-summary-grid,.directory-metrics,.process-summary-grid,.project-summary-grid,.signing-summary-grid,.archive-summary-grid,.reserve-summary-grid){grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .admin-shell :is(.filter-card,.directory-filter,.audit-filters,.vendor-toolbar,.archive-filters,.project-filters,.process-filters,.signing-filters,.reminder-filters,.reserve-filters,.finance-filters,.report-filters,.toolbar){align-items:stretch;flex-direction:column;grid-template-columns:minmax(0,1fr)!important}
+  .admin-shell :is(.filter-card,.directory-filter,.audit-filters,.vendor-toolbar,.archive-filters,.project-filters,.process-filters,.signing-filters,.reminder-filters,.reserve-filters,.finance-filters,.report-filters,.toolbar)>*{width:100%!important;max-width:none!important}
+  .admin-shell :is(.table-wrap,.directory-table-wrap,.owners-table-wrap,.finance-review-table-wrap,.tenancy-table-wrap,.maintenance-table-wrap,.reserve-table-wrap,.reminder-table-wrap,.audit-table-wrap,.vendor-table-wrap,.report-table-wrap) table{min-width:48rem}
+}
+
+@media (max-width:32rem){
+  .admin-shell :is(.summary-grid,.dashboard-summary-grid,.directory-metrics,.process-summary-grid,.project-summary-grid,.signing-summary-grid,.archive-summary-grid,.reserve-summary-grid){grid-template-columns:minmax(0,1fr)!important}
+  .admin-shell .top-actions>*{width:100%!important;max-width:none!important}
+  .admin-shell .top-actions .icon-btn{width:var(--admin-control-height)!important}
+  .admin-shell .admin-page>:is(.smart-board,.admin-dashboard-workspace,.project-management,.property-process-center,.rental-signing-page,.deposit-page,.property-detail-page,.archive-workspace,.admin-owner-workspace,.admin-finance-shell,.tenant-directory,.admin-tenancy-workspace,.mandate-workspace,.admin-maintenance-workspace,.admin-building-workspace,.reserve-layout,.reminder-layout,.admin-accounts-workspace,.audit-workspace,.backup-workspace,.report-layout),
+  .admin-shell .admin-page>:is(.metrics),
+  .admin-shell .admin-page>.toolbar,
+  .admin-shell .admin-finance-navigation{
+    width:calc(100% - (var(--space-admin-sm) * 2));
+  }
+}
+
+/* Admin workspaces · page-level structural corrections */
+.admin-shell :is(
+  .admin-owner-detail-modal,
+  .maintenance-detail-modal,
+  .dialog-backdrop,
+  .modal-backdrop,
+  .vendor-dialog-backdrop,
+  .tenant-dialog-backdrop,
+  .pma-form-backdrop,
+  .finance-document-backdrop,
+  .template-designer-backdrop,
+  .process-setup-backdrop,
+  .rental-checklist-modal,
+  .operations-center-modal,
+  .service-manager-modal,
+  .operations-work-order-modal,
+  .operations-renewal-modal
+){z-index:var(--z-admin-overlay)!important}
+
+.admin-shell .admin-page>.content-grid{
+  width:calc(100% - (var(--space-admin-lg) * 2));
+  max-width:var(--admin-content-max);
+  min-width:0;
+  margin:var(--space-admin-md) auto var(--space-admin-xl)!important;
+}
+
+.admin-shell :is(.project-heading,.rental-signing-header,.archive-hero){
+  min-height:4.75rem;
+  margin:0 0 var(--space-admin-md)!important;
+  padding:0 0 var(--space-admin-md)!important;
+  border:0!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  background-image:none!important;
+  box-shadow:none!important;
+}
+.admin-shell :is(.project-heading,.rental-signing-header,.archive-hero) :is(h1,h2,h3){
+  margin:0;
+  color:var(--color-admin-ink-strong)!important;
+  font-family:var(--font-admin-display);
+  font-size:var(--text-admin-title)!important;
+  line-height:1.2;
+}
+.admin-shell :is(.project-heading,.rental-signing-header,.archive-hero) :is(p,small){
+  color:var(--color-admin-muted)!important;
+}
+
+.admin-shell :is(.project-metrics,.archive-metrics){
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:var(--space-admin-sm)!important;
+  margin:0 0 var(--space-admin-md)!important;
+}
+.admin-shell :is(.project-metrics,.archive-metrics)>article{
+  min-height:6.75rem!important;
+  padding:var(--space-admin-md)!important;
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-panel)!important;
+  background:var(--color-admin-paper)!important;
+  background-image:none!important;
+  box-shadow:none!important;
+}
+.admin-shell :is(.project-metrics,.archive-metrics)>article:before{display:none!important}
+.admin-shell :is(.project-metrics,.archive-metrics)>article span{
+  color:var(--color-admin-muted)!important;
+  font-size:var(--text-admin-caption)!important;
+}
+.admin-shell :is(.project-metrics,.archive-metrics)>article strong{
+  color:var(--color-admin-ink-strong)!important;
+  font-size:1.5rem!important;
+  font-variant-numeric:tabular-nums;
+}
+
+.admin-shell :is(.project-toolbar,.archive-toolbar){
+  gap:var(--space-admin-sm)!important;
+  min-height:4.25rem;
+  margin:0 0 var(--space-admin-md)!important;
+  padding:var(--space-admin-sm)!important;
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-panel)!important;
+  background:var(--color-admin-paper)!important;
+  box-shadow:none!important;
+}
+.admin-shell :is(.project-toolbar,.archive-toolbar) :is(input:not([type=checkbox]):not([type=radio]),select){
+  min-height:var(--admin-control-height);
+  border:1px solid var(--color-admin-rule-strong)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-surface)!important;
+  color:var(--color-admin-ink)!important;
+}
+.admin-shell .search-box input:not([type=checkbox]):not([type=radio]){
+  min-height:0!important;
+  height:100%;
+  padding-block:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.admin-shell .search-box:focus-within{
+  border-color:var(--color-admin-accent)!important;
+  box-shadow:0 0 0 .1875rem var(--color-admin-accent-soft)!important;
+}
+.admin-shell :is(.project-list-card,.rental-signing-property-picker,.rental-signing-main,.process-context-rail,.process-journey-map,.process-center-layout){
+  min-width:0;
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-panel)!important;
+  background:var(--color-admin-paper)!important;
+  background-image:none!important;
+  box-shadow:var(--shadow-admin-panel)!important;
+}
+.admin-shell :is(.card-heading,.archive-panel-head,.rental-signing-picker-head,.process-picker-head){
+  min-height:4rem;
+  padding:var(--space-admin-sm) var(--space-admin-md)!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+}
+.admin-shell :is(.project-pager,.archive-pager){
+  min-height:3.75rem!important;
+  padding:var(--space-admin-sm) var(--space-admin-md)!important;
+  border-top:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+  color:var(--color-admin-muted)!important;
+}
+
+.admin-shell .process-shell{
+  display:grid!important;
+  grid-template-columns:minmax(15rem,17rem) minmax(0,1fr)!important;
+  align-items:start!important;
+  gap:var(--space-admin-md)!important;
+}
+.admin-shell .process-context-rail{
+  position:sticky;
+  top:calc(var(--admin-topbar-height) + var(--space-admin-md));
+  max-height:none;
+  overflow:visible;
+}
+.admin-shell .process-center-header{
+  min-height:0!important;
+  padding:var(--space-admin-md)!important;
+  border-bottom:1px solid var(--color-admin-rule)!important;
+  background:var(--color-admin-paper)!important;
+}
+.admin-shell .process-center-header h2{
+  margin:.25rem 0;
+  color:var(--color-admin-ink-strong)!important;
+  font-family:var(--font-admin-display);
+  font-size:1.125rem!important;
+}
+.admin-shell .process-center-header p{color:var(--color-admin-muted)!important}
+.admin-shell .process-workspace{display:grid;min-width:0;gap:var(--space-admin-md)!important}
+.admin-shell .process-journey-map{padding:var(--space-admin-md)!important}
+.admin-shell :is(.process-property-option,.rental-signing-property-list button){
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-paper)!important;
+}
+.admin-shell :is(.process-property-option,.rental-signing-property-list button).active{
+  border-color:var(--color-admin-accent)!important;
+  background:var(--color-admin-accent-soft)!important;
+  box-shadow:inset .1875rem 0 var(--color-admin-accent)!important;
+}
+
+.admin-shell .rental-signing-layout{
+  display:grid!important;
+  grid-template-columns:minmax(15rem,17rem) minmax(0,1fr)!important;
+  align-items:start!important;
+  gap:var(--space-admin-md)!important;
+  height:auto!important;
+}
+.admin-shell .rental-signing-property-picker{
+  position:sticky;
+  top:calc(var(--admin-topbar-height) + var(--space-admin-md));
+  max-height:calc(100vh - var(--admin-topbar-height) - (var(--space-admin-lg) * 2));
+  overflow:auto;
+}
+.admin-shell .rental-signing-main{height:auto!important;padding:var(--space-admin-lg)!important}
+.admin-shell .rental-signing-card{
+  border-color:var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-surface)!important;
+  box-shadow:none!important;
+}
+
+.admin-shell .reminder-layout{
+  grid-template-columns:minmax(0,1fr) minmax(18rem,22rem)!important;
+  align-items:start!important;
+  gap:var(--space-admin-md)!important;
+  height:auto!important;
+  overflow:visible!important;
+}
+.admin-shell .reminder-detail{
+  position:sticky;
+  top:calc(var(--admin-topbar-height) + var(--space-admin-md));
+  max-height:calc(100vh - var(--admin-topbar-height) - (var(--space-admin-lg) * 2));
+  overflow:auto;
+}
+.admin-shell .reminder-tabs{
+  display:flex;
+  align-items:center;
+  gap:var(--space-admin-2xs)!important;
+  max-width:100%;
+  padding:0!important;
+  overflow-x:auto;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  scrollbar-width:none;
+}
+.admin-shell .reminder-tabs::-webkit-scrollbar{display:none}
+.admin-shell .reminder-tabs button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:var(--space-admin-xs);
+  min-height:var(--admin-control-height);
+  flex:0 0 auto;
+  padding:0 var(--space-admin-sm)!important;
+  border:1px solid transparent!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:transparent!important;
+  color:var(--color-admin-muted)!important;
+  box-shadow:none!important;
+  font-size:var(--text-admin-body);
+  font-weight:700;
+  line-height:1;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background-color var(--dur-admin-micro) var(--ease-admin-out),border-color var(--dur-admin-micro) var(--ease-admin-out),color var(--dur-admin-micro) var(--ease-admin-out),transform var(--dur-admin-micro) var(--ease-admin-out);
+}
+.admin-shell .reminder-tabs button b{
+  display:inline-grid;
+  min-width:1.5rem;
+  height:1.5rem;
+  place-items:center;
+  margin:0!important;
+  padding:0 .375rem;
+  border-radius:.375rem;
+  background:var(--color-admin-surface-muted)!important;
+  color:var(--color-admin-muted)!important;
+  font-size:var(--text-admin-caption);
+  font-variant-numeric:tabular-nums;
+  line-height:1;
+}
+.admin-shell .reminder-tabs button.active{
+  border-color:var(--color-admin-rule-strong)!important;
+  background:var(--color-admin-accent-soft)!important;
+  color:var(--color-admin-accent-hover)!important;
+  box-shadow:none!important;
+}
+.admin-shell .reminder-tabs button.active b{background:var(--color-admin-accent)!important;color:var(--color-admin-on-accent)!important}
+.admin-shell .reminder-tabs button:focus-visible{outline:2px solid var(--color-admin-focus);outline-offset:2px}
+.admin-shell .reminder-tabs button:active{transform:translateY(1px)}
+.admin-shell .reminder-tabs button:disabled,.admin-shell .reminder-tabs button[data-state="loading"]{opacity:.48;cursor:not-allowed}
+.admin-shell .reminder-tabs button[data-state="loading"]{cursor:progress}
+.admin-shell .reminder-tabs button[data-state="error"]{border-color:var(--color-admin-danger)!important;background:var(--color-admin-danger-soft)!important;color:var(--color-admin-danger)!important}
+.admin-shell .reminder-tabs button[data-state="success"]{border-color:var(--color-admin-success)!important;background:var(--color-admin-success-soft)!important;color:var(--color-admin-success)!important}
+@media(hover:hover) and (pointer:fine){
+  .admin-shell .reminder-tabs button:not(.active):not(:disabled):hover{border-color:var(--color-admin-rule)!important;background:var(--color-admin-surface)!important;color:var(--color-admin-ink)!important}
+}
+@media(pointer:coarse){.admin-shell .reminder-tabs button{min-height:3rem}}
+@media(prefers-reduced-motion:reduce){.admin-shell .reminder-tabs button{transition:none}}
+
+.admin-shell :is(.reminder-tag,.archive-panel .status-tag,.account-pill,.bill-status,.channel-chip){
+  min-height:1.625rem;
+  padding:.25rem .5rem!important;
+  border-radius:.375rem!important;
+  font-size:var(--text-admin-caption)!important;
+  font-weight:800;
+  line-height:1.25;
+  white-space:nowrap;
+}
+.admin-shell :is(.project-row-actions,.archive-actions,.row-buttons,.account-actions){gap:var(--space-admin-2xs)!important}
+.admin-shell :is(.project-row-actions,.archive-actions,.row-buttons,.account-actions) button{
+  min-height:2.25rem;
+  padding:0 var(--space-admin-xs)!important;
+  border:1px solid var(--color-admin-rule-strong)!important;
+  border-radius:var(--radius-admin-control)!important;
+  background:var(--color-admin-paper)!important;
+  color:var(--color-admin-accent)!important;
+  font-size:var(--text-admin-caption)!important;
+  font-weight:800;
+  box-shadow:none!important;
+}
+.admin-shell :is(.project-dialog,.account-modal,.action-modal,.process-setup-dialog,.process-rental-off-market-dialog,.rule-dialog){
+  border:1px solid var(--color-admin-rule)!important;
+  border-radius:var(--radius-admin-dialog)!important;
+  background:var(--color-admin-paper)!important;
+  box-shadow:var(--shadow-admin-dialog)!important;
+}
+
+@media (max-width:80rem){
+  .admin-shell :is(.project-metrics,.archive-metrics){grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .admin-shell .reminder-layout{grid-template-columns:minmax(0,1fr)!important}
+  .admin-shell .reminder-detail{position:relative;top:auto;max-height:none}
+}
+@media (max-width:64rem){
+  .admin-shell .admin-page>.content-grid{width:calc(100% - (var(--space-admin-md) * 2))}
+  .admin-shell :is(.process-shell,.rental-signing-layout){grid-template-columns:minmax(0,1fr)!important}
+  .admin-shell :is(.process-context-rail,.rental-signing-property-picker){position:relative;top:auto;max-height:none}
+}
+@media (max-width:50rem){
+  .admin-shell :is(.project-toolbar,.archive-toolbar){align-items:stretch!important;flex-direction:column!important}
+  .admin-shell :is(.project-toolbar,.archive-toolbar)>*{width:100%!important;max-width:none!important}
+}
+@media (max-width:32rem){
+  .admin-shell .admin-page>.content-grid{width:calc(100% - (var(--space-admin-sm) * 2))}
+  .admin-shell :is(.project-metrics,.archive-metrics){grid-template-columns:minmax(0,1fr)!important}
+}
+
+/* Monthly ledger: keep translated headings and controls inside the dialog. */
+.admin-shell .monthly-cashflow-dialog[open]{display:flex;flex-direction:column;width:min(74rem,calc(100% - 2rem));max-height:calc(100dvh - 2rem);overflow:hidden}
+.admin-shell .monthly-cashflow-dialog>.modal-head{flex:none;align-items:flex-start;gap:var(--space-admin-sm)}
+.admin-shell .monthly-cashflow-dialog>.modal-head>div{min-width:0;overflow-wrap:anywhere}
+.admin-shell .monthly-cashflow-dialog .icon-close{flex:0 0 44px;min-width:44px;min-height:44px;border:1px solid var(--color-admin-rule);border-radius:var(--radius-admin-control);background:var(--color-admin-paper);color:var(--color-admin-ink)}
+.admin-shell .monthly-cashflow-dialog>.modal-head :is(h3,small){font-family:var(--font-admin-body);line-height:1.45}
+.admin-shell .monthly-cashflow-dialog>.modal-head small{display:block;color:var(--color-admin-muted);font-size:var(--text-admin-caption)}
+.admin-shell .monthly-cashflow-dialog>menu{flex-shrink:0}
+.admin-shell .monthly-cashflow-dialog>menu button{min-height:44px;padding-inline:var(--space-admin-md);border:1px solid var(--color-admin-rule);border-radius:var(--radius-admin-control);background:var(--color-admin-paper);color:var(--color-admin-ink);font-family:var(--font-admin-body);font-size:var(--text-admin-body)}
+.admin-shell .monthly-cashflow-body{flex:1 1 auto;min-height:0;max-height:none;grid-template-columns:minmax(0,1fr);overflow-y:auto;background:var(--color-admin-canvas)}
+.admin-shell .monthly-unit-panel{max-height:16rem;flex-shrink:0;min-width:0;background:var(--color-admin-paper)}
+.admin-shell .monthly-unit-panel>label{flex-shrink:0}
+.admin-shell .monthly-unit-list{grid-auto-rows:max-content}
+.admin-shell .monthly-unit-list button{min-width:0;overflow-wrap:anywhere}
+.admin-shell .monthly-ledger-panel{overflow:visible;min-width:0}
+.admin-shell .monthly-ledger-head{flex-wrap:wrap}
+.admin-shell .monthly-ledger-head>div{min-width:0;overflow-wrap:anywhere}
+.admin-shell .monthly-summary-grid{grid-template-columns:minmax(0,1fr)}
+.admin-shell .monthly-summary-grid article{min-width:0}
+.admin-shell .monthly-summary-grid strong{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.admin-shell .monthly-detail-grid>div{grid-template-columns:minmax(0,1fr)}
+.admin-shell .monthly-cashflow-dialog :is(input,.monthly-detail-button,.monthly-proof-button){min-height:44px}
+.admin-shell .monthly-proof-button{height:auto;max-width:100%;white-space:normal;overflow-wrap:anywhere;padding-block:var(--space-admin-xs)}
+.admin-shell .monthly-cashflow-detail>header>button{flex:0 0 44px;width:44px;height:44px}
+.admin-shell .monthly-cashflow-dialog :is(button,input):focus-visible{outline:2px solid var(--color-admin-focus);outline-offset:2px}
+@media (min-width:26rem){
+  .admin-shell .monthly-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin-shell .monthly-detail-grid>div{grid-template-columns:minmax(6rem,1fr) minmax(0,2fr)}
+}
+@media (min-width:52rem){
+  .admin-shell .monthly-cashflow-body{grid-template-columns:17.5rem minmax(0,1fr);overflow:hidden;min-height:min(38rem,calc(100dvh - 12rem))}
+  .admin-shell .monthly-unit-panel{max-height:none}
+  .admin-shell .monthly-ledger-panel{overflow-y:auto}
+}
+@media (min-width:72rem){.admin-shell .monthly-summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* Split phone controls must not inherit the global select minimum width (230px). */
+.admin-shell :is(.phone-entry,.owner-phone-entry,.process-phone-entry){
+  display:grid;
+  grid-template-columns:minmax(0,12rem) minmax(0,1fr);
+  gap:12px;
+  min-width:0;
+  width:100%;
+  align-items:start;
+}
+.admin-shell :is(.phone-entry,.owner-phone-entry,.process-phone-entry)>:is(select,input){
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  min-height:44px;
+  margin:0;
+  border-radius:var(--radius-admin-control,8px);
+}
+@media(max-width:50rem){
+  .admin-shell :is(.phone-entry,.owner-phone-entry,.process-phone-entry){grid-template-columns:minmax(0,1fr)}
 }

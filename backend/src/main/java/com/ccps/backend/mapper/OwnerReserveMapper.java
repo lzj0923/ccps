@@ -113,7 +113,10 @@ public interface OwnerReserveMapper {
             SELECT rt.id, rt.finance_record_id, ra.id AS reserve_account_id,
                    p.id AS project_id, p.name AS project_name, u.unit_no,
                    rt.occurred_at, rt.transaction_type,
-                   COALESCE(rt.note, CASE rt.transaction_type WHEN 'topup' THEN '預備金充值' WHEN 'debit' THEN '預備金扣款' ELSE '預備金調整' END) AS description,
+                   COALESCE(rt.note, CASE rt.transaction_type WHEN 'topup' THEN '預備金充值' WHEN 'debit' THEN '預備金扣款'
+                     WHEN 'transfer_in' THEN '房產間內部調撥轉入' WHEN 'transfer_out' THEN '房產間內部調撥轉出'
+                     WHEN 'transfer_reverse_in' THEN '內部調撥沖正轉入' WHEN 'transfer_reverse_out' THEN '內部調撥沖正轉出'
+                     ELSE '預備金調整' END) AS description,
                    rt.amount, rt.balance_after, 'confirmed' AS status, 'confirmed' AS confirmation_status,
                    COALESCE(doc.total, 0) AS attachment_count
             FROM reserve_transactions rt

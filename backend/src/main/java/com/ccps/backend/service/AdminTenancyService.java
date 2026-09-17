@@ -3,7 +3,6 @@ package com.ccps.backend.service;
 import java.math.BigDecimal;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -17,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.math.RoundingMode;
@@ -77,7 +77,6 @@ import com.ccps.backend.mapper.AdminTenancyMapper.RentCollectionRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentCollectionSummaryRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentCollectionContext;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentInvoiceAdvanceRow;
-import com.ccps.backend.mapper.AdminTenancyMapper.RentReceiptRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.NewRentCollection;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentCreditRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.RentInvoiceCreditRow;
@@ -99,7 +98,10 @@ public class AdminTenancyService {
     private static final Set<String> RENT_CALCULATION_METHODS = Set.of("daily_prorated");
     private static final Set<String> DEPOSIT_CREDIT_TYPES = Set.of("tenant_repayment", "adjustment_credit");
     private static final Set<String> DEPOSIT_DEBIT_TYPES = Set.of("tenant_advance", "refund", "forfeiture", "adjustment_debit");
+    private static final Set<String> DELETABLE_DEPOSIT_TYPES = Set.of(
+            "tenant_repayment", "adjustment_credit", "tenant_advance", "adjustment_debit");
     private static final long MAX_CONTRACT_SIZE = 10L * 1024 * 1024;
+    private static final long MAX_GENERATED_CONTRACT_SIZE = 30L * 1024 * 1024;
     private static final Map<String, String> CONTRACT_EXTENSIONS = Map.of(
             "application/pdf", ".pdf", "image/jpeg", ".jpg", "image/png", ".png");
     private final AdminTenancyMapper mapper;
@@ -108,6 +110,12 @@ public class AdminTenancyService {
     private final Path rentProofStorageRoot;
     private final Path electronicSignatureStorageRoot;
     private PropertyExpensePostingService propertyExpensePostingService;
+    private TenantWhatsAppSubscriptionService tenantWhatsAppSubscriptionService;
+
+    @Autowired
+    void setTenantWhatsAppSubscriptionService(TenantWhatsAppSubscriptionService service) {
+        this.tenantWhatsAppSubscriptionService = service;
+    }
 
     @Autowired
     public AdminTenancyService(AdminTenancyMapper mapper,
@@ -261,7 +269,8 @@ public class AdminTenancyService {
                 row.getDepositEntryStatus(), row.getConfirmationStatus(), row.getPaymentStatus());
         AdminDepositAccountDetailResponse.Reserve reserve = new AdminDepositAccountDetailResponse.Reserve(
                 row.getOwnerId(), row.getOwnerName(), row.getReserveAccountId(), zero(row.getReserveBalance()));
-        return new AdminDepositAccountDetailResponse(account, bill, reserve, transactions, allowedActions);
+        return new AdminDepositAccountDetailResponse(account, bill, reserve, transactions, allowedActions,
+                mapper.findDepositBills(leaseId));
     }
 
     @Transactional
@@ -334,6 +343,66 @@ public class AdminTenancyService {
     }
 
     @Transactional
+    public void deleteTenantDepositTransactions(Long actorId, Long leaseId, List<Long> transactionIds) {
+        LinkedHashSet<Long> selectedIds = transactionIds == null
+                ? new LinkedHashSet<>() : new LinkedHashSet<>(transactionIds);
+        if (selectedIds.isEmpty() || selectedIds.contains(null) || selectedIds.size() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select deposit transactions to delete");
+        }
+        if (mapper.lockLeaseForChange(leaseId) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lease not found");
+        }
+
+        List<AdminTenantDepositTransactionResponse> transactions = mapper.findLeaseDepositTransactions(leaseId);
+        List<AdminTenantDepositTransactionResponse> selected = transactions.stream()
+                .filter(item -> selectedIds.contains(item.id()))
+                .toList();
+        if (selected.size() != selectedIds.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Deposit transaction selection changed; reload and try again");
+        }
+        boolean containsProtectedRecord = selected.stream().anyMatch(item ->
+                !"posted".equals(item.status()) || item.financeRecordId() != null
+                        || !DELETABLE_DEPOSIT_TYPES.contains(item.transactionType()));
+        if (containsProtectedRecord) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Only manual deposit account transactions can be deleted");
+        }
+
+        List<AdminTenantDepositTransactionResponse> remaining = transactions.stream()
+                .filter(item -> !selectedIds.contains(item.id()))
+                .sorted(Comparator.comparing(AdminTenantDepositTransactionResponse::occurredOn)
+                        .thenComparing(AdminTenantDepositTransactionResponse::id))
+                .toList();
+        BigDecimal runningBalance = BigDecimal.ZERO;
+        BigDecimal runningAdvance = BigDecimal.ZERO;
+        for (AdminTenantDepositTransactionResponse item : remaining) {
+            runningBalance = runningBalance.add(
+                    "credit".equals(item.direction()) ? item.amount() : item.amount().negate());
+            if (runningBalance.signum() < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Deleting these transactions would make the deposit balance negative");
+            }
+            if ("posted".equals(item.status())) {
+                if ("tenant_advance".equals(item.transactionType())) runningAdvance = runningAdvance.add(item.amount());
+                if ("tenant_repayment".equals(item.transactionType())) runningAdvance = runningAdvance.subtract(item.amount());
+                if (runningAdvance.signum() < 0) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Delete the related tenant repayment before deleting its advance");
+                }
+            }
+        }
+
+        List<Long> ids = new ArrayList<>(selectedIds);
+        if (mapper.cancelTenantDepositTransactions(leaseId, ids) != ids.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Deposit transaction selection changed; reload and try again");
+        }
+        selected.forEach(item -> mapper.insertTenantDepositDeleteAudit(actorId, item.id(), leaseId,
+                item.transactionType(), item.direction(), item.amount()));
+    }
+
+    @Transactional
     public AdminTenancyOptionsResponse options() {
         expireEndedLeases();
         return new AdminTenancyOptionsResponse(mapper.findProjects(), mapper.findTenantOptions(),
@@ -387,7 +456,7 @@ public class AdminTenancyService {
 
     @Transactional(readOnly = true)
     public AdminRentCollectionResponse findRentCollections(int requestedPage, int requestedPageSize, String keyword,
-            String projectName, String status, LocalDate startDate, LocalDate endDate) {
+            String projectName, String status, LocalDate startDate, LocalDate endDate, Long invoiceId) {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date must not be before start date");
         }
@@ -397,11 +466,11 @@ public class AdminTenancyService {
         }
         int pageSize = Math.max(1, Math.min(requestedPageSize, 100));
         String normalizedKeyword = normalize(keyword); String normalizedProject = normalize(projectName);
-        long totalRows = zero(mapper.countRentCollections(normalizedKeyword, normalizedProject, normalizedStatus, startDate, endDate));
+        long totalRows = zero(mapper.countRentCollections(normalizedKeyword, normalizedProject, normalizedStatus, startDate, endDate, invoiceId));
         int totalPages = Math.max(1, (int) Math.ceil((double) totalRows / pageSize));
         int page = Math.max(1, Math.min(requestedPage, totalPages));
         List<AdminRentCollectionResponse.Item> rows = mapper.findRentCollections(normalizedKeyword, normalizedProject,
-                normalizedStatus, startDate, endDate, pageSize, (page - 1) * pageSize).stream()
+                normalizedStatus, startDate, endDate, invoiceId, pageSize, (page - 1) * pageSize).stream()
                 .map(this::toRentCollectionItem).toList();
         RentCollectionSummaryRow source = mapper.findRentCollectionSummary();
         AdminRentCollectionResponse.Summary summary = new AdminRentCollectionResponse.Summary(
@@ -582,6 +651,7 @@ public class AdminTenancyService {
         NewTenant tenant = new NewTenant(); tenant.setFullName(request.fullName().trim()); tenant.setIdentityNo(identity);
         tenant.setPhone(normalize(request.phone())); tenant.setEmail(email); tenant.setStatus(request.status());
         if (mapper.insertTenant(tenant) != 1 || tenant.getId() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to create tenant");
+        tenantWhatsAppSubscriptionService.synchronizeTenant(tenant.getId(), tenant.getPhone(), tenant.getStatus(), request.whatsappEnabled());
         return tenant.getId();
     }
 
@@ -593,6 +663,18 @@ public class AdminTenancyService {
         NewTenant tenant=new NewTenant();tenant.setId(tenantId);tenant.setFullName(request.fullName().trim());tenant.setIdentityNo(identity);
         tenant.setPhone(normalize(request.phone()));tenant.setEmail(email);tenant.setStatus(request.status());
         if(mapper.updateTenant(tenant)!=1) throw new ResponseStatusException(HttpStatus.CONFLICT,"Unable to update tenant");
+        tenantWhatsAppSubscriptionService.synchronizeTenant(tenantId, tenant.getPhone(), tenant.getStatus(), request.whatsappEnabled());
+    }
+
+    @Transactional
+    public void updateTenantStatus(Long tenantId, String status) {
+        if (mapper.countTenant(tenantId) != 1) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found");
+        }
+        if (mapper.updateTenantStatus(tenantId, status) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to update tenant status");
+        }
+        tenantWhatsAppSubscriptionService.synchronizeTenant(tenantId);
     }
 
     @Transactional
@@ -601,6 +683,7 @@ public class AdminTenancyService {
         if (mapper.countTenantLeases(tenantId) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant has lease history and cannot be deleted; deactivate the tenant instead");
         }
+        tenantWhatsAppSubscriptionService.deleteForTenant(tenantId);
         if (mapper.deleteTenant(tenantId) != 1) throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to delete tenant");
     }
 
@@ -1077,7 +1160,19 @@ public class AdminTenancyService {
 
     @Transactional
     public Long uploadContract(Long actorId, Long leaseId, MultipartFile file) {
-        validateContract(file);
+        return storeContract(actorId, leaseId, file, MAX_CONTRACT_SIZE,
+                "Only PDF, JPG or PNG lease contracts up to 10MB are supported");
+    }
+
+    @Transactional
+    public Long uploadGeneratedContract(Long actorId, Long leaseId, MultipartFile file) {
+        return storeContract(actorId, leaseId, file, MAX_GENERATED_CONTRACT_SIZE,
+                "Generated PDF lease contracts must not exceed 30MB");
+    }
+
+    private Long storeContract(Long actorId, Long leaseId, MultipartFile file, long maximumSize,
+            String validationMessage) {
+        validateContract(file, maximumSize, validationMessage);
         if (mapper.countLeaseRentalMandate(leaseId) == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Lease contract requires an active rental mandate covering the full lease term");
@@ -1218,52 +1313,6 @@ public class AdminTenancyService {
         return new Download(target, safeFileName(file.getOriginalName()),
                 normalize(file.getMimeType()) == null ? "application/octet-stream" : file.getMimeType(),
                 file.getFileSize() == null ? 0 : file.getFileSize());
-    }
-
-    @Transactional(readOnly = true)
-    public Download downloadRentReceipt(Long financeRecordId) {
-        RentReceiptRow row = mapper.findRentReceipt(financeRecordId);
-        if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rent receipt not found");
-        Path directory = rentProofStorageRoot.resolve("receipts").normalize();
-        Path target = directory.resolve(safeFileName(row.getReceiptNo()) + ".pdf").normalize();
-        if (!directory.startsWith(rentProofStorageRoot) || !target.startsWith(directory)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid receipt path");
-        }
-        try {
-            Files.createDirectories(directory);
-            try (OutputStream output = Files.newOutputStream(target)) {
-                String billingPeriod = FinanceDocumentPdfRenderer.billingPeriod(row.getBillingMonth());
-                FinanceDocumentPdfRenderer.write(output, new FinanceDocumentPdfRenderer.Data(
-                        false,
-                        "CCPS PROPERTY MANAGEMENT SDN. BHD.",
-                        "",
-                        List.of(),
-                        List.of(
-                                text(row.getTenantName()),
-                                text(row.getProjectName()) + " / " + text(row.getUnitNo()),
-                                "LEASE NO. : " + text(row.getLeaseNo()),
-                                "PAYER : " + text(row.getPayerName())),
-                        text(row.getReceiptNo()),
-                        row.getTransactionDate(),
-                        "RENTAL FOR " + billingPeriod,
-                        List.of(
-                                new FinanceDocumentPdfRenderer.Detail("Transaction No.", text(row.getTransactionNo())),
-                                new FinanceDocumentPdfRenderer.Detail("Lease No.", text(row.getLeaseNo())),
-                                new FinanceDocumentPdfRenderer.Detail("Tenancy Period", billingPeriod),
-                                new FinanceDocumentPdfRenderer.Detail("Billing Month", monthText(row.getBillingMonth())),
-                                new FinanceDocumentPdfRenderer.Detail("Payment Method", paymentMethodText(row.getPaymentMethod())),
-                                new FinanceDocumentPdfRenderer.Detail("Payer", text(row.getPayerName())),
-                                new FinanceDocumentPdfRenderer.Detail("Payment Reference", text(row.getBankReference())),
-                                new FinanceDocumentPdfRenderer.Detail("Note", text(row.getSubmissionNote()))),
-                        zero(row.getAmount()),
-                        row.getCurrency(),
-                        List.of("This receipt was generated automatically after the payment was confirmed.")));
-            }
-            return new Download(target, safeFileName(row.getReceiptNo()) + ".pdf", "application/pdf", Files.size(target));
-        } catch (Exception exception) {
-            deleteQuietly(target);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate rent receipt", exception);
-        }
     }
 
     @Transactional
@@ -1517,10 +1566,14 @@ public class AdminTenancyService {
     private long zero(Long v) { return v == null ? 0 : v; }
     private String money(BigDecimal v) { return zero(v).setScale(2).toPlainString(); }
     private void validateContract(MultipartFile file) {
-        boolean valid = file != null && !file.isEmpty() && file.getSize() <= MAX_CONTRACT_SIZE
+        validateContract(file, MAX_CONTRACT_SIZE,
+                "Only PDF, JPG or PNG lease contracts up to 10MB are supported");
+    }
+    private void validateContract(MultipartFile file, long maximumSize, String validationMessage) {
+        boolean valid = file != null && !file.isEmpty() && file.getSize() <= maximumSize
                 && CONTRACT_EXTENSIONS.containsKey(file.getContentType());
         if (!valid) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Only PDF, JPG or PNG lease contracts up to 10MB are supported");
+                validationMessage);
     }
     private void validateProof(MultipartFile file) {
         boolean valid = file != null && !file.isEmpty() && file.getSize() <= MAX_CONTRACT_SIZE
@@ -1535,8 +1588,6 @@ public class AdminTenancyService {
         return name.length() > 255 ? name.substring(name.length() - 255) : name;
     }
     private String text(String value) { return value == null || value.isBlank() ? "—" : value; }
-    private String monthText(LocalDate value) { return value == null ? "—" : value.toString().substring(0, 7); }
-    private String paymentMethodText(String value) { return switch (value == null ? "" : value) { case "bank_transfer" -> "Bank Transfer"; case "online_payment", "online_banking" -> "Online Payment"; case "cash" -> "Cash"; case "cheque" -> "Cheque"; case "security_deposit" -> "Security Deposit"; default -> text(value); }; }
     private String sha256(Path path) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

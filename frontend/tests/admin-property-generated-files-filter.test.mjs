@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-const utilityPath = path.resolve('frontend/src/utils/generatedFilesByStage.js');
+const utilityPath = new URL('../src/utils/generatedFilesByStage.js', import.meta.url);
 
 test('filters generated files to the selected stage and current rental cycle', async () => {
   assert.ok(fs.existsSync(utilityPath), 'stage file filter utility should exist');

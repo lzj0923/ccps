@@ -6,6 +6,8 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,6 +31,7 @@ import com.ccps.backend.mapper.OwnerDocumentMapper.DocumentRow;
 public class OwnerDocumentService {
     private final OwnerDocumentMapper mapper;
     private final List<Path> storageRoots;
+    private final Path contractStorageRoot;
 
     @Autowired
     public OwnerDocumentService(OwnerDocumentMapper mapper,
@@ -43,11 +46,12 @@ public class OwnerDocumentService {
             @Value("${ccps.storage.property-attachments:uploads/property-attachments}") String propertyAttachmentRoot,
             @Value("${ccps.storage.property-handover-reports:uploads/property-handover-reports}") String handoverReportRoot,
             @Value("${ccps.storage.property-cashflow:uploads/property-cashflow}") String propertyCashflowRoot,
-            @Value("${ccps.storage.reports:uploads/reports}") String reportRoot) {
+            @Value("${ccps.storage.reports:uploads/reports}") String reportRoot,
+            @Value("${ccps.storage.property-photos:uploads/property-photos}") String propertyPhotoRoot) {
         this(mapper, List.of(documentRoot, paymentProofRoot, maintenanceRoot, reserveTopupRoot,
                 leaseContractRoot, rentalMandateRoot, signatureRoot, propertyContractRoot,
-                propertyAttachmentRoot, handoverReportRoot, propertyCashflowRoot, reportRoot).stream()
-                .map(Path::of).toList());
+                propertyAttachmentRoot, handoverReportRoot, propertyCashflowRoot, reportRoot, propertyPhotoRoot).stream()
+                .map(Path::of).toList(), Path.of(propertyContractRoot));
     }
 
     OwnerDocumentService(OwnerDocumentMapper mapper, Path storageRoot) {
@@ -57,17 +61,21 @@ public class OwnerDocumentService {
                 storageRoot.resolve("electronic-signatures"), storageRoot.resolve("property-contracts"),
                 storageRoot.resolve("property-attachments"), storageRoot.resolve("property-handover-reports"),
                 storageRoot.resolve("property-cashflow"), storageRoot.resolve("reports"),
-                storageRoot.resolve("documents")));
+                storageRoot.resolve("documents"), storageRoot.resolve("property-photos")), storageRoot.resolve("property-contracts"));
     }
 
-    private OwnerDocumentService(OwnerDocumentMapper mapper, List<Path> storageRoots) {
+    private OwnerDocumentService(OwnerDocumentMapper mapper, List<Path> storageRoots, Path contractStorageRoot) {
         this.mapper = mapper;
         this.storageRoots = storageRoots.stream().map(path -> path.toAbsolutePath().normalize()).distinct().toList();
+        this.contractStorageRoot = contractStorageRoot.toAbsolutePath().normalize();
     }
 
     @Transactional(readOnly = true)
     public OwnerDocumentResponse getDocuments(Long userId) {
-        List<DocumentRow> rows = mapper.findDocuments(userId);
+        List<DocumentRow> rows = new ArrayList<>(mapper.findDocuments(userId));
+        rows.addAll(mapper.findContractDocuments(userId));
+        rows.sort(Comparator.comparing(DocumentRow::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         List<DocumentItem> items = rows.stream().map(this::toItem).toList();
         Map<String, Integer> counts = new LinkedHashMap<>();
         counts.put("all", items.size());
@@ -80,6 +88,10 @@ public class OwnerDocumentService {
                 new Category("receipt", "收據發票", counts.getOrDefault("receipt", 0)),
                 new Category("maintenance", "維修單據", counts.getOrDefault("maintenance", 0)),
                 new Category("finance", "財務確認", counts.getOrDefault("finance", 0)),
+                new Category("cashflow", "收支附件", counts.getOrDefault("cashflow", 0)),
+                new Category("photo", "房屋照片", counts.getOrDefault("photo", 0)),
+                new Category("property_contract", "房產合約", counts.getOrDefault("property_contract", 0)),
+                new Category("handover", "交接資料", counts.getOrDefault("handover", 0)),
                 new Category("other", "其他資料", counts.getOrDefault("other", 0)));
         LocalDate today = LocalDate.now();
         int pending = (int) items.stream().filter(item -> "待簽署".equals(item.status())).count();
@@ -94,9 +106,19 @@ public class OwnerDocumentService {
 
     @Transactional(readOnly = true)
     public Download download(Long userId, Long documentId) {
-        DocumentFile file = mapper.findDocumentFile(userId, documentId);
+        return download(userId, documentId, "document");
+    }
+
+    @Transactional(readOnly = true)
+    public Download download(Long userId, Long documentId, String source) {
+        if (!List.of("document", "property_contract").contains(source)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown document source");
+        }
+        DocumentFile file = "property_contract".equals(source)
+                ? mapper.findContractFile(userId, documentId) : mapper.findDocumentFile(userId, documentId);
         if (file == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found");
-        Path target = resolveStoragePath(file.getStorageKey());
+        Path target = "property_contract".equals(source)
+                ? resolveContractPath(file.getStorageKey()) : resolveStoragePath(file.getStorageKey());
         if (target == null || !Files.isRegularFile(target)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document file is unavailable");
         }
@@ -106,17 +128,23 @@ public class OwnerDocumentService {
     }
 
     private DocumentItem toItem(DocumentRow row) {
-        String category = category(row.getDocumentType(), row.getLinkEntityType());
+        boolean contract = "property_contract".equals(row.getSource());
+        String category = contract ? "property_contract" : category(row.getDocumentType(), row.getLinkEntityType());
         LocalDate today = LocalDate.now();
         String status = status(row.getStatus(), row.getExpiresAt(), today);
         return new DocumentItem(row.getId(), row.getDocumentNo() == null ? "DOC-" + row.getId() : row.getDocumentNo(),
-                row.getOriginalName(), category, typeLabel(row.getDocumentType(), row.getLinkEntityType()), status, row.getMimeType(),
+                row.getOriginalName(), category, contract ? "房產合約" : typeLabel(row.getDocumentType(), row.getLinkEntityType()), status, row.getMimeType(),
                 row.getFileSize(), row.getCreatedAt(), row.getUpdatedAt(), row.getExpiresAt(), row.getUploaderName(),
-                row.getProjectName(), row.getCity(), row.getUnitNo(), resolveStoragePath(row.getStorageKey()) != null);
+                row.getProjectName(), row.getCity(), row.getUnitNo(),
+                (contract ? resolveContractPath(row.getStorageKey()) : resolveStoragePath(row.getStorageKey())) != null,
+                row.getSource(), row.getOwnerUnitId());
     }
 
     private String category(String type, String linkEntityType) {
         String value = type == null ? "" : type.toLowerCase(Locale.ROOT);
+        if (value.equals("property_photo")) return "photo";
+        if (value.equals("cashflow_attachment") || "cashflow".equals(linkEntityType)) return "cashflow";
+        if (value.equals("handover_repair_attachment") || value.equals("handover_photo") || value.equals("inventory")) return "handover";
         if (value.contains("purchase")) return "sale";
         if ("lease".equals(linkEntityType)
                 || value.equals("lease") || value.equals("lease_period")
@@ -142,6 +170,7 @@ public class OwnerDocumentService {
                 Map.entry("handover_repair_attachment", "維修單據"),
                 Map.entry("finance_confirmation", "財務確認"),
                 Map.entry("cashflow_attachment", "收支附件"),
+                Map.entry("property_photo", "房屋照片"),
                 Map.entry("property_attachment", "其他附件"),
                 Map.entry("authorization_draft", "授權委託書"),
                 Map.entry("mandate_document", "代管文件"),
@@ -153,7 +182,7 @@ public class OwnerDocumentService {
 
     private String status(String value, LocalDate expiresAt, LocalDate today) {
         if (expiresAt != null && !expiresAt.isBefore(today) && !expiresAt.isAfter(today.plusDays(30))) return "即將到期";
-        return Map.of("active", "已生效", "confirmed", "已確認", "pending_review", "處理中",
+        return Map.of("active", "已生效", "approved", "已確認", "confirmed", "已確認", "pending_review", "處理中",
                 "pending_signature", "待簽署", "expired", "已過期").getOrDefault(value, value == null ? "處理中" : value);
     }
 
@@ -164,6 +193,12 @@ public class OwnerDocumentService {
             if (target.startsWith(root) && Files.isRegularFile(target)) return target;
         }
         return null;
+    }
+
+    private Path resolveContractPath(String storageKey) {
+        if (storageKey == null || storageKey.isBlank()) return null;
+        Path target = contractStorageRoot.resolve(storageKey).normalize();
+        return target.startsWith(contractStorageRoot) && Files.isRegularFile(target) ? target : null;
     }
 
     private long fileSize(Path path) {

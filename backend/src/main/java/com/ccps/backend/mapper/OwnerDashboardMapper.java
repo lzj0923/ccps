@@ -45,9 +45,15 @@ public interface OwnerDashboardMapper {
     @Select("""
             SELECT
               ou.id AS owner_unit_id,
+              (SELECT pp.document_id FROM property_photos pp JOIN documents photo_doc ON photo_doc.id=pp.document_id
+               WHERE pp.owner_unit_id=ou.id AND photo_doc.status NOT IN ('voided', 'rejected')
+                 AND photo_doc.mime_type LIKE 'image/%'
+               ORDER BY (pp.lease_id IS NULL) DESC, pp.version_month DESC, pp.is_cover DESC, pp.sort_order, pp.id DESC
+               LIMIT 1) AS cover_document_id,
               u.id AS unit_id,
               p.name AS project_name,
               p.city,
+              p.country_code,
               u.unit_no,
               u.unit_type,
               u.area_sqm,
@@ -57,6 +63,8 @@ public interface OwnerDashboardMapper {
               ou.actual_handover_date,
               svc.services_csv,
               COALESCE(pay.purchase_price, 0) AS purchase_price,
+              COALESCE(pay.currency, 'MYR') AS currency,
+              pay.purchase_date,
               CASE WHEN ou.asset_stage <> 'PRE_HANDOVER' THEN COALESCE(pay.purchase_price, 0)
                    ELSE COALESCE(pay.paid_amount, 0) END AS paid_amount,
               CASE WHEN ou.asset_stage <> 'PRE_HANDOVER' THEN 0
@@ -65,6 +73,8 @@ public interface OwnerDashboardMapper {
               COALESCE(pay.total_installment_count, 0) AS total_installment_count,
               pay.next_due_date,
               lease_info.tenant_name,
+              lease_info.lease_no,
+              lease_info.lease_start_date,
               COALESCE(lease_info.monthly_rent, 0) AS monthly_rent,
               COALESCE(lease_info.tenant_deposit_amount, 0) AS tenant_deposit_amount,
               lease_info.lease_end_date,
@@ -104,6 +114,8 @@ public interface OwnerDashboardMapper {
               SELECT
                 pc.owner_unit_id,
                 MAX(pc.purchase_price) AS purchase_price,
+                MAX(pc.currency) AS currency,
+                MAX(pc.signed_date) AS purchase_date,
                 COALESCE(SUM(pi.amount_paid), 0) AS paid_amount,
                 SUM(CASE WHEN pi.amount_due > 0 AND pi.amount_paid >= pi.amount_due THEN 1 ELSE 0 END) AS paid_installment_count,
                 COUNT(pi.id) AS total_installment_count,
@@ -120,6 +132,8 @@ public interface OwnerDashboardMapper {
             LEFT JOIN (
               SELECT l.unit_id,
                      MAX(t.full_name) AS tenant_name,
+                     MAX(l.lease_no) AS lease_no,
+                     MAX(l.start_date) AS lease_start_date,
                      MAX(l.monthly_rent) AS monthly_rent,
                      COALESCE(SUM(l.deposit_amount), 0) AS tenant_deposit_amount,
                      MAX(l.end_date) AS lease_end_date

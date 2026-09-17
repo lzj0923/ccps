@@ -17,7 +17,7 @@
     </div>
 
     <div class="project-toolbar">
-      <label class="search-box"><span>⌕</span><input v-model.trim="keyword" :placeholder="$t('projectManagement.search')" @keyup.enter="search"></label>
+      <label class="search-box"><Search :size="16" :stroke-width="2" aria-hidden="true" /><input v-model.trim="keyword" :placeholder="$t('projectManagement.search')" @keyup.enter="search"></label>
       <select v-model="status" @change="search">
         <option value="">{{ $t('projectManagement.allStatus') }}</option>
         <option value="active">{{ $t('projectManagement.active') }}</option>
@@ -34,7 +34,7 @@
       </div>
 
       <div v-if="loading" class="project-empty">{{ $t('ui.loading') }}</div>
-      <div v-else-if="error" class="project-empty error">{{ error }} <button type="button" @click="load(pager.page)">{{ $t('ui.retry') }}</button></div>
+      <div v-else-if="error" class="project-empty error">{{ $lt(error) }} <button type="button" @click="load(pager.page)">{{ $t('ui.retry') }}</button></div>
       <div v-else class="table-wrap">
         <table>
           <colgroup><col class="code-col"><col class="name-col"><col class="location-col"><col class="address-col"><col class="units-col"><col class="owners-col"><col class="status-col"><col class="actions-col"></colgroup>
@@ -82,15 +82,14 @@
       <form class="project-dialog" @submit.prevent="save">
         <header><div><span class="eyebrow">{{ $t('projectManagement.formEyebrow') }}</span><h3>{{ editing ? $t('projectManagement.editTitle') : $t('projectManagement.createTitle') }}</h3><p>{{ $t('projectManagement.formHint') }}</p></div><button type="button" class="close-btn" @click="closeDialog">×</button></header>
         <div class="project-form">
-          <label><span>{{ $t('projectManagement.code') }} *</span><input v-model.trim="form.projectCode" required maxlength="40" :placeholder="$t('projectManagement.codePlaceholder')"></label>
-          <label><span>{{ $t('projectManagement.name') }} *</span><input v-model.trim="form.name" required maxlength="160" :placeholder="$t('projectManagement.namePlaceholder')"></label>
-          <label><span>{{ $t('projectManagement.state') }}</span><select v-model="form.state" @change="onStateChange"><option value="">{{ $t('projectManagement.statePlaceholder') }}</option><option v-for="location in malaysiaLocations" :key="location.state" :value="location.state">{{ location.state }}</option></select></label>
-          <label><span>{{ $t('projectManagement.city') }}</span><select v-model="form.city" :disabled="!form.state"><option value="">{{ $t('projectManagement.cityPlaceholder') }}</option><option v-if="form.city && !areaOptions.includes(form.city)" :value="form.city">{{ form.city }}</option><option v-for="area in areaOptions" :key="area" :value="area">{{ area }}</option></select></label>
-          <label class="wide"><span>{{ $t('projectManagement.detailedAddress') }}</span><input v-model.trim="form.address" maxlength="255" :placeholder="$t('projectManagement.addressPlaceholder')"></label>
-          <label><span>{{ $t('projectManagement.countryCode') }} *</span><input v-model.trim="form.countryCode" required maxlength="2" pattern="[A-Za-z]{2}"></label>
-          <label><span>{{ $t('projectManagement.status') }}</span><select v-model="form.status"><option value="active">{{ $t('projectManagement.active') }}</option><option value="inactive">{{ $t('projectManagement.inactive') }}</option></select></label>
+          <label><span>{{ $t('projectManagement.code') }} *</span><input v-model.trim="projectForm.projectCode" required maxlength="40" :placeholder="$t('projectManagement.codePlaceholder')"></label>
+          <label><span>{{ $t('projectManagement.name') }} *</span><input v-model.trim="projectForm.name" required maxlength="160" :placeholder="$t('projectManagement.namePlaceholder')"></label>
+          <label><span>{{ $t('projectManagement.state') }}</span><select v-model="projectForm.state" @change="onStateChange"><option value="">{{ $t('projectManagement.statePlaceholder') }}</option><option v-for="location in malaysiaLocations" :key="location.state" :value="location.state">{{ location.state }}</option></select></label>
+          <label><span>{{ $t('projectManagement.city') }}</span><select v-model="projectForm.city" :disabled="!projectForm.state"><option value="">{{ $t('projectManagement.cityPlaceholder') }}</option><option v-if="projectForm.city && !areaOptions.includes(projectForm.city)" :value="projectForm.city">{{ projectForm.city }}</option><option v-for="area in areaOptions" :key="area" :value="area">{{ area }}</option></select></label>
+          <label class="wide"><span>{{ $t('projectManagement.detailedAddress') }}</span><input v-model.trim="projectForm.address" maxlength="255" :placeholder="$t('projectManagement.addressPlaceholder')"></label>
+          <label class="wide"><span>{{ $t('projectManagement.status') }}</span><select v-model="projectForm.status"><option value="active">{{ $t('projectManagement.active') }}</option><option value="inactive">{{ $t('projectManagement.inactive') }}</option></select></label>
         </div>
-        <p v-if="formError" class="form-error">{{ formError }}</p>
+        <p v-if="formError" class="form-error">{{ $lt(formError) }}</p>
         <footer><button type="button" class="secondary-btn" @click="closeDialog">{{ $t('ui.cancel') }}</button><button type="submit" class="primary-btn" :disabled="saving">{{ saving ? $t('ui.saving') : $t('projectManagement.save') }}</button></footer>
       </form>
     </div>
@@ -98,6 +97,7 @@
 </template>
 
 <script>
+import { Search } from '@lucide/vue';
 import pageBridge from '../pageBridge';
 import { findStateByArea, malaysiaLocations } from '../data/malaysiaLocations';
 import { createAdminProject, deleteAdminProject, fetchAdminProjects, updateAdminProject } from '../services/propertyApi';
@@ -105,6 +105,7 @@ import { createAdminProject, deleteAdminProject, fetchAdminProjects, updateAdmin
 const emptyForm = () => ({ projectCode: '', name: '', address: '', state: '', city: '', countryCode: 'MY', status: 'active' });
 
 export default {
+  components: { Search },
   mixins: [pageBridge],
   data() {
     return {
@@ -112,12 +113,12 @@ export default {
       keyword: '', status: '', rows: [], loading: false, error: '', saving: false,
       summary: { totalCount: 0, activeCount: 0, inactiveCount: 0, unitCount: 0 },
       pager: { totalRows: 0, page: 1, pageSize: 5, totalPages: 1 },
-      dialogOpen: false, editing: null, form: emptyForm(), formError: '', requestSerial: 0
+      dialogOpen: false, editing: null, projectForm: emptyForm(), formError: '', requestSerial: 0
     };
   },
   computed: {
     areaOptions() {
-      return this.malaysiaLocations.find(location => location.state === this.form.state)?.areas || [];
+      return this.malaysiaLocations.find(location => location.state === this.projectForm.state)?.areas || [];
     }
   },
   mounted() { this.load(1); },
@@ -139,11 +140,11 @@ export default {
     },
     search() { this.load(1); },
     go(page) { if (page >= 1 && page <= this.pager.totalPages) this.load(page); },
-    openCreate() { this.editing = null; this.form = emptyForm(); this.formError = ''; this.dialogOpen = true; },
-    openEdit(row) { this.editing = row; this.form = { projectCode: row.projectCode, name: row.name, address: row.address || '', state: row.state || findStateByArea(row.city), city: row.city || '', countryCode: row.countryCode || 'MY', status: row.status || 'active' }; this.formError = ''; this.dialogOpen = true; },
+    openCreate() { this.editing = null; this.projectForm = emptyForm(); this.formError = ''; this.dialogOpen = true; },
+    openEdit(row) { this.editing = row; this.projectForm = { projectCode: row.projectCode, name: row.name, address: row.address || '', state: row.state || findStateByArea(row.city), city: row.city || '', countryCode: row.countryCode || 'MY', status: row.status || 'active' }; this.formError = ''; this.dialogOpen = true; },
     closeDialog() { if (!this.saving) this.dialogOpen = false; },
-    onStateChange() { this.form.city = ''; },
-    payload(source = this.form) { return { projectCode: source.projectCode.trim().toUpperCase(), name: source.name.trim(), address: source.address?.trim() || null, state: source.state?.trim() || null, city: source.city?.trim() || null, countryCode: source.countryCode.trim().toUpperCase(), status: source.status }; },
+    onStateChange() { this.projectForm.city = ''; },
+    payload(source = this.projectForm) { return { projectCode: source.projectCode.trim().toUpperCase(), name: source.name.trim(), address: source.address?.trim() || null, state: source.state?.trim() || null, city: source.city?.trim() || null, countryCode: source.countryCode.trim().toUpperCase(), status: source.status }; },
     async save() {
       this.saving = true; this.formError = '';
       try {

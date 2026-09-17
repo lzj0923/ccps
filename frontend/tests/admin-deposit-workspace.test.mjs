@@ -8,6 +8,7 @@ const router = readFileSync(new URL('../src/router.js', import.meta.url), 'utf8'
 const viewModel = readFileSync(new URL('../src/composables/dashboardViewModel.js', import.meta.url), 'utf8');
 const modules = readFileSync(new URL('../src/data/dashboardData.js', import.meta.url), 'utf8');
 const i18n = readFileSync(new URL('../src/i18n/index.js', import.meta.url), 'utf8');
+const legacyI18n = readFileSync(new URL('../src/i18n/legacy.generated.js', import.meta.url), 'utf8');
 const process = readFileSync(new URL('../src/components/AdminPropertyProcessWorkspace.vue', import.meta.url), 'utf8');
 const tenantDirectory = readFileSync(new URL('../src/components/AdminTenantDirectoryWorkspace.vue', import.meta.url), 'utf8');
 
@@ -20,19 +21,32 @@ test('exposes deposit management as its own rental module', () => {
   assert.match(adminPage, /import AdminDepositWorkspace/);
 });
 
-test('manages lease deposits and transactions inside the standalone workspace', () => {
+test('manages lease deposits locally and routes pending reviews to centralized finance', () => {
   assert.match(deposit, /fetchAdminDepositAccounts/);
   assert.match(deposit, /fetchAdminDepositAccount/);
   assert.match(deposit, /createAdminTenantDepositTransaction/);
-  assert.match(deposit, /confirmAdminFinanceReview/);
-  assert.match(deposit, /押金账单/);
-  assert.match(deposit, /增加押金/);
-  assert.match(deposit, /代付租客费用/);
-  assert.match(deposit, /登记租客还款/);
-  assert.match(deposit, /押金余款返还/);
-  assert.match(deposit, /押金余款没收/);
-  assert.match(deposit, /业主预备金/);
-  assert.match(deposit, /不会进入业主账户报表/);
+  assert.match(deposit, /adminFinanceMode = 'tenant_deposit'/);
+  assert.match(deposit, /adminFinanceViewMode = 'pending'/);
+  assert.doesNotMatch(deposit, /confirmAdminFinanceReview/);
+  assert.match(legacyI18n, /押金账单/);
+  assert.match(legacyI18n, /增加押金/);
+  assert.match(legacyI18n, /代付租客费用/);
+  assert.match(legacyI18n, /登记租客还款/);
+  assert.match(legacyI18n, /押金余款返还/);
+  assert.match(legacyI18n, /押金余款没收/);
+  assert.match(legacyI18n, /业主预备金/);
+  assert.match(legacyI18n, /不会进入业主账户报表/);
+});
+
+test('supports selecting and safely deleting manual deposit account entries', () => {
+  assert.match(deposit, /deleteAdminTenantDepositTransactions/);
+  assert.match(deposit, /startDeleteMode/);
+  assert.match(deposit, /v-model="selectedTransactionIds"/);
+  assert.match(i18n, /depositDeleteSelectAll: \['全选可删除记录'/);
+  assert.match(i18n, /depositDeleteConfirm: \['确定删除'/);
+  assert.match(deposit, /\['adjustment_credit', 'adjustment_debit', 'tenant_advance', 'tenant_repayment'\]/);
+  assert.match(i18n, /depositDeleteLocked: \['系统／财务流水，不可删除'/);
+  assert.match(deposit, /window\.confirm/);
 });
 
 test('keeps deposit page styles independent from Vue scoped metadata', () => {

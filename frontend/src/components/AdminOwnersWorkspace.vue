@@ -2,7 +2,7 @@
   <section class="owners-grid admin-owner-workspace" :class="{ 'property-list-workspace': isPropertyMode }">
     <template v-if="isPropertyMode">
       <div class="panel owners-table-panel">
-        <div v-if="errorMessage" class="admin-owner-state error" role="alert"><strong>{{ $t('properties.dataLoadFailed') }}</strong><span>{{ errorMessage }}</span><button type="button" @click="loadOwners">{{ $t('ui.reload') }}</button></div>
+        <div v-if="errorMessage" class="admin-owner-state error" role="alert"><strong>{{ $t('properties.dataLoadFailed') }}</strong><span>{{ $lt(errorMessage) }}</span><button type="button" @click="loadOwners">{{ $t('ui.reload') }}</button></div>
         <div v-else class="table-wrap owners-table-wrap">
           <table>
             <thead><tr><th>{{ $t('properties.projectItem') }}</th><th>{{ $t('properties.unitNo') }}</th><th>{{ $t('ui.owner') }}</th><th>{{ $t('properties.unitType') }}</th><th>{{ $t('properties.handoverStatus') }}</th><th>{{ $t('properties.rentalStatus') }}</th><th>{{ $t('properties.propertyTotal') }}</th><th>{{ $t('properties.paidTotal') }}</th><th>{{ $t('properties.unpaidTotal') }}</th><th>{{ $t('ui.actions') }}</th></tr></thead>
@@ -12,12 +12,12 @@
                 <td><strong>{{ property.unitNo || '—' }}</strong><small>{{ [property.building, property.floorNo].filter(Boolean).join(' · ') || '—' }}</small></td>
                 <td><span class="avatar">{{ initials(property.ownerName) }}</span>{{ property.ownerName }}<small>{{ property.ownerPhone || $t('properties.unsetMobile') }}</small></td>
                 <td>{{ property.unitType || '—' }}<small>{{ property.areaSqm ? `${property.areaSqm} m²` : '—' }}</small></td>
-                <td><span class="tag" :class="lifecycleClass(property.assetStage)">{{ lifecycleLabel(property.assetStage) }}</span></td>
-                <td><span class="tag" :class="rentalStatusClass(property.rentalStatus)">{{ rentalStatusLabel(property.rentalStatus) }}</span></td>
+                <td><span class="tag" :class="lifecycleClass(property.assetStage)">{{ $lt(lifecycleLabel(property.assetStage)) }}</span></td>
+                <td><span class="tag" :class="rentalStatusClass(property.rentalStatus)">{{ $lt(rentalStatusLabel(property.rentalStatus)) }}</span></td>
                 <td>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.purchasePrice) }}</td><td>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.paidAmount) }}</td>
                 <td :class="{ 'money-red': Number(property.remainingAmount || 0) > 0 }">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.remainingAmount) }}</td>
                 <td class="property-actions-cell"><div class="property-list-actions">
-                  <button class="row-actions property-open-action" type="button" :title="$t('properties.enterManagement')" @click.stop="selectProperty(property)"><span>{{ $t('legacy.t_0596bf73ba05') }}</span><ArrowUpRight :size="14" aria-hidden="true" /></button>
+                  <button class="row-actions property-open-action" type="button" :title="$t('properties.enterManagement')" @click.stop="selectProperty(property)"><span>{{ $t('legacy.t_0596bf73ba05') }}</span></button>
                   <button class="row-actions property-delete-action" type="button" :disabled="propertyDeletingId !== null" :title="$t('properties.deleteProperty')" :aria-label="$t('properties.deleteProperty')" :aria-busy="propertyDeletingId === property.unitId" :data-state="propertyDeletingId === property.unitId ? 'loading' : 'default'" @click.stop="removeProperty(property)"><LoaderCircle v-if="propertyDeletingId === property.unitId" class="property-action-spinner" :size="15" aria-hidden="true" /><Trash2 v-else :size="15" aria-hidden="true" /></button>
                 </div></td>
               </tr>
@@ -29,8 +29,8 @@
       </div>
       <aside v-if="!isPropertyMode" class="panel owners-detail admin-owner-detail">
         <template v-if="selectedProperty">
-          <div class="owners-profile"><div class="big-avatar">{{ $t('legacy.t_510cf918d2af') }}</div><div><h3>{{ selectedProperty.projectName }} · {{ selectedProperty.unitNo }}</h3><p>{{ selectedProperty.ownerName }} {{ $t('legacy.t_c3ed62b96510') }}</p></div><span class="tag" :class="lifecycleClass(selectedProperty.assetStage)">{{ lifecycleLabel(selectedProperty.assetStage) }}</span></div>
-          <section class="owners-section"><h4><span>{{ $t('legacy.t_356a192b7913') }}</span>{{ $t('legacy.t_bbda2bc362dd') }}</h4><div class="kv"><span>{{ $t('legacy.t_cf545c9c1bf9') }}</span><b>{{ selectedProperty.projectName || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_590157b8d4d7') }}</span><b>{{ selectedProperty.city || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_7abe31b88b71') }}</span><b>{{ [selectedProperty.building, selectedProperty.floorNo].filter(Boolean).join('／') || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_9387cc206f80') }}</span><b>{{ selectedProperty.unitType || '—' }} · {{ selectedProperty.areaSqm ? `${selectedProperty.areaSqm} m²` : '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_5a6b3e9d88af') }}</span><b>{{ listingStatusLabel(selectedProperty.listingStatus) }}</b></div></section>
+          <div class="owners-profile"><div class="big-avatar">{{ $t('legacy.t_510cf918d2af') }}</div><div><h3>{{ selectedProperty.projectName }} · {{ selectedProperty.unitNo }}</h3><p>{{ selectedProperty.ownerName }} {{ $t('legacy.t_c3ed62b96510') }}</p></div><span class="tag" :class="lifecycleClass(selectedProperty.assetStage)">{{ $lt(lifecycleLabel(selectedProperty.assetStage)) }}</span></div>
+          <section class="owners-section"><h4><span>{{ $t('legacy.t_356a192b7913') }}</span>{{ $t('legacy.t_bbda2bc362dd') }}</h4><div class="kv"><span>{{ $t('legacy.t_cf545c9c1bf9') }}</span><b>{{ selectedProperty.projectName || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_590157b8d4d7') }}</span><b>{{ selectedProperty.city || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_7abe31b88b71') }}</span><b>{{ [selectedProperty.building, selectedProperty.floorNo].filter(Boolean).join('／') || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_9387cc206f80') }}</span><b>{{ selectedProperty.unitType || '—' }} · {{ selectedProperty.areaSqm ? `${selectedProperty.areaSqm} m²` : '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_5a6b3e9d88af') }}</span><b>{{ $lt(listingStatusLabel(selectedProperty.listingStatus)) }}</b></div></section>
           <section class="owners-section"><h4><span>{{ $t('legacy.t_da4b9237bacc') }}</span>{{ $t('legacy.t_82688930fcc0') }}</h4><div class="kv"><span>{{ $t('legacy.t_1c4f579e884d') }}</span><b>{{ selectedProperty.ownerName }}</b></div><div class="kv"><span>{{ $t('legacy.t_c30e4f203e42') }}</span><b>{{ selectedProperty.ownerPhone || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_13127f02a814') }}</span><b>{{ selectedProperty.ownershipPercent ?? 100 }}%</b></div><div class="kv"><span>{{ $t('legacy.t_c31bb6b8e6e4') }}</span><b>{{ selectedProperty.primary ? $t('legacy.t_30160a21b92a') : $t('legacy.t_8bf5c10ad937') }}</b></div></section>
           <section class="owners-section"><h4><span>{{ $t('legacy.t_77de68daecd8') }}</span>{{ $t('legacy.t_f9ba1ae07a6e') }}</h4><div class="kv"><span>{{ $t('legacy.t_bbc3a9494a03') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedProperty.purchasePrice) }}</b></div><div class="kv"><span>{{ $t('legacy.t_929fe9d67675') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedProperty.paidAmount) }}</b></div><div class="kv"><span>{{ $t('legacy.t_1e7b168f5733') }}</span><b class="money-red">{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedProperty.remainingAmount) }}</b></div><div class="progress"><i :style="{ width: propertyProgress + '%' }"></i></div></section>
           <div class="owner-property-actions property-page-actions"><button type="button" @click="openDetails(selectedProperty)">{{ $t('legacy.t_0596bf73ba05') }}</button><button type="button" class="edit" @click="openEdit(selectedProperty)">{{ $t('legacy.t_cf0180e2cd0f') }}</button></div>
@@ -54,13 +54,13 @@
 
       <div v-if="errorMessage" class="admin-owner-state error" role="alert">
         <strong>{{ $t('ui.ownerDataLoadFailed') }}</strong>
-        <span>{{ errorMessage }}</span>
+        <span>{{ $lt(errorMessage) }}</span>
         <button type="button" @click="loadOwners">{{ $t('ui.reload') }}</button>
       </div>
       <div v-else class="table-wrap owners-table-wrap">
         <table>
           <thead>
-            <tr><th>{{ $t('ui.ownerName') }}</th><th>{{ $t('ui.identityNo') }}</th><th>{{ $t('ui.mobile') }}</th><th>{{ $t('ui.mailbox') }}</th><th>{{ $t('ui.propertyCount') }}</th><th>{{ $t('ui.accountStatus') }}</th><th>{{ $t('ui.actions') }}</th></tr>
+            <tr><th>{{ $t('ui.ownerName') }}</th><th>{{ $t('ui.identityNo') }}</th><th>{{ $t('ui.mobile') }}</th><th>{{ $t('ui.mailbox') }}</th><th>{{ $t('ownerStaff.label') }}</th><th>{{ $t('ui.propertyCount') }}</th><th>{{ $t('ui.accountStatus') }}</th><th>{{ $t('ui.actions') }}</th></tr>
           </thead>
           <tbody>
             <tr v-for="owner in pagedOwners" :key="owner.id" :class="{ selected: owner.id === selectedOwnerId }" @click="selectOwner(owner)">
@@ -68,11 +68,12 @@
               <td>{{ owner.identityNo || '—' }}</td>
               <td>{{ owner.phone || '—' }}</td>
               <td>{{ owner.email || '—' }}</td>
+              <td><span class="owner-staff-list-text">{{ responsibleStaffNames(owner) }}</span></td>
               <td><span class="owner-property-count">{{ $t('ui.properties', { count: owner.properties.length }) }}</span></td>
               <td><span class="tag" :class="owner.status === 'active' ? 'green' : 'gray'">{{ owner.status === 'active' ? $t('ui.enabled') : $t('ui.disabled') }}</span></td>
               <td><button class="row-actions owner-row-arrow" type="button" :title="$t('ui.viewProperties')" @click.stop="selectOwner(owner)">{{ $t('legacy.t_0596bf73ba05') }}</button></td>
             </tr>
-            <tr v-if="!loading && !filteredOwners.length"><td colspan="7" class="admin-owner-empty">{{ $t('ui.noMatchingOwners') }}</td></tr>
+            <tr v-if="!loading && !filteredOwners.length"><td colspan="8" class="admin-owner-empty">{{ $t('ui.noMatchingOwners') }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -108,6 +109,7 @@
           <div class="kv"><span>{{ $t('legacy.t_898dcb50fa59') }}</span><b>{{ selectedOwner.homePhone || '—' }}</b></div>
           <div class="kv"><span>{{ $t('legacy.t_89d89b88795a') }}</span><b>{{ selectedOwner.officePhone || '—' }}</b></div>
           <div class="kv"><span>{{ $t('legacy.t_0d01e2e86669') }}</span><b>{{ selectedOwner.email || '—' }}</b></div>
+          <div class="kv"><span>{{ $t('ownerStaff.label') }}</span><b>{{ responsibleStaffNames(selectedOwner) }}</b></div>
         </section>
 
         <section class="owners-section owner-properties-section">
@@ -115,11 +117,11 @@
           <article v-for="property in selectedOwner.properties" :key="property.ownerUnitId" class="admin-owner-property-card">
             <div class="owner-property-heading">
               <div><strong>{{ property.unitNo }}</strong><small>{{ property.projectName }}</small></div>
-              <span class="tag" :class="lifecycleClass(property.assetStage)">{{ lifecycleLabel(property.assetStage) }}</span>
+              <span class="tag" :class="lifecycleClass(property.assetStage)">{{ $lt(lifecycleLabel(property.assetStage)) }}</span>
             </div>
             <div class="owner-property-meta"><span>{{ property.unitType || $t('legacy.t_d865d84d2ab9') }}</span><span>{{ property.areaSqm ? `${property.areaSqm} m²` : $t('legacy.t_908f758f9c20') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(property.purchasePrice) }}</b></div>
             <div v-if="property.assetStage === 'OPERATING'" class="owner-property-services">
-              <span v-for="service in property.services" :key="service">{{ serviceLabel(service) }}</span>
+              <span v-for="service in property.services" :key="service">{{ $lt(serviceLabel(service)) }}</span>
               <small v-if="!property.services?.length">{{ $t('legacy.t_92fd34a9ca85') }}</small>
             </div>
             <div class="owner-property-actions">
@@ -148,13 +150,13 @@
           <label class="wide">{{ $t('legacy.t_1c4f579e884d') }}<input v-model.trim="ownerForm.fullName" maxlength="160" required :placeholder="$t('legacy.t_87746aa5b712')"></label>
           <label class="wide owner-mobile-field">{{ $t('legacy.t_45d661f5882e') }}
             <span class="owner-phone-entry">
-              <select v-model="ownerForm.mobileCountry" aria-label="国家或地区" @change="validateOwnerPhone(false)">
-                <option v-for="country in phoneCountries" :key="country.code" :value="country.code">{{ country.label }} {{ country.dialCode }}</option>
+              <select v-model="ownerForm.mobileCountry" :aria-label="$t('legacy.t_cc725f519afb')" @change="validateOwnerPhone(false)">
+                <option v-for="country in phoneCountries" :key="country.code" :value="country.code">{{ $regionName(country.code) }} {{ country.dialCode }}</option>
               </select>
               <input v-model.trim="ownerForm.mobileNational" inputmode="tel" autocomplete="tel-national" maxlength="30" required :placeholder="selectedOwnerPhoneCountry.example" @blur="validateOwnerPhone(true)">
             </span>
-            <small>该完整号码将作为业主登录账号。</small>
-            <small v-if="ownerPhoneError" class="owner-phone-error">{{ ownerPhoneError }}</small>
+            <small>{{ $t('legacy.t_458d10bfc8a2') }}</small>
+            <small v-if="ownerPhoneError" class="owner-phone-error">{{ $lt(ownerPhoneError) }}</small>
           </label>
           <label>{{ $t('legacy.t_898dcb50fa59') }}<input v-model.trim="ownerForm.homePhone" maxlength="40"></label>
           <label>{{ $t('legacy.t_89d89b88795a') }}<input v-model.trim="ownerForm.officePhone" maxlength="40"></label>
@@ -162,8 +164,13 @@
           <label>{{ $t('legacy.t_cddd3bbff27d') }}<input v-model.trim="ownerForm.identityNo" maxlength="120"></label>
           <label>{{ $t('legacy.t_196ac5431d6e') }}<input v-model.trim="ownerForm.passportNo" maxlength="80"></label>
           <label>{{ $t('legacy.t_f91fbded4c19') }}<select v-model="ownerForm.status"><option value="active">{{ $t('legacy.t_ce6c3dc32674') }}</option><option value="inactive">{{ $t('legacy.t_d989e55188c9') }}</option></select></label>
+          <div class="wide owner-staff-form-field">
+            <span>{{ $t('ownerStaff.label') }}</span>
+            <OwnerStaffMultiSelect v-model="ownerForm.responsibleUserIds" :options="staffOptions" :label="$t('ownerStaff.label')" :placeholder="$t('ownerStaff.select')" :empty-text="$t('ownerStaff.empty')" />
+            <small v-if="staffOptionsError" class="owner-phone-error">{{ $lt(staffOptionsError) }}</small>
+          </div>
           <p class="admin-owner-form-note wide">{{ $t('legacy.t_86e05c5b59d5') }}</p>
-          <p v-if="ownerFormError" class="admin-property-error wide">{{ ownerFormError }}</p>
+          <p v-if="ownerFormError" class="admin-property-error wide">{{ $lt(ownerFormError) }}</p>
         </div>
         <menu><button type="button" @click="closeOwnerDialog">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn" :disabled="ownerSaving">{{ ownerSaving ? $t('legacy.t_59d9eae44030') : (ownerEditingId ? $t('legacy.t_60b4ae9082a3') : $t('legacy.t_f2a2753dcacf')) }}</button></menu>
       </form>
@@ -186,7 +193,7 @@
             </button>
             <p v-if="!propertyOwnerOptions.length" class="admin-owner-empty">{{ $t('legacy.t_e83da67e0d0f') }}</p>
           </div>
-          <p v-if="propertyCreateError" class="admin-property-error">{{ propertyCreateError }}</p>
+          <p v-if="propertyCreateError" class="admin-property-error">{{ $lt(propertyCreateError) }}</p>
         </section>
 
         <div v-else class="form-grid admin-new-property-form">
@@ -208,14 +215,14 @@
           <label v-else>{{ $t('legacy.t_5e6ad3f8b374') }}<input v-model="propertyCreateForm.actualHandoverDate" type="date" required></label>
           <fieldset v-if="propertyCreateForm.assetStage === 'OPERATING'" class="property-service-picker wide">
             <legend>{{ $t('legacy.t_bdc0d84fec07') }}</legend>
-            <label v-for="service in serviceOptions" :key="service.value"><input v-model="propertyCreateForm.services" type="checkbox" :value="service.value">{{ service.label }}</label>
+            <label v-for="service in serviceOptions" :key="service.value"><input v-model="propertyCreateForm.services" type="checkbox" :value="service.value">{{ $lt(service.label) }}</label>
           </fieldset>
           <label>{{ $t('legacy.t_5a6b3e9d88af') }}<select v-model="propertyCreateForm.listingStatus"><option value="available">{{ $t('legacy.t_e91365cf9ed9') }}</option><option value="reserved">{{ $t('legacy.t_ede0de28e966') }}</option><option value="sold">{{ $t('legacy.t_606980e3452f') }}</option><option value="rented">{{ $t('legacy.t_2ba7bdb71038') }}</option><option value="inactive">{{ $t('legacy.t_d989e55188c9') }}</option></select></label>
           <label>{{ $t('legacy.t_3aa05659bf08') }}<input v-model.number="propertyCreateForm.purchasePrice" type="number" min="0" step="0.01" required></label>
           <label>{{ $t('legacy.t_0f79c83ef51a') }}<input v-model.number="propertyCreateForm.ownershipPercent" type="number" min="0.01" max="100" step="0.01" required></label>
           <label>{{ $t('legacy.t_83bf65a6c9e2') }}<input v-model="propertyCreateForm.startDate" type="date"></label>
           <label class="property-primary-check"><input v-model="propertyCreateForm.primary" type="checkbox">{{ $t('legacy.t_c59ab1be53f3') }}</label>
-          <p v-if="propertyCreateError" class="admin-property-error wide">{{ propertyCreateError }}</p>
+          <p v-if="propertyCreateError" class="admin-property-error wide">{{ $lt(propertyCreateError) }}</p>
         </div>
 
         <menu v-if="propertyCreateStep === 1"><button type="button" @click="closePropertyCreateDialog">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="button" class="primary-btn" :disabled="!propertyOwnerId" @click="continuePropertyCreate">{{ $t('legacy.t_d0a1c0c58c5d') }}</button></menu>
@@ -228,7 +235,7 @@
         <div class="modal-head"><h3>{{ dialogMode === 'edit' ? $t('legacy.t_cf0180e2cd0f') : $t('legacy.t_c2119703b8d0') }}</h3><button class="icon-close" type="button" @click="closeDialog">×</button></div>
 
         <div v-if="dialogLoading" class="admin-owner-state">{{ $t('legacy.t_00f31e8a581d') }}</div>
-        <div v-else-if="dialogError && !dialogProperty" class="admin-owner-state error">{{ dialogError }}</div>
+        <div v-else-if="dialogError && !dialogProperty" class="admin-owner-state error">{{ $lt(dialogError) }}</div>
         <div v-else-if="dialogProperty" class="form-grid admin-property-form">
           <label>{{ $t('legacy.t_f189d51d8d04') }}<input :value="dialogProperty.projectName" disabled></label>
           <label>{{ $t('legacy.t_590157b8d4d7') }}<input :value="dialogProperty.city || '—'" disabled></label>
@@ -247,7 +254,7 @@
           <label v-else>{{ $t('legacy.t_5e6ad3f8b374') }}<input v-model="editForm.actualHandoverDate" :disabled="dialogMode !== 'edit'" type="date" required></label>
           <fieldset v-if="editForm.assetStage === 'OPERATING'" class="property-service-picker wide">
             <legend>{{ $t('legacy.t_bdc0d84fec07') }}</legend>
-            <label v-for="service in serviceOptions" :key="service.value"><input v-model="editForm.services" type="checkbox" :value="service.value" :disabled="dialogMode !== 'edit'">{{ service.label }}</label>
+            <label v-for="service in serviceOptions" :key="service.value"><input v-model="editForm.services" type="checkbox" :value="service.value" :disabled="dialogMode !== 'edit'">{{ $lt(service.label) }}</label>
           </fieldset>
           <label>{{ $t('legacy.t_5a6b3e9d88af') }} <select v-model="editForm.listingStatus" :disabled="dialogMode !== 'edit'">
               <option value="available">{{ $t('legacy.t_e91365cf9ed9') }}</option><option value="reserved">{{ $t('legacy.t_ede0de28e966') }}</option><option value="sold">{{ $t('legacy.t_606980e3452f') }}</option><option value="rented">{{ $t('legacy.t_2ba7bdb71038') }}</option><option value="inactive">{{ $t('legacy.t_d989e55188c9') }}</option>
@@ -258,7 +265,7 @@
             <label>{{ $t('legacy.t_e63769dcd289') }}<input :value="money(dialogProperty.paidAmount)" disabled></label>
             <label>{{ $t('legacy.t_68856e4c6d17') }}<input :value="money(dialogProperty.remainingAmount)" disabled></label>
           </template>
-          <p v-if="dialogError" class="admin-property-error wide">{{ dialogError }}</p>
+          <p v-if="dialogError" class="admin-property-error wide">{{ $lt(dialogError) }}</p>
         </div>
 
         <menu>
@@ -271,13 +278,14 @@
 </template>
 
 <script>
-import { ArrowUpRight, LoaderCircle, Trash2 } from '@lucide/vue';
-import { createAdminOwner, createAdminOwnerProperty, deleteAdminProperty, fetchAdminOwnerProperty, fetchAdminOwnerSummary, fetchAdminOwners, fetchAdminProperties, fetchAdminPropertyProjects, updateAdminOwner, updateAdminOwnerProperty } from '../services/propertyApi';
+import { LoaderCircle, Trash2 } from '@lucide/vue';
+import { createAdminOwner, createAdminOwnerProperty, deleteAdminProperty, fetchAdminOwnerProperty, fetchAdminOwnerStaffOptions, fetchAdminOwnerSummary, fetchAdminOwners, fetchAdminProperties, fetchAdminPropertyProjects, updateAdminOwner, updateAdminOwnerProperty } from '../services/propertyApi';
 import { navigate } from '../router';
 import { PHONE_COUNTRIES, phoneCountry, splitPhone, validatePhone } from '../utils/tenantPhone';
+import OwnerStaffMultiSelect from './OwnerStaffMultiSelect.vue';
 
 export default {
-  components: { ArrowUpRight, LoaderCircle, Trash2 },
+  components: { LoaderCircle, Trash2, OwnerStaffMultiSelect },
   inject: ['page'],
   props: { mode: { type: String, default: 'owners' } },
   data() {
@@ -286,8 +294,8 @@ export default {
       owners: [], propertyRows: [], loading: false, errorMessage: '', selectedOwnerId: null, selectedPropertyKey: null, propertyDeletingId: null,
       propertyPageNumber: 1, propertyPageSize: 5, propertyTotalRows: 0, propertyTotalPages: 1, propertyRequestSerial: 0,
       ownerPageNumber: 1, ownerPageSize: 5, ownerDetailOpen: false,
-      ownerSaving: false, ownerFormError: '', ownerPhoneError: '', ownerEditingId: null, phoneCountries: PHONE_COUNTRIES,
-      ownerForm: { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', mobileCountry: 'MY', mobileNational: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' },
+      ownerSaving: false, ownerFormError: '', ownerPhoneError: '', ownerEditingId: null, phoneCountries: PHONE_COUNTRIES, staffOptions: [], staffOptionsError: '',
+      ownerForm: { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', mobileCountry: 'MY', mobileNational: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active', responsibleUserIds: [] },
       propertyProjects: [], propertyCreateStep: 1, propertyOwnerSearch: '', propertyOwnerId: null,
       propertyCreating: false, propertyCreateError: '',
       serviceOptions: [{ value: 'RENTAL', label: '出租' }, { value: 'RESALE', label: '代售' }, { value: 'MANAGEMENT', label: '代管' }],
@@ -326,7 +334,8 @@ export default {
       const statusFilter = String(this.page.statusFilter || '');
       return this.owners.filter(owner => {
         const propertyText = owner.properties.map(item => `${item.projectName} ${item.unitNo}`).join(' ');
-        const matchesKeyword = !keyword || `${owner.fullName} ${owner.phone || ''} ${owner.email || ''} ${propertyText}`.toLowerCase().includes(keyword);
+        const staffText = (owner.responsibleStaff || []).map(staff => `${staff.displayName || ''} ${staff.username || ''}`).join(' ');
+        const matchesKeyword = !keyword || `${owner.fullName} ${owner.phone || ''} ${owner.email || ''} ${staffText} ${propertyText}`.toLowerCase().includes(keyword);
         const matchesProject = projectFilter.includes('全部') || owner.properties.some(item => item.projectName === projectFilter);
         const matchesStatus = statusFilter.includes('全部') || (statusFilter === '啟用' ? owner.status === 'active' : statusFilter === '停用' ? owner.status !== 'active' : owner.properties.some(item => this.lifecycleLabel(item.assetStage) === statusFilter));
         return matchesKeyword && matchesProject && matchesStatus;
@@ -400,7 +409,7 @@ export default {
       else this.editForm.expectedHandoverDate = '';
     }
   },
-  async mounted() { this.page.adminOwnerWorkspaceTab = this.workspaceTab; if (this.isPropertyMode) this.page.statusFilter = '全部出租狀態'; await this.loadOwners(); if (this.isPropertyMode) await this.loadProperties(); },
+  async mounted() { this.page.adminOwnerWorkspaceTab = this.workspaceTab; if (this.isPropertyMode) this.page.statusFilter = '全部出租狀態'; await Promise.all([this.loadOwners(), this.isPropertyMode ? Promise.resolve() : this.loadStaffOptions()]); if (this.isPropertyMode) await this.loadProperties(); },
   methods: {
     openAccountCreate() {
       this.workspaceTab = 'accounts';
@@ -487,9 +496,14 @@ export default {
         this.propertyDeletingId = null;
       }
     },
+    async loadStaffOptions() {
+      this.staffOptionsError = '';
+      try { this.staffOptions = await fetchAdminOwnerStaffOptions(); }
+      catch (error) { this.staffOptions = []; this.staffOptionsError = error.message || this.$t('ownerStaff.empty'); }
+    },
     openCreateOwner() {
       this.ownerEditingId = null;
-      this.ownerForm = { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', mobileCountry: 'MY', mobileNational: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active' };
+      this.ownerForm = { ownerNo: '', fullName: '', identityNo: '', phone: '', mobilePhone: '', mobileCountry: 'MY', mobileNational: '', homePhone: '', officePhone: '', passportNo: '', email: '', status: 'active', responsibleUserIds: [] };
       this.ownerFormError = ''; this.ownerPhoneError = '';
       this.$refs.ownerDialog.showModal();
     },
@@ -499,7 +513,7 @@ export default {
       if (!owner) return;
       const mobile = splitPhone(owner.mobilePhone || owner.phone || '');
       this.ownerEditingId = owner.id;
-      this.ownerForm = { ownerNo: owner.ownerNo || '', fullName: owner.fullName || '', identityNo: owner.identityNo || '', phone: owner.phone || '', mobilePhone: owner.mobilePhone || owner.phone || '', mobileCountry: mobile.country, mobileNational: mobile.nationalNumber, homePhone: owner.homePhone || '', officePhone: owner.officePhone || '', passportNo: owner.passportNo || '', email: owner.email || '', status: owner.status || 'active' };
+      this.ownerForm = { ownerNo: owner.ownerNo || '', fullName: owner.fullName || '', identityNo: owner.identityNo || '', phone: owner.phone || '', mobilePhone: owner.mobilePhone || owner.phone || '', mobileCountry: mobile.country, mobileNational: mobile.nationalNumber, homePhone: owner.homePhone || '', officePhone: owner.officePhone || '', passportNo: owner.passportNo || '', email: owner.email || '', status: owner.status || 'active', responsibleUserIds: (owner.responsibleStaff || []).map(staff => staff.id) };
       this.ownerFormError = ''; this.ownerPhoneError = '';
       this.$refs.ownerDialog.showModal();
     },
@@ -515,6 +529,7 @@ export default {
     },
     async saveOwner() {
       if (!this.ownerForm.fullName) { this.ownerFormError = '請填寫業主姓名'; return; }
+      if (!this.ownerForm.responsibleUserIds.length) { this.ownerFormError = this.$t('ownerStaff.required'); return; }
       const mobile = this.validateOwnerPhone(true);
       if (!mobile.valid) { this.ownerFormError = this.ownerPhoneError; return; }
       this.ownerForm.phone = mobile.e164;
@@ -532,6 +547,7 @@ export default {
       } catch (error) { this.ownerFormError = error.message || (this.ownerEditingId ? '房主资料更新失败' : '新增业主失败'); }
       finally { this.ownerSaving = false; }
     },
+    responsibleStaffNames(owner) { return (owner?.responsibleStaff || []).map(staff => staff.displayName || staff.username).filter(Boolean).join('、') || '—'; },
     emptyPropertyCreateForm() {
       return { projectId: '', projectName: '', building: '', floorNo: '', unitNo: '', unitType: '', areaSqm: null, bedroomCount: null, listingStatus: 'available', assetStage: 'PRE_HANDOVER', expectedHandoverDate: '', actualHandoverDate: '', services: [], purchasePrice: 0, ownershipPercent: 100, primary: true, startDate: new Date().toISOString().slice(0, 10) };
     },
@@ -641,5 +657,5 @@ export default {
 .property-action-spinner{animation:property-action-spin .8s linear infinite}
 @keyframes property-action-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.property-list-actions .row-actions{transition:none}.property-action-spinner{animation-duration:1.6s}}
-.owner-mobile-field{display:grid;gap:7px}.owner-phone-entry{display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:14px}.owner-phone-entry>select,.owner-phone-entry>input{margin-top:0!important;border-radius:9px!important}.owner-mobile-field>small{color:#71889f;font-size:11px}.owner-mobile-field .owner-phone-error{color:#c43d45;font-weight:700}@media(max-width:720px){.owner-phone-entry{grid-template-columns:1fr;row-gap:10px}}
+.owner-mobile-field{display:grid;gap:7px}.owner-phone-entry{display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:14px}.owner-phone-entry>select,.owner-phone-entry>input{box-sizing:border-box;min-width:0;width:100%;margin-top:0!important;border-radius:9px!important}.owner-mobile-field>small{color:#71889f;font-size:11px}.owner-mobile-field .owner-phone-error{color:#c43d45;font-weight:700}@media(max-width:720px){.owner-phone-entry{grid-template-columns:1fr;row-gap:10px}}
 </style>

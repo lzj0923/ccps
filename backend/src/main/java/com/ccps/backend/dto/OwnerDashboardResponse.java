@@ -24,9 +24,11 @@ public record OwnerDashboardResponse(
 
     public static class Property {
         private Long ownerUnitId;
+        private Long coverDocumentId;
         private Long unitId;
         private String projectName;
         private String city;
+        private String countryCode;
         private String unitNo;
         private String unitType;
         private BigDecimal areaSqm;
@@ -36,6 +38,8 @@ public record OwnerDashboardResponse(
         private LocalDate actualHandoverDate;
         private String servicesCsv;
         private BigDecimal purchasePrice;
+        private String currency;
+        private LocalDate purchaseDate;
         private BigDecimal paidAmount;
         private BigDecimal remainingAmount;
         private Integer paidInstallmentCount;
@@ -43,6 +47,8 @@ public record OwnerDashboardResponse(
         private LocalDate nextDueDate;
         private String paymentStatus;
         private String tenantName;
+        private String leaseNo;
+        private LocalDate leaseStartDate;
         private BigDecimal monthlyRent;
         private BigDecimal tenantDepositAmount;
         private LocalDate leaseEndDate;
@@ -56,6 +62,8 @@ public record OwnerDashboardResponse(
         private Integer pendingMaintenanceCount;
 
         public Long getOwnerUnitId() { return ownerUnitId; }
+        public Long getCoverDocumentId() { return coverDocumentId; }
+        public void setCoverDocumentId(Long coverDocumentId) { this.coverDocumentId = coverDocumentId; }
         public void setOwnerUnitId(Long ownerUnitId) { this.ownerUnitId = ownerUnitId; }
         public Long getUnitId() { return unitId; }
         public void setUnitId(Long unitId) { this.unitId = unitId; }
@@ -63,6 +71,8 @@ public record OwnerDashboardResponse(
         public void setProjectName(String projectName) { this.projectName = projectName; }
         public String getCity() { return city; }
         public void setCity(String city) { this.city = city; }
+        public String getCountryCode() { return countryCode; }
+        public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
         public String getUnitNo() { return unitNo; }
         public void setUnitNo(String unitNo) { this.unitNo = unitNo; }
         public String getUnitType() { return unitType; }
@@ -83,6 +93,10 @@ public record OwnerDashboardResponse(
         public void setServicesCsv(String servicesCsv) { this.servicesCsv = servicesCsv; }
         public BigDecimal getPurchasePrice() { return purchasePrice; }
         public void setPurchasePrice(BigDecimal purchasePrice) { this.purchasePrice = purchasePrice; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        public LocalDate getPurchaseDate() { return purchaseDate; }
+        public void setPurchaseDate(LocalDate purchaseDate) { this.purchaseDate = purchaseDate; }
         public BigDecimal getPaidAmount() { return paidAmount; }
         public void setPaidAmount(BigDecimal paidAmount) { this.paidAmount = paidAmount; }
         public BigDecimal getRemainingAmount() { return remainingAmount; }
@@ -97,6 +111,10 @@ public record OwnerDashboardResponse(
         public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
         public String getTenantName() { return tenantName; }
         public void setTenantName(String tenantName) { this.tenantName = tenantName; }
+        public String getLeaseNo() { return leaseNo; }
+        public void setLeaseNo(String leaseNo) { this.leaseNo = leaseNo; }
+        public LocalDate getLeaseStartDate() { return leaseStartDate; }
+        public void setLeaseStartDate(LocalDate leaseStartDate) { this.leaseStartDate = leaseStartDate; }
         public BigDecimal getMonthlyRent() { return monthlyRent; }
         public void setMonthlyRent(BigDecimal monthlyRent) { this.monthlyRent = monthlyRent; }
         public BigDecimal getTenantDepositAmount() { return tenantDepositAmount; }

@@ -16,6 +16,7 @@
     "preview": "vite preview",
     "test:phone": "node --test tests/tenantPhone.test.mjs",
     "lint:i18n": "eslint src --ext .js,.vue",
+    "audit:i18n": "node scripts/audit-i18n.mjs",
     "localize:templates": "node scripts/localize-templates.mjs"
   },
   "dependencies": {

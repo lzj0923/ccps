@@ -23,12 +23,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.AdminOwnerResponse;
+import com.ccps.backend.dto.AdminOwnerStaffOption;
 import com.ccps.backend.dto.AdminOwnerCreateRequest;
 import com.ccps.backend.dto.AdminOwnerUpdateRequest;
 import com.ccps.backend.dto.AdminPropertyCreateRequest;
 import com.ccps.backend.dto.AdminPropertyUpdateRequest;
 import com.ccps.backend.mapper.AdminOwnerMapper;
 import com.ccps.backend.mapper.AdminOwnerMapper.OwnerPropertyRow;
+import com.ccps.backend.mapper.AdminOwnerMapper.OwnerStaffRow;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewOwner;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewOwnerUnit;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewPurchaseContract;
@@ -134,6 +136,57 @@ class AdminOwnerServiceTest {
     }
 
     @Test
+    void createsOwnerWithMultipleResponsibleStaffAndReturnsAssignments() {
+        AdminOwnerCreateRequest request = new AdminOwnerCreateRequest(
+                null, "New Owner", null, "+60120000000", "+60120000000",
+                null, null, null, null, "active", List.of(7L, 8L, 7L));
+        when(mapper.findActiveAdminStaffOptions()).thenReturn(List.of(
+                new AdminOwnerStaffOption(7L, "alice", "Alice"),
+                new AdminOwnerStaffOption(8L, "bob", "Bob")));
+        when(mapper.insertOwner(any(NewOwner.class))).thenAnswer(invocation -> {
+            NewOwner owner = invocation.getArgument(0);
+            owner.setId(99L);
+            return 1;
+        });
+        when(mapper.assignOwnerNo(99L, "000099")).thenReturn(1);
+        when(mapper.insertOwnerStaffAssignment(99L, 7L)).thenReturn(1);
+        when(mapper.insertOwnerStaffAssignment(99L, 8L)).thenReturn(1);
+        OwnerPropertyRow created = propertyRow(99L, null, null, null);
+        when(mapper.findOwnerById(99L)).thenReturn(List.of(created));
+        when(mapper.findOwnerStaffAssignmentsByOwnerId(99L)).thenReturn(List.of(
+                staffRow(99L, 7L, "alice", "Alice"),
+                staffRow(99L, 8L, "bob", "Bob")));
+
+        AdminOwnerResponse result = service.createOwner(request);
+
+        assertThat(result.responsibleStaff()).extracting(AdminOwnerStaffOption::id)
+                .containsExactly(7L, 8L);
+        verify(mapper).deleteOwnerStaffAssignments(99L);
+        verify(mapper).insertOwnerStaffAssignment(99L, 7L);
+        verify(mapper).insertOwnerStaffAssignment(99L, 8L);
+    }
+
+    @Test
+    void rejectsUnavailableResponsibleStaffAccount() {
+        AdminOwnerCreateRequest request = new AdminOwnerCreateRequest(
+                null, "New Owner", null, "+60120000000", "+60120000000",
+                null, null, null, null, "active", List.of(99L));
+        when(mapper.findActiveAdminStaffOptions()).thenReturn(List.of(
+                new AdminOwnerStaffOption(7L, "alice", "Alice")));
+        when(mapper.insertOwner(any(NewOwner.class))).thenAnswer(invocation -> {
+            NewOwner owner = invocation.getArgument(0);
+            owner.setId(99L);
+            return 1;
+        });
+        when(mapper.assignOwnerNo(99L, "000099")).thenReturn(1);
+
+        assertThatThrownBy(() -> service.createOwner(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("unavailable");
+        verify(mapper, never()).deleteOwnerStaffAssignments(99L);
+    }
+
+    @Test
     void rejectsDuplicateOwnerIdentityNumber() {
         AdminOwnerCreateRequest request = new AdminOwnerCreateRequest(
                 "New Owner", "ID-900", null, null, "active");
@@ -186,6 +239,35 @@ class AdminOwnerServiceTest {
         new AdminOwnerService(mapper, accountService).updateOwner(9L, request);
 
         verify(accountService).synchronizeOwnerAccount(9L, "+60123456789", "Test Owner", "active");
+    }
+
+    @Test
+    void replacesResponsibleStaffWhenOwnerIsUpdated() {
+        AdminOwnerUpdateRequest request = new AdminOwnerUpdateRequest(
+                null, "Test Owner", null, "+60123456789", "+60123456789",
+                null, null, null, null, null, "active", List.of(8L, 9L));
+        when(mapper.updateOwner(9L, "Test Owner", null, "+60123456789", "+60123456789",
+                null, null, null, null, null, "active")).thenReturn(1);
+        when(mapper.findActiveAdminStaffOptions()).thenReturn(List.of(
+                new AdminOwnerStaffOption(8L, "bob", "Bob"),
+                new AdminOwnerStaffOption(9L, "carol", "Carol")));
+        when(mapper.insertOwnerStaffAssignment(9L, 8L)).thenReturn(1);
+        when(mapper.insertOwnerStaffAssignment(9L, 9L)).thenReturn(1);
+        OwnerPropertyRow updated = propertyRow(9L, null, null, null);
+        updated.setPhone("+60123456789");
+        updated.setMobilePhone("+60123456789");
+        when(mapper.findOwnerById(9L)).thenReturn(List.of(updated));
+        when(mapper.findOwnerStaffAssignmentsByOwnerId(9L)).thenReturn(List.of(
+                staffRow(9L, 8L, "bob", "Bob"),
+                staffRow(9L, 9L, "carol", "Carol")));
+
+        AdminOwnerResponse result = service.updateOwner(9L, request);
+
+        assertThat(result.responsibleStaff()).extracting(AdminOwnerStaffOption::username)
+                .containsExactly("bob", "carol");
+        verify(mapper).deleteOwnerStaffAssignments(9L);
+        verify(mapper).insertOwnerStaffAssignment(9L, 8L);
+        verify(mapper).insertOwnerStaffAssignment(9L, 9L);
     }
 
     @Test
@@ -366,6 +448,15 @@ class AdminOwnerServiceTest {
         row.setRemainingAmount(new BigDecimal("400000.00"));
         row.setPaymentStatus("paying");
         row.setAssetStage("PRE_HANDOVER");
+        return row;
+    }
+
+    private OwnerStaffRow staffRow(Long ownerId, Long id, String username, String displayName) {
+        OwnerStaffRow row = new OwnerStaffRow();
+        row.setOwnerId(ownerId);
+        row.setId(id);
+        row.setUsername(username);
+        row.setDisplayName(displayName);
         return row;
     }
 }

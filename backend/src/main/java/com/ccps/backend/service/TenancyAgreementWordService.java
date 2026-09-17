@@ -25,7 +25,6 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -37,7 +36,7 @@ import org.xml.sax.InputSource;
  * wording, inventory tables, or formatting. The source template is read-only;
  * every request produces a new DOCX package.
  */
-@Service
+@Deprecated(forRemoval = true)
 public class TenancyAgreementWordService {
     public static final String TEMPLATE_RESOURCE = "contract-templates/owner-tenancy-agreement-template.docx";
     public static final String DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -45,7 +44,14 @@ public class TenancyAgreementWordService {
     private static final String XML_NS = XMLConstants.XML_NS_URI;
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
+    public boolean isTemplateAvailable() {
+        return new ClassPathResource(TEMPLATE_RESOURCE).exists();
+    }
+
     public byte[] generate(Map<String, String> fields) {
+        if (!isTemplateAvailable()) {
+            throw new IllegalStateException("Legacy tenancy agreement Word generation is unavailable; use the current PDF tenancy agreement service");
+        }
         Map<String, String> values = fields == null ? Map.of() : fields;
         try (InputStream source = new ClassPathResource(TEMPLATE_RESOURCE).getInputStream();
                 ZipInputStream input = new ZipInputStream(source);

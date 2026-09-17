@@ -31,6 +31,7 @@ import com.ccps.backend.dto.AdminRentCollectionRequest;
 import com.ccps.backend.dto.AdminRentCollectionBatchRequest;
 import com.ccps.backend.dto.AdminTenantCreateRequest;
 import com.ccps.backend.dto.AdminTenantDepositTransactionRequest;
+import com.ccps.backend.dto.AdminTenantDepositTransactionResponse;
 import com.ccps.backend.mapper.AdminTenancyMapper;
 import com.ccps.backend.mapper.AdminTenancyMapper.DepositAccountRow;
 import com.ccps.backend.mapper.AdminTenancyMapper.LeaseContractContext;
@@ -51,12 +52,14 @@ import com.ccps.backend.mapper.AdminTenancyMapper.RentalSpaceContext;
 class AdminTenancyServiceTest {
     @Mock AdminTenancyMapper mapper;
     @Mock PropertyExpensePostingService propertyExpensePostingService;
+    @Mock TenantWhatsAppSubscriptionService tenantWhatsAppSubscriptionService;
     @TempDir Path tempDir;
     AdminTenancyService service;
 
     @BeforeEach void setUp() {
         service = new AdminTenancyService(mapper,
                 Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneOffset.UTC), tempDir);
+        service.setTenantWhatsAppSubscriptionService(tenantWhatsAppSubscriptionService);
         org.mockito.Mockito.lenient().when(mapper.insertLeasePeriod(org.mockito.ArgumentMatchers.any(NewLeasePeriod.class))).thenAnswer(invocation -> {
             NewLeasePeriod period = invocation.getArgument(0);
             if (period.getId() == null) period.setId(700L + period.getPeriodNo());
@@ -81,6 +84,41 @@ class AdminTenancyServiceTest {
         verify(mapper).insertTenant(tenantCaptor.capture());
         assertThat(tenantCaptor.getValue().getEmail()).isEqualTo("shared@example.com");
         assertThat(tenantCaptor.getValue().getPhone()).isEqualTo("18981712596");
+        verify(tenantWhatsAppSubscriptionService).synchronizeTenant(52L, "18981712596", "active", null);
+    }
+
+    @Test void updatesTenantStatusWithoutRevalidatingLegacyContactFields() {
+        when(mapper.countTenant(52L)).thenReturn(1);
+        when(mapper.updateTenantStatus(52L, "inactive")).thenReturn(1);
+
+        service.updateTenantStatus(52L, "inactive");
+
+        verify(mapper).updateTenantStatus(52L, "inactive");
+        verify(tenantWhatsAppSubscriptionService).synchronizeTenant(52L);
+    }
+
+    @Test void createsTenantWithExplicitOptOutInTheSameSave() {
+        when(mapper.insertTenant(org.mockito.ArgumentMatchers.any(NewTenant.class))).thenAnswer(invocation -> {
+            NewTenant tenant = invocation.getArgument(0); tenant.setId(53L); return 1;
+        });
+        service.createTenant(new AdminTenantCreateRequest("Tenant", null, null, null, "active", false));
+        verify(tenantWhatsAppSubscriptionService).synchronizeTenant(53L, null, "active", false);
+    }
+
+    @Test void tenantPhoneEditPassesNullPreferenceToPreserveOptOut() {
+        when(mapper.countTenant(52L)).thenReturn(1);
+        when(mapper.updateTenant(org.mockito.ArgumentMatchers.any(NewTenant.class))).thenReturn(1);
+        service.updateTenant(52L, new AdminTenantCreateRequest("Tenant", null, "+60123456789", null, "active"));
+        verify(tenantWhatsAppSubscriptionService).synchronizeTenant(52L, "+60123456789", "active", null);
+    }
+
+    @Test void deletingTenantWithoutLeaseHistoryAlsoRemovesSubscription() {
+        when(mapper.countTenant(52L)).thenReturn(1);
+        when(mapper.deleteTenant(52L)).thenReturn(1);
+        service.deleteTenant(52L);
+        var order = org.mockito.Mockito.inOrder(tenantWhatsAppSubscriptionService, mapper);
+        order.verify(tenantWhatsAppSubscriptionService).deleteForTenant(52L);
+        order.verify(mapper).deleteTenant(52L);
     }
 
     @Test void createsLeaseWithTwoAndAHalfMonthsDepositForTheExplicitCurrentRentalMandate() {
@@ -239,6 +277,32 @@ class AdminTenancyServiceTest {
         verify(mapper).insertContractAudit(1L, 44L, null, 91L, "signed-lease.pdf", "upload_lease_contract");
     }
 
+    @Test void acceptsSystemGeneratedLeaseContractLargerThanTenMegabytes() {
+        when(mapper.countLeaseRentalMandate(44L)).thenReturn(1);
+        LeaseContractContext context = new LeaseContractContext(); context.setLeaseId(44L); context.setLeaseNo("LEASE-44");
+        when(mapper.lockLeaseContract(44L)).thenReturn(context);
+        when(mapper.insertContractDocument(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            NewContractDocument document = invocation.getArgument(0); document.setId(94L); return 1;
+        });
+        when(mapper.insertContractLink(94L, 44L)).thenReturn(1);
+        when(mapper.updateLeaseContract(44L, 94L)).thenReturn(1);
+        MockMultipartFile generated = new MockMultipartFile("file", "generated-lease.pdf", "application/pdf",
+                new byte[13 * 1024 * 1024]);
+
+        Long documentId = service.uploadGeneratedContract(1L, 44L, generated);
+
+        assertThat(documentId).isEqualTo(94L);
+    }
+
+    @Test void keepsManualLeaseContractLimitAtTenMegabytes() {
+        MockMultipartFile oversizedContract = new MockMultipartFile("file", "oversized-contract.pdf", "application/pdf",
+                new byte[11 * 1024 * 1024]);
+
+        assertThatThrownBy(() -> service.uploadContract(1L, 44L, oversizedContract))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("up to 10MB");
+    }
+
     @Test void downloadsLatestSignedLeaseContractWhenAvailable() throws Exception {
         ContractFile file = new ContractFile();
         file.setOriginalName("LEASE-44-已簽署.pdf");
@@ -359,6 +423,15 @@ class AdminTenancyServiceTest {
 
         assertThat(documentId).isEqualTo(101L);
         verify(mapper).insertRentProofAudit(1L, 18L, null, 101L, "offline-receipt.pdf", "upload_rent_proof");
+    }
+
+    @Test void keepsRentPaymentProofLimitAtTenMegabytes() {
+        MockMultipartFile oversizedProof = new MockMultipartFile("file", "oversized-proof.pdf", "application/pdf",
+                new byte[11 * 1024 * 1024]);
+
+        assertThatThrownBy(() -> service.uploadRentProof(1L, 18L, oversizedProof))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("up to 10MB");
     }
 
     @Test void adminReplacesRentProofAndKeepsOldVersion() {
@@ -570,6 +643,21 @@ class AdminTenancyServiceTest {
                 .containsExactly("pending_collection", "awaiting_settlement");
     }
 
+    @Test void returnsAllDepositBillsWithoutReplacingTheExistingReviewTarget() {
+        var account = depositAccount(44L, "expired", "confirmed", "3500.00", "3500.00");
+        when(mapper.findDepositAccount(44L)).thenReturn(account);
+        when(mapper.findLeaseDepositTransactions(44L)).thenReturn(java.util.List.of());
+        var first = new com.ccps.backend.dto.AdminDepositAccountDetailResponse.Bill(90L, "DEPOSIT-4000",
+                new BigDecimal("4000.00"), LocalDate.parse("2026-08-01"), "confirmed", "confirmed", "paid");
+        var second = new com.ccps.backend.dto.AdminDepositAccountDetailResponse.Bill(91L, "DEPOSIT-500",
+                new BigDecimal("500.00"), LocalDate.parse("2026-08-02"), "confirmed", "confirmed", "paid");
+        when(mapper.findDepositBills(44L)).thenReturn(java.util.List.of(second, first));
+        var result = service.findDepositAccount(44L);
+        assertThat(result.bills()).containsExactly(second, first);
+        assertThat(result.bill().financeRecordId()).isEqualTo(account.getFinanceRecordId());
+        assertThat(result.account().postedBalance()).isEqualByComparingTo("3500.00");
+    }
+
     @Test void rejectsDepositSettlementWhileLeaseIsStillActive() {
         LeaseChangeContext lease = activeLease();
         when(mapper.lockLeaseForChange(44L)).thenReturn(lease);
@@ -611,6 +699,41 @@ class AdminTenancyServiceTest {
 
         assertThat(result.id()).isEqualTo(92L);
         verify(mapper).insertTenantDepositRefundFinance(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test void softDeletesSelectedManualDepositTransactionsAndWritesAudit() {
+        when(mapper.lockLeaseForChange(44L)).thenReturn(activeLease());
+        when(mapper.findLeaseDepositTransactions(44L)).thenReturn(java.util.List.of(
+                depositTransaction(1L, 80L, "collection", "credit", "1000.00", "2026-07-01"),
+                depositTransaction(2L, null, "tenant_advance", "debit", "100.00", "2026-07-02")));
+        when(mapper.cancelTenantDepositTransactions(44L, java.util.List.of(2L))).thenReturn(1);
+
+        service.deleteTenantDepositTransactions(9L, 44L, java.util.List.of(2L));
+
+        verify(mapper).cancelTenantDepositTransactions(44L, java.util.List.of(2L));
+        verify(mapper).insertTenantDepositDeleteAudit(9L, 2L, 44L,
+                "tenant_advance", "debit", new BigDecimal("100.00"));
+    }
+
+    @Test void rejectsDeletingFinanceLinkedDepositTransactions() {
+        when(mapper.lockLeaseForChange(44L)).thenReturn(activeLease());
+        when(mapper.findLeaseDepositTransactions(44L)).thenReturn(java.util.List.of(
+                depositTransaction(1L, 80L, "collection", "credit", "1000.00", "2026-07-01")));
+
+        assertThatThrownBy(() -> service.deleteTenantDepositTransactions(9L, 44L, java.util.List.of(1L)))
+                .hasMessageContaining("Only manual deposit account transactions can be deleted");
+    }
+
+    @Test void rejectsDeleteThatWouldMakeAnEarlierDepositBalanceNegative() {
+        when(mapper.lockLeaseForChange(44L)).thenReturn(activeLease());
+        when(mapper.findLeaseDepositTransactions(44L)).thenReturn(java.util.List.of(
+                depositTransaction(1L, 80L, "collection", "credit", "100.00", "2026-07-01"),
+                depositTransaction(2L, null, "adjustment_credit", "credit", "100.00", "2026-07-02"),
+                depositTransaction(3L, null, "tenant_advance", "debit", "150.00", "2026-07-03"),
+                depositTransaction(4L, null, "tenant_repayment", "credit", "100.00", "2026-07-04")));
+
+        assertThatThrownBy(() -> service.deleteTenantDepositTransactions(9L, 44L, java.util.List.of(2L)))
+                .hasMessageContaining("deposit balance negative");
     }
 
     @Test void editsLeaseTenantAndUnitWithOperationalValidation() {
@@ -769,6 +892,13 @@ class AdminTenancyServiceTest {
                 LocalDate.parse("2026-07-01"), LocalDate.parse("2027-06-30"),
                 new BigDecimal("3000.00"), new BigDecimal("6000.00"), 5)))
                 .hasMessageContaining("active rental mandate");
+    }
+
+    private AdminTenantDepositTransactionResponse depositTransaction(Long id, Long financeRecordId,
+            String type, String direction, String amount, String occurredOn) {
+        return new AdminTenantDepositTransactionResponse(id, 44L, "LEASE-44", 5L, 8L,
+                "测试建案", "A-01", financeRecordId, type, direction, new BigDecimal(amount),
+                BigDecimal.ZERO, LocalDate.parse(occurredOn), "测试记录", "posted");
     }
 
     private LeaseChangeContext activeLease() {

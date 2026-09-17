@@ -6,11 +6,12 @@ const workspace = readFileSync(new URL('../src/components/AdminTenancyWorkspace.
 const i18n = readFileSync(new URL('../src/i18n/index.js', import.meta.url), 'utf8');
 const propertyApi = readFileSync(new URL('../src/services/propertyApi.js', import.meta.url), 'utf8');
 
-test('contract generator labels use tenancy i18n messages in all supported locales', () => {
-  assert.match(workspace, /\$t\('tenancy\.generateOtr'\)/);
-  assert.match(workspace, /\$t\('tenancy\.generateTenancyAgreement'\)/);
+test('contract generator dialogs keep localized labels when opened from their owning workflows', () => {
+  assert.match(workspace, /\$t\('tenancy\.generateOtrTitle'\)/);
+  assert.match(workspace, /\$t\('tenancy\.generateTenancyAgreementTitle'\)/);
   assert.match(workspace, /\$t\('tenancy\.generateDownloadPdf'\)/);
-  assert.match(workspace, /\$t\('tenancy\.generateDownloadPdf'\)/);
+  assert.match(workspace, /workflow === 'otr'[\s\S]*openTemplateGenerator\('otr'\)/);
+  assert.match(workspace, /workflow === 'lease-contract'[\s\S]*openTemplateGenerator\('tenancy-agreement', true\)/);
   assert.match(workspace, /setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 1000\)/);
   assert.doesNotMatch(workspace, />生成授权委托书</);
   assert.doesNotMatch(workspace, />生成 OTR 出价函</);
@@ -35,7 +36,8 @@ test('authorization letter is owned by rental mandate page, not tenants and rent
   assert.doesNotMatch(mandateWorkspace, /@click="openAuthorizationGenerator\(selected\)"/);
   assert.match(mandateWorkspace, /generateAdminContractTemplate\('authorization'/);
   assert.match(mandateWorkspace, /uploadAdminRentalMandateDocument\(this\.selected\.id, 'authorization_draft'/);
-  assert.match(mandateWorkspace, /v-if="authorizationOpen" class="modal-backdrop" @click\.self="closeAuthorizationDialog"/);
-  assert.match(mandateWorkspace, /authorizationOpen = false/);
+  assert.match(mandateWorkspace, /v-if="authorizationOpen" class="modal-backdrop" @pointerdown\.self="closeAuthorizationDialog"/);
+  assert.match(mandateWorkspace, /authorizationOpen:\s*false/);
+  assert.match(mandateWorkspace, /closeAuthorizationDialog\(\) \{ this\.authorizationOpen = false/);
   assert.doesNotMatch(mandateWorkspace, /<dialog ref="authorizationDialog"/);
 });

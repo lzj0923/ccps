@@ -76,6 +76,7 @@ public class AdminPropertyHandoverReportService {
         StoredFile stored=file==null||file.isEmpty()?null:store(ownerUnitId,file);
         StoredContent content=attachPhotos(ownerUnitId,contentJson,photos,photoMeta);
         try{
+            if(completed)validateCompletedContent(content.json());
             Long documentId=null;
             if(stored!=null){DocumentRow document=document(actorId,stored);if(mapper.insertDocument(document)!=1||document.getId()==null)throw conflict("Unable to create handover attachment");documentId=document.getId();}
             ReportRow row=new ReportRow();row.setOwnerUnitId(ownerUnitId);row.setDocumentId(documentId);row.setTitle(title.trim());
@@ -98,6 +99,7 @@ public class AdminPropertyHandoverReportService {
         Path previous=current.getStorageKey()==null?null:resolve(current.getStorageKey());
         Set<Path> oldPhotos=photoPaths(current.getContentJson());
         try{
+            if(completed)validateCompletedContent(content.json());
             current.setTitle(title.trim());current.setReportDate(reportDate);current.setTrackingStartDate(trackingStartDate);
             current.setTrackingEndDate(trackingEndDate);current.setRemarks(blankToNull(remarks));current.setContentJson(content.json());current.setCompleted(completed);
             if(replacement!=null){
@@ -216,6 +218,19 @@ public class AdminPropertyHandoverReportService {
     private AdminPropertyHandoverReportResponse response(ReportRow row){String path=row.getOriginalName()==null?null:"/交屋報告/"+row.getOriginalName();return new AdminPropertyHandoverReportResponse(row.getId(),row.getOwnerUnitId(),row.getDocumentId(),row.getTitle(),row.getReportDate(),row.getTrackingStartDate(),row.getTrackingEndDate(),path,row.getOriginalName(),row.getMimeType(),row.getFileSize(),row.getRemarks(),row.getContentJson(),row.isCompleted(),row.getCreatedBy(),row.getCreatedByName(),row.getCreatedAt(),row.getUpdatedAt());}
     private void validate(String title,LocalDate reportDate,LocalDate start,LocalDate end,String remarks){if(title==null||title.isBlank()||title.trim().length()>160)throw bad("Handover report title is required and must not exceed 160 characters");if(reportDate==null)throw bad("Report date is required");if(start!=null&&end!=null&&end.isBefore(start))throw bad("Tracking end date must not be before start date");if(remarks!=null&&remarks.length()>1000)throw bad("Handover report remarks must not exceed 1000 characters");}
     private void validateContent(String contentJson){if(contentJson!=null&&contentJson.length()>200000)throw bad("Handover report content is too large");if(contentJson!=null&&!contentJson.isBlank())content(contentJson);}
+    private void validateCompletedContent(String contentJson){
+        ObjectNode value=content(contentJson);List<String> missing=new ArrayList<>();
+        if(text(value,"unitType","").isBlank())missing.add("房型");
+        if(text(value,"handoverFrom","").isBlank())missing.add("交接人");
+        if(text(value,"handoverTo","").isBlank())missing.add("接收人");
+        boolean hasChecklist=false;
+        for(JsonNode section:value.withArray("sections")){if(section.withArray("items").size()>0){hasChecklist=true;break;}}
+        if(!hasChecklist)missing.add("交接清单");
+        boolean hasPhoto=false;
+        for(JsonNode photo:value.withArray("photos")){if(!text(photo,"storageKey","").isBlank()){hasPhoto=true;break;}}
+        if(!hasPhoto)missing.add("照片");
+        if(!missing.isEmpty())throw bad("交接报告资料不完整："+String.join("、",missing));
+    }
     private void requireProperty(Long ownerId,Long ownerUnitId){if(mapper.ownsProperty(ownerId,ownerUnitId)!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Property not found");}
     private void requirePropertyForUser(Long userId,Long ownerUnitId){if(mapper.ownsPropertyForUser(userId,ownerUnitId)!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Property not found");}
     private ReportRow requireReport(Long ownerUnitId,Long reportId){ReportRow row=mapper.find(ownerUnitId,reportId);if(row==null)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Handover report not found");return row;}

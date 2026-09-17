@@ -65,15 +65,15 @@ public class AdminPropertyContractRecordController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate validFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate validTo,
             @RequestParam String status, @RequestParam(required = false) String notes,
-            @RequestPart(value = "file", required = false) MultipartFile file) {
-        return service.update(ownerId, ownerUnitId, contractId, leaseId, contractType, contractNo,
+            @RequestPart(value = "file", required = false) MultipartFile file, HttpServletRequest request) {
+        return service.update(AuthInterceptor.userId(request), ownerId, ownerUnitId, contractId, leaseId, contractType, contractNo,
                 signedDate, validFrom, validTo, status, notes, file);
     }
 
     @DeleteMapping("/{contractId}")
     public ResponseEntity<Void> delete(@PathVariable Long ownerId, @PathVariable Long ownerUnitId,
-            @PathVariable Long contractId) {
-        service.delete(ownerId, ownerUnitId, contractId);
+            @PathVariable Long contractId, HttpServletRequest request) {
+        service.delete(AuthInterceptor.userId(request), ownerId, ownerUnitId, contractId);
         return ResponseEntity.noContent().build();
     }
 

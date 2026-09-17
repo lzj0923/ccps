@@ -14,6 +14,9 @@ class OwnerDocumentMapperQueryTest {
 
         assertThat(sql).contains("maintenance_work_orders work_order");
         assertThat(sql).contains("finance_records finance_record");
-        assertThat(sql).contains("coalesce(unit_link.entity_id, work_order.unit_id, finance_record.unit_id)");
+        assertThat(sql).contains("coalesce(unit_link.entity_id, work_order.unit_id, finance_record.unit_id,");
+        assertThat(sql).contains("cashflow_entries");
+        assertThat(sql).contains("mandate_owner_unit.unit_id, archive_owner_unit.unit_id)");
+        assertThat(sql).contains("o.user_id = #{userid}");
     }
 }

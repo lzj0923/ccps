@@ -7,10 +7,15 @@ const adminThemeSource = readFileSync(new URL('../src/admin-theme.css', import.m
 const workbenchSource = readFileSync(new URL('../src/utils/rentalCycleWorkbench.js', import.meta.url), 'utf8');
 const i18nSource = readFileSync(new URL('../src/i18n/index.js', import.meta.url), 'utf8');
 
-test('move-in handover is not shown as property handover data', () => {
-  assert.match(workbenchSource, /action\('complete_move_in_handover'/);
-  assert.match(source, /complete_move_in_handover/);
-  assert.match(i18nSource, /complete_move_in_handover:\s*\['完成入住交接'/);
+test('does not expose move-in handover as a standalone rental-process step', () => {
+  assert.doesNotMatch(workbenchSource, /moveInCollection|complete_move_in_handover/);
+  assert.doesNotMatch(source, /moveInCollection|complete_move_in_handover/);
+});
+
+test('keeps handover reports optional and outside the system rental gate', () => {
+  assert.match(source, /class="rental-action-wide rental-handover-report-launcher"/);
+  assert.doesNotMatch(source, /openSigningHandover|saveAdminPropertyHandover/);
+  assert.doesNotMatch(workbenchSource, /missingItems,[\s\S]{0,120}\['handover'\]/);
 });
 
 test('process center uses the current rental workbench model', () => {
@@ -40,12 +45,11 @@ test('process center uses the current rental workbench model', () => {
   assert.doesNotMatch(source, /confirm_first_receipt/);
   assert.match(source, /confirmAdminRentCollection/);
   assert.match(source, /saveAdminPropertyWorkspaceBasic/);
-  assert.match(source, /saveAdminPropertyHandover/);
+  assert.doesNotMatch(source, /saveAdminPropertyHandover/);
   assert.match(source, /complete_handover/);
   assert.match(source, /complete_property_data/);
   assert.match(source, /conditionSummary/);
   assert.match(source, /keyCount/);
-  assert.match(source, /completed: true/);
   assert.match(source, /createAdminPropertyHandoverChecklistItem/);
   assert.match(source, /updateAdminPropertyHandoverChecklistItem/);
   assert.match(source, /createAdminPropertyPhoto/);
@@ -101,10 +105,14 @@ test('provides a lease closure action followed by a move-out handover report', (
   assert.match(source, /leaseClosure\?\.leaseId/);
 });
 
-test('loads the current mandate handover completion record into the rental workbench', () => {
-  assert.match(source, /fetchAdminPropertyHandover/);
-  assert.match(source, /handover:\s*this\.workspaceRelated\.handover/);
-  assert.match(source, /const handover = currentMandate/);
+test('keeps move-out handover report generation available after a report already exists', () => {
+  assert.doesNotMatch(source, /leaseClosure\.leaseId && !rentalWorkbench\.leaseClosure\.handoverReportReady/);
+  assert.match(source, /handoverReportReady\s*\?\s*\$t\('rentalFiles\.regenerateHandoverReport'\)/);
+});
+
+test('does not load a move-in completion record to gate rental operations', () => {
+  assert.doesNotMatch(source, /\bfetchAdminPropertyHandover\b/);
+  assert.doesNotMatch(source, /handover:\s*this\.workspaceRelated\.handover/);
 });
 
 test('allows selecting an existing tenant before creating a new tenant', () => {
@@ -190,9 +198,9 @@ test('keeps the checklist category trigger as a direct button interaction', () =
 });
 
 test('keeps the category menu options available independently of checklist rows', () => {
-  assert.match(source, /handoverCategoryOptions: HANDOVER_CATEGORIES/);
-  assert.match(source, /chooseHandoverChecklistCategory\('鑰匙 Keys'\)/);
-  assert.match(source, /chooseHandoverChecklistCategory\('主浴室 Master Bathroom'\)/);
+  assert.match(source, /handoverCategoryOptions\(\).*HANDOVER_CATEGORIES\.map/);
+  assert.match(source, /@click="chooseHandoverChecklistCategory\(category\.value\)"/);
+  assert.match(source, /v-for="category in handoverCategoryOptions"/);
   assert.match(source, /\.rental-checklist-category-menu\{[^}]*min-height:160px/);
 });
 
@@ -226,6 +234,24 @@ test('uses the page scrollbar instead of a nested workbench scrollbar', () => {
   assert.match(source, /\.process-center-main\{[^}]*height:auto/);
   assert.match(source, /\.process-center-main\{[^}]*overflow:visible/);
   assert.doesNotMatch(source, /process-pagination/);
+});
+
+test('opens the selected journey step at its exact editable record', () => {
+  assert.match(source, /class="process-step-edit-button"/);
+  assert.match(source, /editSelectedJourneyStep/);
+  assert.match(source, /type: 'property', tab: 'basic', action: 'edit'/);
+  assert.match(source, /type: 'rentalMandate', action: 'edit'/);
+  assert.match(source, /type: 'tenantDirectory', action: 'edit', tenantId/);
+  assert.match(source, /tab: 'rentalManagement', rentalTab: 'lease', leaseId/);
+  assert.match(source, /openOperationsCenter\('billing'\)/);
+  assert.match(source, /openOperationsCenter\('maintenance'\)/);
+  assert.match(source, /openOperationsCenter\('lease'\)/);
+  assert.match(source, /from: 'rental-process'/);
+});
+
+test('removes the duplicate outer scrollbar from the process context rail', () => {
+  assert.match(adminThemeSource, /\.admin-shell \.process-context-rail\{[^}]*max-height:none;[^}]*overflow:visible/);
+  assert.match(source, /\.process-property-list\{[^}]*overflow-y:auto/);
 });
 
 test('keeps process content away from the page and panel edges', () => {
@@ -315,14 +341,14 @@ test('selected stage page exposes its workflow action without attachment shortcu
 });
 
 test('starts a complete rental journey from project, owner, and property setup', () => {
-  assert.match(source, /开始新租房流程/);
+  assert.match(source, /legacy\.t_e46922c4e850/);
   assert.match(source, /process-journey-track/);
   assert.match(source, /openSetupWizard/);
   assert.match(source, /createAdminProject/);
   assert.match(source, /createAdminOwner/);
   assert.match(source, /createAdminOwnerProperty/);
   assert.match(source, /setupStep === 1/);
-  assert.match(source, /建立并进入流程/);
+  assert.match(source, /legacy\.t_2be6c56a71a9/);
 });
 
 test('rejects a duplicate project code in the first setup step instead of the final submission', () => {
@@ -337,7 +363,7 @@ test('new rental flow only accepts handed-over properties', () => {
   assert.doesNotMatch(source, /<option value="PRE_HANDOVER">未交房<\/option>/);
   assert.doesNotMatch(source, /setupPropertyForm\.assetStage === 'PRE_HANDOVER'/);
   assert.match(source, /setupPropertyForm:\s*\{[^}]*assetStage:\s*'OPERATING'/);
-  assert.match(source, /实际交房日期<input v-model="setupPropertyForm\.actualHandoverDate"/);
+  assert.match(source, /v-model="setupPropertyForm\.actualHandoverDate" type="date" required/);
   assert.match(source, /if \(!this\.setupPropertyForm\.actualHandoverDate\)/);
 });
 
@@ -345,14 +371,14 @@ test('journey navigation combines project owner property and handover into one p
   assert.doesNotMatch(source, /key:\s*'projectRecord'/);
   assert.doesNotMatch(source, /key:\s*'ownerRecord'/);
   assert.doesNotMatch(source, /key:\s*'propertyRecord'/);
-  assert.match(source, /item\.key === 'propertySetup' \? '房产准备'/);
+  assert.match(source, /item\.key === 'propertySetup' \? this\.\$t\('processCenter\.journeyPropertySetup'\)/);
   assert.match(source, /selectedJourneyStep\.key === 'propertySetup'/);
-  assert.match(source, /<span>建案<\/span>/);
-  assert.match(source, /<span>业主<\/span>/);
-  assert.match(source, /<span>房产单位<\/span>/);
-  assert.match(source, /<span>交房状态<\/span>/);
+  assert.match(source, /legacy\.t_cf545c9c1bf9/);
+  assert.match(source, /legacy\.t_a39a3f21f732/);
+  assert.match(source, /legacy\.t_ec0053796f17/);
+  assert.match(source, /legacy\.t_3a6e5d931db1/);
   assert.match(source, /isRentalControlEligible\(property\).*=== 'OPERATING'/);
-  assert.match(source, /从房产准备到结束租约/);
+  assert.match(source, /legacy\.t_8371a53c870b/);
 });
 
 test('journey navigation splits later work into tenant lease billing and maintenance steps', () => {
@@ -362,7 +388,7 @@ test('journey navigation splits later work into tenant lease billing and mainten
   assert.match(source, /key:\s*'maintenanceOperations'/);
   assert.match(source, /openOperationsCenter\('billing'\)/);
   assert.match(source, /openOperationsCenter\('maintenance'\)/);
-  assert.match(source, /grid-template-columns:repeat\(8,minmax\(112px,1fr\)\)/);
+  assert.match(source, /grid-template-columns:repeat\(7,minmax\(112px,1fr\)\)/);
 });
 
 test('scopes a shared rental workflow to one room while allowing multiple room leases', () => {
@@ -390,7 +416,7 @@ test('keeps deposit management outside the rental journey', () => {
 test('renders the journey overview as compact status tiles with one current-stage summary', () => {
   assert.match(source, /journeyCompletedCount/);
   assert.match(source, /journeyCurrentStep/);
-  assert.match(source, /当前 · \{\{ journeyCurrentStep\.title \}\}/);
+  assert.match(source, /\$lt\(journeyCurrentStep\.title\)/);
   assert.match(source, /step\.status === 'completed' \? '✓' : index \+ 1/);
   assert.match(source, /\.process-journey-track button\{[^}]*border:1px solid/);
   assert.match(source, /\.process-journey-track button\.active\{[^}]*border-color:#0b8f96/);

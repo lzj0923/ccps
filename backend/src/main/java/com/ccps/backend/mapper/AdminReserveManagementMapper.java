@@ -27,12 +27,14 @@ public interface AdminReserveManagementMapper {
                     WHERE fr.record_type='rent_payment' AND fr.payment_status='paid'
                       AND fr.confirmation_status='confirmed' AND fr.transaction_date<=CURRENT_DATE),0) AS total_balance,
                    COALESCE(SUM(current_balance),0) + COALESCE((SELECT SUM(fr.amount)
-                     FROM rent_payments rp JOIN finance_records fr ON fr.id=rp.finance_record_id
-                     JOIN rent_invoices ri ON ri.id=rp.rent_invoice_id JOIN leases l ON l.id=ri.lease_id
-                     JOIN owner_units xou ON xou.unit_id=l.unit_id AND xou.status='active' AND xou.asset_stage='OPERATING'
+                     FROM finance_records fr
+                     JOIN owner_units xou ON xou.owner_id=fr.owner_id AND xou.unit_id=fr.unit_id
+                       AND xou.status='active' AND xou.asset_stage='OPERATING'
                      JOIN reserve_accounts xra ON xra.owner_unit_id=xou.id AND xra.status='active'
                     WHERE fr.record_type='rent_payment' AND fr.payment_status='paid'
-                      AND fr.confirmation_status='confirmed' AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE),0) AS accounting_balance,
+                      AND fr.confirmation_status='confirmed'
+                      AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE
+                      AND EXISTS (SELECT 1 FROM rent_payments rp WHERE rp.finance_record_id=fr.id)),0) AS accounting_balance,
                    COALESCE(SUM(minimum_balance),0) AS minimum_balance,
                    COUNT(*) AS account_count,
                    COALESCE(SUM(current_balance < minimum_balance),0) AS low_balance_count,
@@ -77,9 +79,11 @@ public interface AdminReserveManagementMapper {
                           AND fr.confirmation_status='confirmed' AND fr.transaction_date<=CURRENT_DATE
                         GROUP BY fr.owner_id,fr.unit_id) posted_rent ON posted_rent.owner_id=o.id AND posted_rent.unit_id=u.id
             LEFT JOIN (SELECT fr.owner_id,fr.unit_id,SUM(fr.amount) AS amount
-                         FROM rent_payments rp JOIN finance_records fr ON fr.id=rp.finance_record_id
+                         FROM finance_records fr
                         WHERE fr.record_type='rent_payment' AND fr.payment_status='paid'
-                          AND fr.confirmation_status='confirmed' AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE
+                          AND fr.confirmation_status='confirmed'
+                          AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE
+                          AND EXISTS (SELECT 1 FROM rent_payments rp WHERE rp.finance_record_id=fr.id)
                         GROUP BY fr.owner_id,fr.unit_id) received_rent ON received_rent.owner_id=o.id AND received_rent.unit_id=u.id
             WHERE ra.status='active'
             GROUP BY ra.id,o.id,o.full_name,p.id,p.name,u.id,u.unit_no,ra.remarks,ra.minimum_balance,ra.current_balance,
@@ -263,16 +267,18 @@ public interface AdminReserveManagementMapper {
     List<ReconciliationRow> findReconciliations();
 
     @Select("""
-            SELECT COALESCE(SUM(ra.current_balance),0) + COALESCE((SELECT SUM(rp.allocated_amount)
-              FROM rent_payments rp JOIN finance_records fr ON fr.id=rp.finance_record_id
+            SELECT COALESCE(SUM(ra.current_balance),0) + COALESCE((SELECT SUM(fr.amount)
+              FROM finance_records fr
               JOIN owner_units ou ON ou.owner_id=fr.owner_id AND ou.unit_id=fr.unit_id
                 AND ou.status='active' AND ou.asset_stage='OPERATING'
               JOIN reserve_accounts xra ON xra.owner_unit_id=ou.id AND xra.status='active'
              WHERE fr.record_type='rent_payment' AND fr.payment_status='paid'
-               AND fr.confirmation_status='confirmed' AND fr.transaction_date<=CURRENT_DATE),0)
+               AND fr.confirmation_status='confirmed'
+               AND COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE
+               AND EXISTS (SELECT 1 FROM rent_payments rp WHERE rp.finance_record_id=fr.id)),0)
             FROM reserve_accounts ra WHERE ra.status='active'
             """)
-    BigDecimal findPostedTotalBalance();
+    BigDecimal findReceivedTotalBalance();
 
     @Insert("INSERT INTO reserve_reconciliations (reconciliation_month,system_balance,finance_balance,difference_amount,status,note,confirmed_by,confirmed_at) VALUES (#{month},#{systemBalance},#{financeBalance},#{difference},#{status},#{note},#{actorId},CASE WHEN #{status}='confirmed' THEN CURRENT_TIMESTAMP ELSE NULL END) ON DUPLICATE KEY UPDATE system_balance=VALUES(system_balance),finance_balance=VALUES(finance_balance),difference_amount=VALUES(difference_amount),status=VALUES(status),note=VALUES(note),confirmed_by=VALUES(confirmed_by),confirmed_at=CASE WHEN VALUES(status)='confirmed' THEN CURRENT_TIMESTAMP ELSE NULL END")
     int saveReconciliation(@Param("month") LocalDate month,@Param("systemBalance") BigDecimal systemBalance,

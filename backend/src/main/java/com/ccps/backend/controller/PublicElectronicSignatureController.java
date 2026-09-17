@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ccps.backend.dto.ElectronicSignaturePublicResponse;
@@ -27,15 +28,18 @@ public class PublicElectronicSignatureController {
     public PublicElectronicSignatureController(ElectronicSignatureService service) { this.service = service; }
 
     @GetMapping("/{token}") public ElectronicSignaturePublicResponse view(@PathVariable String token) { return service.publicView(token); }
-    @PostMapping("/{token}/verification-code") public ResponseEntity<Void> resend(@PathVariable String token, HttpServletRequest request) {
-        service.resendCode(token, remoteIp(request), request.getHeader("User-Agent")); return ResponseEntity.noContent().build();
-    }
     @PostMapping("/{token}/sign") public ElectronicSignaturePublicResponse sign(@PathVariable String token,
             @Valid @RequestBody ElectronicSignatureSignRequest payload, HttpServletRequest request) {
         return service.sign(token, payload, remoteIp(request), request.getHeader("User-Agent"));
     }
-    @GetMapping("/{token}/document") public ResponseEntity<FileSystemResource> document(@PathVariable String token) { return file(service.downloadOriginal(token), false); }
-    @GetMapping("/{token}/signed-document") public ResponseEntity<FileSystemResource> signedDocument(@PathVariable String token) { return file(service.downloadSigned(token), true); }
+    @GetMapping("/{token}/document") public ResponseEntity<FileSystemResource> document(@PathVariable String token,
+            @RequestParam(defaultValue = "false") boolean download) {
+        return file(service.downloadOriginal(token), download);
+    }
+    @GetMapping("/{token}/signed-document") public ResponseEntity<FileSystemResource> signedDocument(@PathVariable String token,
+            @RequestParam(defaultValue = "false") boolean download) {
+        return file(service.downloadSigned(token), download);
+    }
 
     private ResponseEntity<FileSystemResource> file(Download file, boolean attachment) {
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(file.path().toFile().length())

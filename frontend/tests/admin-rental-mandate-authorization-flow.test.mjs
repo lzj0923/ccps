@@ -40,6 +40,6 @@ test('authorization signing stays independent from mandate activation', () => {
   assert.match(i18n, /loadingDocuments: \['[^']+', '[^']+', '[^']+'\]/);
   assert.match(workspace, /beforeUnmount\(\)/);
   assert.match(documentService, /authorization_draft/);
-  assert.match(signatureMapper, /insertSignedMandateAuthorizationLink/);
-  assert.match(signatureService, /insertSignedMandateAuthorizationLink\(signed\.getId\(\), row\.getEntityId\(\)\)/);
+  assert.match(signatureMapper, /insertSignedMandateDocumentLink/);
+  assert.match(signatureService, /insertSignedMandateDocumentLink\(signed\.getId\(\), row\.getEntityId\(\), signedRelation/);
 });

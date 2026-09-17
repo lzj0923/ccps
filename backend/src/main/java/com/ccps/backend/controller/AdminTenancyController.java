@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,8 +44,10 @@ import com.ccps.backend.dto.AdminRecordCreateResponse;
 import com.ccps.backend.dto.AdminTenancyOptionsResponse;
 import com.ccps.backend.dto.AdminTenancyResponse;
 import com.ccps.backend.dto.AdminTenantCreateRequest;
+import com.ccps.backend.dto.AdminTenantStatusUpdateRequest;
 import com.ccps.backend.dto.AdminTenantDirectoryResponse;
 import com.ccps.backend.dto.AdminTenantDetailResponse;
+import com.ccps.backend.dto.AdminTenantDepositTransactionDeleteRequest;
 import com.ccps.backend.dto.AdminTenantDepositTransactionRequest;
 import com.ccps.backend.service.AdminTenancyService;
 import com.ccps.backend.service.AdminTenancyService.Download;
@@ -100,8 +103,9 @@ public class AdminTenancyController {
     public AdminRentCollectionResponse rentCollections(@RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize, @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String projectName, @RequestParam(required = false) String status,
-            @RequestParam(required = false) LocalDate startDate, @RequestParam(required = false) LocalDate endDate) {
-        return service.findRentCollections(page, pageSize, keyword, projectName, status, startDate, endDate);
+            @RequestParam(required = false) LocalDate startDate, @RequestParam(required = false) LocalDate endDate,
+            @RequestParam(required = false) Long invoiceId) {
+        return service.findRentCollections(page, pageSize, keyword, projectName, status, startDate, endDate, invoiceId);
     }
 
     @GetMapping("/rent-collections/projects")
@@ -153,9 +157,23 @@ public class AdminTenancyController {
         return service.createTenantDepositTransaction(AuthInterceptor.userId(request), leaseId, payload);
     }
 
+    @PostMapping("/leases/{leaseId}/deposit-transactions/batch-delete")
+    public ResponseEntity<Void> deleteDepositTransactions(@PathVariable Long leaseId,
+            @Valid @RequestBody AdminTenantDepositTransactionDeleteRequest payload, HttpServletRequest request) {
+        service.deleteTenantDepositTransactions(AuthInterceptor.userId(request), leaseId, payload.transactionIds());
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/tenants/{tenantId}")
     public ResponseEntity<Void> updateTenant(@PathVariable Long tenantId,@Valid @RequestBody AdminTenantCreateRequest request) {
         service.updateTenant(tenantId,request);return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/tenants/{tenantId}/status")
+    public ResponseEntity<Void> updateTenantStatus(@PathVariable Long tenantId,
+            @Valid @RequestBody AdminTenantStatusUpdateRequest request) {
+        service.updateTenantStatus(tenantId, request.status());
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/tenants/{tenantId}")
@@ -237,6 +255,13 @@ public class AdminTenancyController {
         return ResponseEntity.ok(Map.of("id", id));
     }
 
+    @PostMapping(value = "/leases/{leaseId}/generated-contract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Long>> uploadGeneratedContract(@PathVariable Long leaseId,
+            @RequestParam("file") MultipartFile file, HttpServletRequest request) {
+        Long id = service.uploadGeneratedContract(AuthInterceptor.userId(request), leaseId, file);
+        return ResponseEntity.ok(Map.of("id", id));
+    }
+
     @GetMapping("/leases/{leaseId}/contract")
     public ResponseEntity<FileSystemResource> contract(@PathVariable Long leaseId,
             @RequestParam(defaultValue = "false") boolean download) {
@@ -267,14 +292,6 @@ public class AdminTenancyController {
         return ResponseEntity.ok().contentType(mediaType).contentLength(file.size())
                 .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.value(
                         download ? "attachment" : "inline", file.originalName()))
-                .body(new FileSystemResource(file.path()));
-    }
-
-    @GetMapping("/rent-payments/{financeRecordId}/receipt")
-    public ResponseEntity<FileSystemResource> rentReceipt(@PathVariable Long financeRecordId) {
-        Download file = service.downloadRentReceipt(financeRecordId);
-        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).contentLength(file.size())
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadContentDisposition.attachment(file.originalName()))
                 .body(new FileSystemResource(file.path()));
     }
 

@@ -47,7 +47,8 @@ public record PaymentProgressResponse(
             String confirmationStatus,
             String rejectionReason,
             int receiptCount,
-            boolean hasProof) {
+            boolean hasProof,
+            List<Long> proofDocumentIds) {
     }
 
     public record LatestPayment(

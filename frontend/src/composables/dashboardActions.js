@@ -2,18 +2,60 @@ import { toNumber } from '../utils/dashboardFormatters';
 import { downloadCsv, downloadPaymentReport } from '../utils/csvExporter';
 
 import { navigate, resolveRoute, routeForModule } from '../router';
+import { fetchAdminReminders } from '../services/propertyApi';
+import { translateLegacyText } from '../i18n';
+
+const validateDateRange = (startDate, endDate) => Boolean(startDate && endDate && startDate <= endDate);
 
 export default {
   methods: {
     openDatePanel() {
       this.modalMode = "date";
-      this.modalTitle = "日期篩選";
-      this.modal?.showModal();
+      this.modalTitle = this.$t('common.dateFilter');
+      this.dateDraftStart = this.dateStart;
+      this.dateDraftEnd = this.dateEnd;
+      this.dateFilterError = '';
+      if (this.modal?.open) this.modal.close();
+      this.$nextTick(() => this.modal?.showModal());
     },
     openAlertPanel() {
       this.modalMode = "alerts";
-      this.modalTitle = "提醒中心";
-      this.modal?.showModal();
+      this.modalTitle = this.$t('common.notificationCenter');
+      if (this.modal?.open) this.modal.close();
+      this.$nextTick(() => this.modal?.showModal());
+      this.refreshAdminAlerts();
+    },
+    async refreshAdminAlerts() {
+      if (resolveRoute().mode !== 'admin' || this.alertLoading) return;
+      this.alertLoading = true;
+      this.alertError = '';
+      try {
+        const data = await fetchAdminReminders();
+        const summary = data?.summary || {};
+        this.adminAlertCount = Number(summary.pendingDeliveryCount || 0) + Number(summary.failedDeliveryCount || 0);
+        this.alertItems = (Array.isArray(data?.notifications) ? data.notifications : []).slice(0, 12).map(item => {
+          const delivery = String(item.deliverySummary || '');
+          const failed = Boolean(item.failureReason) || delivery.includes(':failed');
+          const pending = delivery.includes(':pending') || delivery.includes(':sending');
+          const status = failed ? this.$t('common.deliveryFailed') : pending ? this.$t('common.pendingDelivery') : this.$t('common.sent');
+          return {
+            id: item.id,
+            title: item.title || this.$t('common.systemNotification'),
+            detail: item.body || item.ruleName || '',
+            status,
+            tone: failed ? 'red' : pending ? 'orange' : 'green',
+            time: item.createdAt ? String(item.createdAt).replace('T', ' ').slice(0, 16) : '',
+            relatedType: item.relatedType,
+            relatedId: item.relatedId
+          };
+        });
+      } catch (error) {
+        this.alertItems = [];
+        this.adminAlertCount = 0;
+        this.alertError = error.message || this.$t('common.notificationLoadFailed');
+      } finally {
+        this.alertLoading = false;
+      }
     },
     triggerPrimaryAction() {
       if (this.currentId === 'adminOwners' && this.adminOwnerWorkspaceTab === 'accounts') {
@@ -54,6 +96,7 @@ export default {
         return;
       }
       if (this.currentId === 'adminMaintenance') {
+        this.adminExpenseCreateMode = '';
         this.adminExpenseCreateNonce += 1;
         return;
       }
@@ -99,7 +142,9 @@ export default {
         return;
       }
       if (this.currentId === 'adminReserve') {
-        this.adminReserveDirectTopupNonce += 1;
+        this.adminExpenseCreateMode = 'reserve-debit';
+        this.selectModule('adminMaintenance');
+        this.$nextTick(() => { this.adminExpenseCreateNonce += 1; });
         return;
       }
       if (this.currentId === 'adminAlerts') {
@@ -117,23 +162,36 @@ export default {
       const month = String(new Date().getMonth() + 1).padStart(2, '0');
       const monthEnd = new Date(year, new Date().getMonth() + 1, 0).getDate();
       const presets = {
-        "本年度": [`${year}-01-01`, `${year}-12-31`],
-        "上半年": [`${year}-01-01`, `${year}-06-30`],
-        "下半年": [`${year}-07-01`, `${year}-12-31`],
-        "本月": [`${year}-${month}-01`, `${year}-${month}-${monthEnd}`]
+        year: [`${year}-01-01`, `${year}-12-31`],
+        h1: [`${year}-01-01`, `${year}-06-30`],
+        h2: [`${year}-07-01`, `${year}-12-31`],
+        month: [`${year}-${month}-01`, `${year}-${month}-${monthEnd}`]
       };
-      const range = presets[this.datePreset] || presets["本年度"];
-      this.dateStart = range[0];
-      this.dateEnd = range[1];
+      const range = presets[this.datePreset];
+      if (!range) return;
+      this.dateDraftStart = range[0];
+      this.dateDraftEnd = range[1];
+      this.dateFilterError = '';
     },
     confirmModal() {
       if (this.modalMode === "date") {
-        this.showToast(`已套用日期：${this.dateRange}`);
+        if (!validateDateRange(this.dateDraftStart, this.dateDraftEnd)) {
+          this.dateFilterError = this.$t('common.dateRangeInvalid');
+          return;
+        }
+        this.dateStart = this.dateDraftStart;
+        this.dateEnd = this.dateDraftEnd;
+        this.dateFilterError = '';
+        this.modal?.close();
+        this.showToast(this.$t('common.dateApplied', { range: this.dateRange }));
         this.$nextTick(this.renderReportTab);
         return;
       }
       if (this.modalMode === "alerts") {
-        this.showToast("提醒已標記為已讀");
+        this.modal?.close();
+        this.globalSearch = '';
+        this.adminReminderOpenNotificationsNonce += 1;
+        this.selectModule('adminAlerts');
         return;
       }
       if (this.modalMode === "upload") {
@@ -143,9 +201,10 @@ export default {
       this.showToast("資料已儲存");
     },
     selectAlert(item) {
-      this.globalSearch = item.title.includes("SQL") ? "SQL" : item.title.slice(0, 2);
-      this.showToast(`已定位：${item.title}`);
       this.modal?.close();
+      this.adminReminderOpenNotificationsNonce += 1;
+      this.selectModule('adminAlerts');
+      this.$nextTick(() => { this.globalSearch = item.title || ''; });
     },
     ownerMetricIcon(icon) {
       const icons = {
@@ -349,7 +408,7 @@ export default {
     },
 
     showToast(text) {
-      this.toastText = text;
+      this.toastText = translateLegacyText(text);
       this.toastVisible = true;
       window.setTimeout(() => { this.toastVisible = false; }, 1800);
     }

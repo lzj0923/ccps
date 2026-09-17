@@ -34,14 +34,19 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request, String requiredRole) {
+        List<String> identifiers = loginIdentifiers(request.identifier());
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getUsername, request.identifier())
+                .in(User::getUsername, identifiers)
                 .or()
-                .eq(User::getEmail, request.identifier()));
+                .in(User::getEmail, identifiers)
+                .or()
+                .in(User::getPhone, identifiers));
 
-        if (user == null || !"active".equalsIgnoreCase(user.getStatus())
-                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
+        }
+        if (!"active".equalsIgnoreCase(user.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is disabled");
         }
 
         Set<String> roleCodes = new LinkedHashSet<>();
@@ -60,8 +65,9 @@ public class AuthService {
         roleCodes.remove(OWNER_ROLE);
         roleCodes.add(accountType);
         if (normalizedRequiredRole != null && !normalizedRequiredRole.equals(accountType)) {
+            String portal = ADMIN_ROLE.equals(accountType) ? "administrator" : "owner";
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    normalizedRequiredRole + " portal access required");
+                    "This account can only sign in through the " + portal + " portal");
         }
         String activeRole = normalizedRequiredRole != null
                 ? normalizedRequiredRole
@@ -77,10 +83,35 @@ public class AuthService {
                         .map(code -> code.toUpperCase(Locale.ROOT)).distinct().toList());
     }
 
+    private List<String> loginIdentifiers(String identifier) {
+        String raw = identifier == null ? "" : identifier.trim();
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        candidates.add(raw);
+        if (!raw.matches("[+\\d\\s().-]+")) return List.copyOf(candidates);
+
+        String digits = raw.replaceAll("\\D", "");
+        if (digits.isBlank()) return List.copyOf(candidates);
+        candidates.add(digits);
+        candidates.add("+" + digits);
+        addNationalPhoneCandidates(candidates, digits, "86", 11, false);
+        addNationalPhoneCandidates(candidates, digits, "60", 9, true);
+        addNationalPhoneCandidates(candidates, digits, "66", 9, true);
+        return List.copyOf(candidates);
+    }
+
+    private void addNationalPhoneCandidates(Set<String> candidates, String digits,
+            String countryCode, int minimumLength, boolean includeLeadingZero) {
+        if (!digits.startsWith(countryCode)) return;
+        String national = digits.substring(countryCode.length());
+        if (national.length() < minimumLength) return;
+        candidates.add(national);
+        if (includeLeadingZero && !national.startsWith("0")) candidates.add("0" + national);
+    }
+
     private String normalizeAccountType(String accountType) {
         String normalized = accountType == null ? "" : accountType.toUpperCase(Locale.ROOT);
         if (ADMIN_ROLE.equals(normalized) || OWNER_ROLE.equals(normalized)) return normalized;
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unsupported account type");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account type is not configured correctly");
     }
 
     private String defaultRole(Set<String> roles) {

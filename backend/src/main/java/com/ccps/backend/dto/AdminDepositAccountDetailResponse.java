@@ -9,7 +9,8 @@ public record AdminDepositAccountDetailResponse(
         Bill bill,
         Reserve reserve,
         List<AdminTenantDepositTransactionResponse> transactions,
-        List<String> allowedActions) {
+        List<String> allowedActions,
+        List<Bill> bills) {
 
     public record Account(Long leaseId, String leaseNo, Long tenantId, String tenantName, String tenantPhone,
             String projectName, String unitNo, String leaseStatus, LocalDate startDate, LocalDate endDate,

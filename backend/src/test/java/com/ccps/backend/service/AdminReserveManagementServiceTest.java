@@ -25,6 +25,7 @@ import com.ccps.backend.dto.AdminReserveSettingsRequest;
 import com.ccps.backend.dto.AdminReserveBatchRefundRequest;
 import com.ccps.backend.dto.AdminReserveDirectTopupRequest;
 import com.ccps.backend.dto.AdminReserveRefundRequest;
+import com.ccps.backend.dto.AdminReserveReconciliationRequest;
 import com.ccps.backend.mapper.AdminReserveManagementMapper;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.DirectTopupContext;
 import com.ccps.backend.mapper.AdminReserveManagementMapper.DirectTopupRecord;
@@ -155,6 +156,45 @@ class AdminReserveManagementServiceTest {
                 eq(selectedDate), eq(new BigDecimal("10000.00")), eq(new BigDecimal("25.00")), eq(9L));
         verify(mapper).insertRefundTransfer(any(), eq(8L), eq(21L), eq(102L), eq(202L), eq(2), eq(2),
                 eq(selectedDate.plusDays(1)), eq(new BigDecimal("2000.00")), eq(new BigDecimal("25.00")), eq(9L));
+    }
+
+    @Test
+    void batchRefundAllowsCashOverrideWithoutBankAccount() {
+        DirectTopupContext context = new DirectTopupContext();
+        context.setId(8L); context.setOwnerId(3L); context.setUnitId(5L);
+        when(mapper.findDirectTopupContext(8L)).thenReturn(context);
+        when(mapper.insertReserveRefundFinance(any(DirectTopupRecord.class))).thenAnswer(invocation -> {
+            invocation.<DirectTopupRecord>getArgument(0).setId(101L); return 1;
+        });
+        when(mapper.insertReserveRefundCashflow(eq(101L), eq(5L), eq(3L), any(), any(LocalDate.class)))
+                .thenReturn(1);
+        LocalDate selectedDate = LocalDate.of(2026, 9, 3);
+
+        var result = service.createRefunds(9L, new AdminReserveBatchRefundRequest(
+                List.of(new AdminReserveBatchRefundRequest.Item(
+                        8L, null, new BigDecimal("1200.00"), "cash")),
+                selectedDate, "bank_transfer", "终止管理返还"));
+
+        assertThat(result).hasSize(1);
+        ArgumentCaptor<DirectTopupRecord> refundCaptor = ArgumentCaptor.forClass(DirectTopupRecord.class);
+        verify(mapper).insertReserveRefundFinance(refundCaptor.capture());
+        assertThat(refundCaptor.getValue().getPaymentMethod()).isEqualTo("cash");
+        verify(mapper, never()).findRefundBankContext(anyLong(), anyLong());
+        verify(mapper, never()).insertRefundTransfer(any(), anyLong(), anyLong(), anyLong(), any(),
+                any(Integer.class), any(Integer.class), any(LocalDate.class), any(BigDecimal.class),
+                any(BigDecimal.class), anyLong());
+    }
+
+    @Test
+    void reconciliationPersistsTheReceiptDateBalance() {
+        when(mapper.findReceivedTotalBalance()).thenReturn(new BigDecimal("1250.00"));
+        LocalDate month = LocalDate.of(2026, 8, 1);
+
+        service.saveReconciliation(9L,
+                new AdminReserveReconciliationRequest(month, new BigDecimal("1200.00"), true, "月结"));
+
+        verify(mapper).saveReconciliation(month, new BigDecimal("1250.00"), new BigDecimal("1200.00"),
+                new BigDecimal("-50.00"), "confirmed", "月结", 9L);
     }
 
     private SettingsRow settings(String mode, String minimum, String calculated, boolean alert) {

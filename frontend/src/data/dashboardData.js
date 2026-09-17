@@ -7,6 +7,11 @@ const detailBlocks = (a, b) => [
 
 const modules = [
   {
+    id: "ownerProjects", shell: "owner-shell", code: "00", name: "最新建案", mobileOnly: true, avatar: false,
+    title: "最新建案", category: "LATEST PROJECTS", hero: "精选房产新项目",
+    hint: "查看开放项目、项目资料与讲座信息。", table: "开放建案", searchHint: "搜索建案"
+  },
+  {
     id: "myProperties", shell: "owner-shell", code: "01", name: "我的房產", avatar: false,
     title: "我的房產", category: "OWNER PORTAL", hero: "業主端房產總覽",
     hint: "查看名下物業、付款摘要、租金狀態、預備金和文件提醒。",
@@ -41,6 +46,11 @@ const modules = [
       { title: "分期資料", items: [["總期數", "12 期"], ["已繳期數", "11 期"], ["下期到期", "2025-06-15"]] },
       { title: "付款狀態", items: [["付款憑證", "已完成"], ["財務確認", "待確認"], ["逾期提醒", "啟用"]] }
     )
+  },
+  {
+    id: "ownerRentalHub", shell: "owner-shell", code: "03.0", name: "租管服务", mobileOnly: true, avatar: false,
+    title: "租管服务", category: "RENTAL MANAGEMENT", hero: "租赁与房产收支",
+    hint: "查看租金、租客、收支、预备金与租赁合同。", table: "租管资产", searchHint: "搜索房产或租客"
   },
   {
     id: "ownerFinance", shell: "owner-shell", code: "03", name: "財務中心", avatar: false,
@@ -140,6 +150,11 @@ const modules = [
       { title: "文件分類", items: [["買賣合約", "已完成"], ["身份文件", "已完成"], ["付款憑證", "待處理"]] },
       { title: "文件提醒", items: [["到期提醒", "啟用"], ["補件提醒", "啟用"], ["審核狀態", "待確認"]] }
     )
+  },
+  {
+    id: "ownerMore", shell: "owner-shell", code: "08", name: "更多服务", mobileOnly: true, avatar: false,
+    title: "更多服务", category: "MORE SERVICES", hero: "业主查询服务",
+    hint: "查看房款、合同、房产资料与账户服务。", table: "服务入口", searchHint: "搜索服务"
   },
   {
     id: "adminSmartDashboard", shell: "admin-shell", code: "-01", name: "智慧大屏", avatar: false,

@@ -40,6 +40,18 @@ public interface AdminMaintenanceMapper {
             """)
     List<UnitOption> findUnitOptions();
 
+    @Select("""
+            SELECT u.id AS unit_id, ou.id AS owner_unit_id, o.id AS owner_id, o.full_name AS owner_name,
+                   NULL AS tenant_name, p.name AS project_name, u.unit_no,
+                   NULL AS reserve_account_id, 0 AS reserve_balance, FALSE AS direct_payment_allowed
+            FROM units u JOIN projects p ON p.id=u.project_id
+            JOIN owner_units ou ON ou.id=(SELECT history.id FROM owner_units history
+                WHERE history.unit_id=u.id ORDER BY (history.status='active') DESC, history.is_primary DESC, history.id DESC LIMIT 1)
+            JOIN owners o ON o.id=ou.owner_id
+            ORDER BY p.name, u.unit_no
+            """)
+    List<UnitOption> findMonthlyUnitOptions();
+
     @Select("SELECT id, name, contact_name, phone FROM vendors WHERE status = 'active' ORDER BY name")
     List<VendorOption> findVendorOptions();
 
@@ -469,8 +481,8 @@ public interface AdminMaintenanceMapper {
                     NULLIF(CONCAT_WS(' | ', NULLIF(#{bankName}, ''), NULLIF(#{paymentAccountNo}, '')), ''),
                     NULLIF(#{feeAccountKey}, ''), NULLIF(#{feeAccountNo}, ''))
             ON DUPLICATE KEY UPDATE payer_name = VALUES(payer_name), bank_reference = VALUES(bank_reference),
-                fee_account_type = COALESCE(VALUES(fee_account_type), fee_account_type),
-                fee_account_no = COALESCE(VALUES(fee_account_no), fee_account_no)
+                fee_account_type = VALUES(fee_account_type),
+                fee_account_no = VALUES(fee_account_no)
             """)
     int upsertPaymentReceipt(@Param("financeRecordId") Long financeRecordId,
             @Param("payerName") String payerName, @Param("bankName") String bankName,

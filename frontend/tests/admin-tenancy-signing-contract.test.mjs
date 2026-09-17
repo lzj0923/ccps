@@ -16,18 +16,61 @@ test('tenancy no longer exposes generated test lease contracts', () => {
   assert.doesNotMatch(api, /test-contract|generateAdminTestLeaseContract/);
 });
 
-test('online signing is unavailable after the current lease document is signed', () => {
-  assert.match(workspace, /contractDocumentMimeType === ['"]application\/pdf['"]\s*&&\s*!selectedRow\.contractSigned/);
+test('system-generated tenancy agreements use the dedicated generated-contract upload route', () => {
+  assert.match(api, /uploadAdminGeneratedLeaseContract/);
+  assert.match(api, /\/generated-contract/);
+  assert.match(workspace, /uploadAdminGeneratedLeaseContract/);
+  assert.match(
+    workspace,
+    /generateAdminContractTemplate\([\s\S]*?uploadAdminGeneratedLeaseContract\(this\.selectedRow\.leaseId, file\)/,
+  );
+});
+
+test('tenancy details no longer expose an online-signing action', () => {
+  assert.doesNotMatch(workspace, /@click="openLeaseSigning"/);
+  assert.doesNotMatch(workspace, /selectedRow\.contractStatus === 'signed' \? \$t\('rentalFiles\.restartSigning'\)/);
 });
 
 test('tenancy details expose the attachment lifecycle separately from the lease', () => {
   assert.match(workspace, /contractStatusLabel\(selectedRow\.contractStatus\)/);
-  assert.match(workspace, /contractStatus !== ['"]signed['"]/);
+  assert.match(workspace, /missing: 'contractMissing', uploaded: 'contractUploadedPending', pending: 'contractSigning', signed: 'contractSigned'/);
 });
 
-test('signed signature page previews the signed document instead of the original', () => {
+test('signed signature page previews the signed document inline at the signature position', () => {
   const signaturePage = readFileSync(new URL('../src/pages/SignaturePage.vue', import.meta.url), 'utf8');
-  assert.match(signaturePage, /documentUrl\(\)\s*\{[^}]*signature\?\.status\s*===\s*['"]signed['"][^}]*signedDocumentUrl/s);
+  assert.match(signaturePage, /currentDocumentBaseUrl\(\)[^}]*canDownloadSigned[^}]*signed-document/s);
+  assert.match(signaturePage, /pdfSignatureAnchor\(this\.previewPage\)/);
+  assert.match(signaturePage, /this\.previewPage = signatureTargetPage\(updated\)/);
+});
+
+test('public signing no longer asks for or resends a verification code', () => {
+  const signaturePage = readFileSync(new URL('../src/pages/SignaturePage.vue', import.meta.url), 'utf8');
+  assert.doesNotMatch(signaturePage, /verificationCode/);
+  assert.doesNotMatch(signaturePage, /resendPublicSignatureCode/);
+  assert.doesNotMatch(signaturePage, /code-row/);
+});
+
+test('public signing page shows the contract first and opens signing from a round floating button', () => {
+  const signaturePage = readFileSync(new URL('../src/pages/SignaturePage.vue', import.meta.url), 'utf8');
+  const viewer = signaturePage.match(/<section v-else-if="signature" class="contract-viewer">[\s\S]*?<\/section>/)?.[0] || '';
+  assert.match(viewer, /class="document-preview"/);
+  assert.doesNotMatch(viewer, /class="sign-form"/);
+  assert.match(signaturePage, /class="signature-fab"[^>]*@click="openSigning"/);
+  assert.match(signaturePage, /<dialog v-if="signature\?\.canSign"[^>]*class="sign-dialog"/);
+  assert.match(signaturePage, /class="signer-name"[\s\S]*signature\.signerName/);
+  assert.match(signaturePage, /openSigning\(\)[^}]*showModal\(\)/);
+  assert.match(signaturePage, /\.signature-fab\{[^}]*border-radius:var\(--radius-round\)/);
+});
+
+test('tenancy signing generates links before choosing a delivery method', () => {
+  assert.match(workspace, /sendLeaseSigningEmail/);
+  assert.match(workspace, /whatsAppLeaseSigningUrl/);
+  assert.match(workspace, /rentalFiles\.sendByEmail/);
+  assert.match(workspace, /rentalFiles\.shareByWhatsApp/);
+  assert.doesNotMatch(workspace, /v-model\.trim="signer\.signerEmail"[^>]*required/);
+  assert.match(workspace, /v-model\.trim="link\.deliveryEmail"/);
+  assert.match(api, /JSON\.stringify\(\{ token, recipientEmail \}\)/);
+  assert.doesNotMatch(workspace, /verificationCodeThirtyMinutes/);
 });
 
 test('API errors are localized before they reach user-facing prompts', () => {

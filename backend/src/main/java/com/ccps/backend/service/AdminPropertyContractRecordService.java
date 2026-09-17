@@ -30,7 +30,9 @@ public class AdminPropertyContractRecordService {
     private static final Set<String> TYPES = Set.of(
             "A_HANDOVER_ASSISTANCE", "B_AGENCY", "C_MANAGEMENT", "D_RESALE",
             "E_LEASE_AMENDMENT", "F_RESALE_AMENDMENT", "L_LEASE", "O_LEASE_RESERVATION");
-    private static final Set<String> STATUSES = Set.of("draft", "active", "completed", "cancelled");
+    private static final Set<String> STATUSES = Set.of(
+            "draft", "active", "completed", "cancelled", "lost", "voided", "archived", "returned");
+    private static final Set<String> REASON_REQUIRED_STATUSES = Set.of("lost", "voided");
     /** Handover assistance is event-based: one lease may have several handovers. */
     private static final Set<String> MULTI_INSTANCE_TYPES = Set.of("A_HANDOVER_ASSISTANCE");
     private static final Set<String> MIME_TYPES = Set.of(
@@ -69,7 +71,7 @@ public class AdminPropertyContractRecordService {
             LocalDate validTo, String status, String notes, MultipartFile file) {
         requireProperty(ownerId, ownerUnitId);
         leaseId = validateLease(ownerUnitId, leaseId, contractType);
-        validate(contractType, contractNo, validFrom, validTo, status);
+        validate(contractType, contractNo, validFrom, validTo, status, notes);
         Row existing = MULTI_INSTANCE_TYPES.contains(contractType) ? null
                 : leaseId == null
                     ? mapper.findByPropertyAndType(ownerUnitId, contractType)
@@ -79,6 +81,7 @@ public class AdminPropertyContractRecordService {
             if (legacy != null && legacy.getLeaseId() == null) existing = legacy;
         }
         if (existing != null) {
+            String previousStatus = existing.getStatus();
             StoredFile replacement = store(ownerUnitId, file, true);
             Path previous = resolve(existing.getStorageKey());
             existing.setLeaseId(leaseId);
@@ -90,6 +93,9 @@ public class AdminPropertyContractRecordService {
                 throw error;
             }
             deleteQuietly(previous);
+            if (!previousStatus.equals(status)) {
+                mapper.insertStatusAudit(actorId, existing.getId(), previousStatus, status, blankToNull(notes));
+            }
             return response(mapper.find(ownerUnitId, existing.getId()));
         }
         StoredFile stored = store(ownerUnitId, file, true);
@@ -104,6 +110,7 @@ public class AdminPropertyContractRecordService {
             deleteQuietly(stored.path());
             throw error;
         }
+        mapper.insertStatusAudit(actorId, row.getId(), null, status, blankToNull(notes));
         return response(mapper.find(ownerUnitId, row.getId()));
     }
 
@@ -111,10 +118,19 @@ public class AdminPropertyContractRecordService {
     public AdminPropertyContractRecordResponse update(Long ownerId, Long ownerUnitId, Long id,
             Long leaseId, String contractType, String contractNo, LocalDate signedDate, LocalDate validFrom,
             LocalDate validTo, String status, String notes, MultipartFile file) {
+        return update(null, ownerId, ownerUnitId, id, leaseId, contractType, contractNo, signedDate,
+                validFrom, validTo, status, notes, file);
+    }
+
+    @Transactional
+    public AdminPropertyContractRecordResponse update(Long actorId, Long ownerId, Long ownerUnitId, Long id,
+            Long leaseId, String contractType, String contractNo, LocalDate signedDate, LocalDate validFrom,
+            LocalDate validTo, String status, String notes, MultipartFile file) {
         requireProperty(ownerId, ownerUnitId);
         Row current = requireContract(ownerUnitId, id);
+        String previousStatus = current.getStatus();
         leaseId = validateLease(ownerUnitId, leaseId, contractType);
-        validate(contractType, contractNo, validFrom, validTo, status);
+        validate(contractType, contractNo, validFrom, validTo, status, notes);
         StoredFile replacement = file == null || file.isEmpty() ? null : store(ownerUnitId, file, false);
         Path previous = resolve(current.getStorageKey());
         current.setLeaseId(leaseId);
@@ -126,13 +142,25 @@ public class AdminPropertyContractRecordService {
             throw error;
         }
         if (replacement != null) deleteQuietly(previous);
+        if (!previousStatus.equals(status)) {
+            mapper.insertStatusAudit(actorId, id, previousStatus, status, blankToNull(notes));
+        }
         return response(mapper.find(ownerUnitId, id));
     }
 
     @Transactional
     public void delete(Long ownerId, Long ownerUnitId, Long id) {
+        delete(null, ownerId, ownerUnitId, id);
+    }
+
+    @Transactional
+    public void delete(Long actorId, Long ownerId, Long ownerUnitId, Long id) {
         requireProperty(ownerId, ownerUnitId);
         Row row = requireContract(ownerUnitId, id);
+        if (!"draft".equals(row.getStatus())) {
+            throw bad("Only draft contracts can be deleted; use voided or archived status to retain history");
+        }
+        mapper.insertStatusAudit(actorId, id, "draft", "deleted", "删除草稿");
         if (mapper.delete(ownerUnitId, id) != 1) throw conflict("Contract was changed by another request");
         deleteQuietly(resolve(row.getStorageKey()));
     }
@@ -163,11 +191,14 @@ public class AdminPropertyContractRecordService {
         }
     }
 
-    private void validate(String type, String no, LocalDate from, LocalDate to, String status) {
+    private void validate(String type, String no, LocalDate from, LocalDate to, String status, String notes) {
         if ("L_LEASE".equals(type)) throw bad("Lease contracts are managed from the linked lease");
         if (!TYPES.contains(type)) throw bad("Unsupported contract type");
         if (no == null || no.isBlank() || no.trim().length() > 80) throw bad("Contract number is required");
         if (!STATUSES.contains(status)) throw bad("Unsupported contract status");
+        if (REASON_REQUIRED_STATUSES.contains(status) && (notes == null || notes.isBlank())) {
+            throw bad("Lost or voided contracts require a reason in notes");
+        }
         if (from != null && to != null && to.isBefore(from)) throw bad("Valid end date cannot be before start date");
     }
 

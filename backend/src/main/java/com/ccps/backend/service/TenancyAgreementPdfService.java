@@ -32,12 +32,13 @@ import com.lowagie.text.pdf.PdfStamper;
 import org.springframework.stereotype.Service;
 
 /**
- * Fills the customer supplied 22-page tenancy agreement PDF. The source PDF is
- * copied and overlaid; its wording, photos, page order and page size are kept.
+ * Fills the customer supplied tenancy agreement PDF. The first 19 agreement
+ * pages are preserved and property photo pages are appended dynamically, with
+ * up to six photos per page.
  */
 @Service
 public class TenancyAgreementPdfService {
-    public static final String TEMPLATE_RESOURCE = "/contract-templates/conlay-tenancy-agreement-template.pdf";
+    public static final String TEMPLATE_RESOURCE = "/contract-templates/flattened/conlay-tenancy-agreement-template.pdf";
     public static final String PDF_CONTENT_TYPE = "application/pdf";
     private static final float PAGE_WIDTH = 595.32f;
     private static final float PAGE_HEIGHT = 841.92f;
@@ -51,20 +52,15 @@ public class TenancyAgreementPdfService {
     private static final float COMPACT_INVENTORY_FONT_SIZE = 7.1f;
     private static final float MIN_FONT_SIZE = 6.2f;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMMM uuuu", Locale.ENGLISH);
-    private static final List<PhotoSlot> PHOTO_SLOTS = List.of(
-            new PhotoSlot(20, 18.4f, 545.5f, 260f, 195f),
-            new PhotoSlot(20, 304.2f, 546.1f, 261.6f, 196.2f),
-            new PhotoSlot(20, 11.4f, 315.56f, 263.4f, 197.55f),
-            new PhotoSlot(20, 308.4f, 316.36f, 259.2f, 194.4f),
-            new PhotoSlot(20, 15.6f, 90.095f, 261.6f, 196.2f),
-            new PhotoSlot(20, 308.4f, 90.183f, 259.8f, 194.85f),
-            new PhotoSlot(21, 12f, 535.9f, 279f, 209.2f),
-            new PhotoSlot(21, 307.8f, 537.6f, 276.6f, 207.4f),
-            new PhotoSlot(21, 11.4f, 306.2f, 279f, 209.2f),
-            new PhotoSlot(21, 306f, 307f, 278.4f, 208.8f),
-            new PhotoSlot(21, 10.8f, 79f, 279.6f, 209.7f),
-            new PhotoSlot(21, 306.8f, 77.5f, 277.6f, 208.2f),
-            new PhotoSlot(22, 12.6f, 533.6f, 282f, 211.5f));
+    private static final int AGREEMENT_PAGE_COUNT = 19;
+    private static final int PHOTOS_PER_PAGE = 6;
+    private static final List<PhotoSlot> PHOTO_PAGE_SLOTS = List.of(
+            new PhotoSlot(18.4f, 545.5f, 260f, 195f),
+            new PhotoSlot(304.2f, 546.1f, 261.6f, 196.2f),
+            new PhotoSlot(11.4f, 315.56f, 263.4f, 197.55f),
+            new PhotoSlot(308.4f, 316.36f, 259.2f, 194.4f),
+            new PhotoSlot(15.6f, 90.095f, 261.6f, 196.2f),
+            new PhotoSlot(308.4f, 90.183f, 259.8f, 194.85f));
 
     public byte[] generate(Map<String, String> fields) {
         return generate(fields, List.of(), null);
@@ -87,10 +83,12 @@ public class TenancyAgreementPdfService {
         try (InputStream source = TenancyAgreementPdfService.class.getResourceAsStream(TEMPLATE_RESOURCE);
                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             if (source == null) throw new IllegalStateException("Tenancy agreement PDF template is missing");
-            PdfReader reader = new PdfReader(source);
+            byte[] template = source.readAllBytes();
+            PdfReader reader = new PdfReader(template);
+            reader.selectPages("1-" + AGREEMENT_PAGE_COUNT);
             PdfStamper stamper = new PdfStamper(reader, output);
-            BaseFont latin = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
-            BaseFont cjk = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+            BaseFont latin = PdfFontResources.regular();
+            BaseFont cjk = latin;
             fillCover(stamper.getOverContent(1), latin, cjk, values);
             for (int page = 2; page <= reader.getNumberOfPages(); page++) {
                 fillHeader(stamper.getOverContent(page), latin, cjk, values);
@@ -109,13 +107,39 @@ public class TenancyAgreementPdfService {
                     fillHeader(stamper.getOverContent(page), latin, cjk, values);
                 }
             }
-            replacePropertyPhotos(stamper, propertyPhotos == null ? List.of() : propertyPhotos);
+            appendPropertyPhotoPages(stamper, latin, cjk, values,
+                    propertyPhotos == null ? List.of() : propertyPhotos);
             stamper.close();
             reader.close();
             return output.toByteArray();
         } catch (IOException | DocumentException exception) {
             throw new IllegalStateException("Unable to generate tenancy agreement PDF", exception);
         }
+    }
+
+    public void validateRequiredFields(Map<String, String> fields) {
+        Map<String, String> values = withStandardLeaseDefaults(fields);
+        Map<String, String> required = new LinkedHashMap<>();
+        required.put("leaseId", "租约关联"); required.put("caseNo", "租约编号"); required.put("agreementDate", "合约日期");
+        required.put("landlordName", "业主姓名"); required.put("landlordIdentity", "业主证件号");
+        required.put("landlordAddress", "业主通讯地址"); required.put("tenantName", "租客姓名");
+        required.put("tenantIdentity", "租客证件号"); required.put("tenantPhone", "租客联系电话");
+        required.put("tenantEmail", "租客邮箱"); required.put("tenantAddress", "租客通讯地址");
+        required.put("propertyAddress", "出租物业地址"); required.put("leaseStart", "租约开始日期");
+        required.put("leaseEnd", "租约结束日期"); required.put("monthlyRent", "月租");
+        required.put("paymentDay", "每月缴费日"); required.put("paymentMode", "付款方式");
+        required.put("advanceRental", "预付租金"); required.put("securityDeposit", "保证金");
+        required.put("utilityDeposit", "水电押金"); required.put("renewalOption", "续租条款");
+        required.put("specialConditions", "特别条件"); required.put("electricityMeter", "入住电表读数");
+        required.put("waterMeter", "入住水表读数"); required.put("handoverChecklistIds", "交接清单");
+        required.put("photoIds", "房产照片");
+        if (value(values, "paymentMode").matches("(?i).*(bank|transfer|转账|匯款|汇款).*")) {
+            required.put("bankName", "收款银行名称"); required.put("bankAccount", "收款银行账号");
+            required.put("bankBranch", "银行／分行地址");
+        }
+        List<String> missing = required.entrySet().stream()
+                .filter(entry -> value(values, entry.getKey()).isBlank()).map(Map.Entry::getValue).toList();
+        if (!missing.isEmpty()) throw new IllegalArgumentException("租赁合同资料不完整：" + String.join("、", missing));
     }
 
     private void replaceInventory(PdfStamper stamper, BaseFont latin, BaseFont cjk,
@@ -186,6 +210,10 @@ public class TenancyAgreementPdfService {
                 }
             }
         }
+        for (int unusedPage = page + 1; unusedPage <= 17; unusedPage++) {
+            text(stamper.getOverContent(unusedPage), latin, cjk,
+                    "无其他交接项目 / No additional handover items", 165, 610, 10.5f, 300);
+        }
     }
 
     private int inventoryCategoryRank(String category) {
@@ -249,34 +277,63 @@ public class TenancyAgreementPdfService {
             text(canvas, latin, cjk, Integer.toString(number++), 82, baseline, fontSize, 17);
             text(canvas, latin, cjk, item.itemName(), 108, baseline, fontSize, 245);
             text(canvas, latin, cjk, displayInventoryQuantity(item.quantity()), 375, baseline, fontSize, 42);
+            drawCheckMark(canvas, 436, baseline + 2);
             baseline -= rowHeight;
         }
+    }
+
+    private void drawCheckMark(PdfContentByte canvas, float x, float y) {
+        canvas.saveState();
+        canvas.setColorStroke(Color.BLACK);
+        canvas.setLineWidth(1.15f);
+        canvas.moveTo(x, y);
+        canvas.lineTo(x + 3.4f, y - 3.2f);
+        canvas.lineTo(x + 9.5f, y + 4.2f);
+        canvas.stroke();
+        canvas.restoreState();
     }
 
     static String displayInventoryQuantity(String quantity) {
         return quantity == null || quantity.isBlank() ? "1" : quantity.trim();
     }
 
-    private void replacePropertyPhotos(PdfStamper stamper, List<PropertyPhotoAsset> propertyPhotos)
-            throws IOException, DocumentException {
+    private void appendPropertyPhotoPages(PdfStamper stamper, BaseFont latin, BaseFont cjk,
+            Map<String, String> fields, List<PropertyPhotoAsset> propertyPhotos) throws IOException, DocumentException {
         List<PropertyPhotoAsset> ordered = propertyPhotos.stream()
                 .filter(photo -> photo != null && photo.path() != null && Files.isRegularFile(photo.path()))
                 .sorted((left, right) -> {
                     int cover = Boolean.compare(right.coverFlag(), left.coverFlag());
                     return cover != 0 ? cover : Integer.compare(left.sortOrder(), right.sortOrder());
                 })
-                .limit(PHOTO_SLOTS.size())
                 .toList();
-        for (int index = 0; index < PHOTO_SLOTS.size(); index++) {
-            PhotoSlot slot = PHOTO_SLOTS.get(index);
-            PdfContentByte canvas = stamper.getOverContent(slot.page());
-            cover(canvas, slot.x(), slot.y(), slot.width(), slot.height());
-            if (index >= ordered.size()) continue;
-            Image image = Image.getInstance(cropToSlot(ordered.get(index).path(), slot.width(), slot.height()));
-            image.setAbsolutePosition(slot.x(), slot.y());
-            image.scaleAbsolute(slot.width(), slot.height());
-            canvas.addImage(image);
+        int photoPageCount = (ordered.size() + PHOTOS_PER_PAGE - 1) / PHOTOS_PER_PAGE;
+        for (int pageIndex = 0; pageIndex < photoPageCount; pageIndex++) {
+            int pageNumber = AGREEMENT_PAGE_COUNT + pageIndex + 1;
+            stamper.insertPage(pageNumber, new com.lowagie.text.Rectangle(PAGE_WIDTH, PAGE_HEIGHT));
+            PdfContentByte canvas = stamper.getOverContent(pageNumber);
+            drawPhotoPageFrame(canvas);
+            fillHeader(canvas, latin, cjk, fields);
+            text(canvas, latin, cjk, Integer.toString(AGREEMENT_PAGE_COUNT + pageIndex), 512, 47, 8, 20);
+            text(canvas, latin, cjk, "Version: 20240729-KL", 443.5f, 36, 6.5f, 82);
+            for (int slotIndex = 0; slotIndex < PHOTO_PAGE_SLOTS.size(); slotIndex++) {
+                PhotoSlot slot = PHOTO_PAGE_SLOTS.get(slotIndex);
+                int photoIndex = pageIndex * PHOTOS_PER_PAGE + slotIndex;
+                if (photoIndex >= ordered.size()) continue;
+                Image image = Image.getInstance(cropToSlot(ordered.get(photoIndex).path(), slot.width(), slot.height()));
+                image.setAbsolutePosition(slot.x(), slot.y());
+                image.scaleAbsolute(slot.width(), slot.height());
+                canvas.addImage(image);
+            }
         }
+    }
+
+    private void drawPhotoPageFrame(PdfContentByte canvas) {
+        canvas.saveState();
+        canvas.setColorFill(new Color(128, 128, 128));
+        canvas.rectangle(129.62f, 758.52f, 452.144f, 2.16f);
+        canvas.rectangle(524.5f, 760.68f, 2.16f, 45.24f);
+        canvas.fill();
+        canvas.restoreState();
     }
 
     private byte[] cropToSlot(Path path, float targetWidth, float targetHeight) throws IOException {
@@ -721,5 +778,5 @@ public class TenancyAgreementPdfService {
 
     public record PropertyPhotoAsset(Path path, String mimeType, int sortOrder, boolean coverFlag) { }
     public record InventoryItem(String category, String itemName, String quantity) { }
-    private record PhotoSlot(int page, float x, float y, float width, float height) { }
+    private record PhotoSlot(float x, float y, float width, float height) { }
 }

@@ -77,7 +77,14 @@ public class OwnerPropertyCashflowService {
         String direction = "income".equals(row.getDirection()) ? "income" : "expense";
         return new CashflowItem(source + "-" + row.getId(), row.getId(), source, direction,
                 row.getCategory(), row.getDescription(), zero(row.getAmount()), row.getOccurredOn(), row.getStatus(),
-                balanceAfter);
+                balanceAfter, parseDocumentIds(row.getDocumentIds()));
+    }
+
+    private List<Long> parseDocumentIds(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        return java.util.Arrays.stream(value.split(",")).map(String::trim)
+                .filter(id -> id.matches("[0-9]+"))
+                .map(Long::valueOf).distinct().toList();
     }
 
     private BigDecimal zero(BigDecimal value) {

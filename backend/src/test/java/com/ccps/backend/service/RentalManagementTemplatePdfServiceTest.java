@@ -18,6 +18,7 @@ import com.lowagie.text.Document;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.pdf.parser.PdfTextExtractor;
 
 class RentalManagementTemplatePdfServiceTest {
     @TempDir Path tempDir;
@@ -32,6 +33,39 @@ class RentalManagementTemplatePdfServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("landlordIdentity")
                 .hasMessageContaining("bankAccountNo");
+    }
+
+    @Test
+    void acceptsAnyNonBlankOwnerAndBankDetailsBeforeGeneratingAnAttachment() {
+        RentalManagementTemplatePdfService service = new RentalManagementTemplatePdfService(tempDir.toString());
+
+        byte[] pdf = service.generate(
+                RentalManagementTemplatePdfService.TemplateType.PROPERTY_MANAGEMENT_AGREEMENT,
+                Map.ofEntries(Map.entry("landlordName", "1"), Map.entry("landlordIdentity", "1"),
+                        Map.entry("propertyAddress", "1"), Map.entry("agreementDate", "2026-08-08"),
+                        Map.entry("startDate", "2026-08-08"), Map.entry("endDate", "2027-08-07"),
+                        Map.entry("bankPayeeName", "1"), Map.entry("bankName", "1"),
+                        Map.entry("bankAddress", "1"), Map.entry("bankBranchCode", "1"),
+                        Map.entry("bankAccountNo", "1"), Map.entry("bankSwiftCode", "1"),
+                        Map.entry("ownerAddress", "1"), Map.entry("ownerEmail", "owner@example.com"),
+                        Map.entry("ownerPhone", "1")));
+
+        assertThat(pdf).isNotEmpty();
+    }
+
+    @Test
+    void terminationLetterDoesNotRequireAnOwnerEmailThatIsNotPrintedInThePdf() {
+        RentalManagementTemplatePdfService service = new RentalManagementTemplatePdfService(tempDir.toString());
+
+        service.generate(RentalManagementTemplatePdfService.TemplateType.TERMINATION_LETTER,
+                Map.ofEntries(Map.entry("agreementDate", "2026-08-19"), Map.entry("landlordName", "张业主"),
+                        Map.entry("landlordIdentity", "P1234567"), Map.entry("projectName", "海天公寓"),
+                        Map.entry("unitNo", "12楼1号"), Map.entry("authorizedAgentName", "代理人甲"),
+                        Map.entry("authorizedAgentIdentity", "A123456"),
+                        Map.entry("authorizedAgentPhone", "+60123456789"),
+                        Map.entry("authorizedAgentEmail", "agent@example.com"), Map.entry("bankName", "Maybank"),
+                        Map.entry("bankPayeeName", "张业主"), Map.entry("bankAccountNo", "123456789"),
+                        Map.entry("bankSwiftCode", "MBBEMYKL"), Map.entry("bankAddress", "Kuala Lumpur")));
     }
 
     @Test
@@ -98,8 +132,43 @@ class RentalManagementTemplatePdfServiceTest {
     }
 
     @Test
-    void generatesTheTwoPageOwnerTerminationLetterWithAllOwnerAndBankDetails() throws Exception {
+    void widensSavedAuthorizationEmailFieldSoTheAddressStaysReadable() throws Exception {
         RentalManagementTemplatePdfService service = new RentalManagementTemplatePdfService(tempDir.toString());
+        var initial = service.currentLayout(
+                RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION);
+        var narrowFields = initial.fields().stream()
+                .map(field -> "email-page-1".equals(field.id())
+                        ? new RentalManagementTemplatePdfService.TemplateFieldPosition(field.id(), field.fieldKey(),
+                                field.label(), field.page(), 463.5f, field.y(), 8f, 43f, field.maxLines(),
+                                field.lineHeight())
+                        : field)
+                .toList();
+        service.saveLayout(RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION,
+                new RentalManagementTemplatePdfService.TemplateLayout(initial.version(), initial.pages(),
+                        initial.pageSizes(), narrowFields));
+
+        var migrated = service.currentLayout(
+                RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION);
+        var email = migrated.fields().stream().filter(field -> "email-page-1".equals(field.id())).findFirst()
+                .orElseThrow();
+
+        assertThat(email.fontSize()).isGreaterThanOrEqualTo(8f);
+        assertThat(email.maxWidth()).isGreaterThanOrEqualTo(87f);
+    }
+
+    @Test
+    void generatesTheTwoPageTerminationLetterWithOwnerAndCompanySigningFields() throws Exception {
+        RentalManagementTemplatePdfService service = new RentalManagementTemplatePdfService(tempDir.toString());
+
+        assertThat(service.currentLayout(RentalManagementTemplatePdfService.TemplateType.TERMINATION_LETTER).fields())
+                .anySatisfy(field -> {
+                    assertThat(field.fieldKey()).isEqualTo("signature.company");
+                    assertThat(field.page()).isEqualTo(2);
+                    assertThat(field.x()).isEqualTo(54f);
+                    assertThat(field.y()).isEqualTo(139f);
+                    assertThat(field.maxWidth()).isEqualTo(165f);
+                    assertThat(field.lineHeight()).isEqualTo(32f);
+                });
 
         byte[] pdf = service.generate(
                 RentalManagementTemplatePdfService.TemplateType.TERMINATION_LETTER,
@@ -114,6 +183,8 @@ class RentalManagementTemplatePdfServiceTest {
 
         PdfReader reader = new PdfReader(pdf);
         assertThat(reader.getNumberOfPages()).isEqualTo(2);
+        String visibleText = new PdfTextExtractor(reader).getTextFromPage(1, true);
+        assertThat(visibleText).contains("19/08/2026").doesNotContain("2026-08-19");
         String page1Content = new String(reader.getPageContent(1), StandardCharsets.ISO_8859_1);
         String page2Content = new String(reader.getPageContent(2), StandardCharsets.ISO_8859_1);
         assertThat(page1Content)
@@ -153,6 +224,8 @@ class RentalManagementTemplatePdfServiceTest {
 
         PdfReader reader = new PdfReader(pdf);
         assertThat(reader.getNumberOfPages()).isEqualTo(1);
+        String visibleText = new PdfTextExtractor(reader).getTextFromPage(1, true);
+        assertThat(visibleText).contains("20/08/2026").doesNotContain("2026-08-20");
         String content = new String(reader.getPageContent(1), StandardCharsets.ISO_8859_1);
         assertThat(content).contains("1 0 0 1 128 758 Tm")
                 .contains("1 0 0 1 250 537 Tm")
@@ -371,7 +444,9 @@ class RentalManagementTemplatePdfServiceTest {
                         initial.pageSizes(), List.of(onlyOwner)));
 
         byte[] pdf = service.generate(RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION,
-                Map.of("landlordName", "Owner", "agreementDate", "2026-08-08"));
+                Map.of("projectName", "Project", "unitNo", "101", "landlordName", "Owner",
+                        "landlordIdentity", "OWNER-1", "ownerEmail", "owner@example.test",
+                        "agreementDate", "2026-08-08"));
 
         PdfReader reader = new PdfReader(pdf);
         String page1Content = new String(reader.getPageContent(1), StandardCharsets.ISO_8859_1);
@@ -382,7 +457,7 @@ class RentalManagementTemplatePdfServiceTest {
     }
 
     @Test
-    void acceptsANewTemplatePageCountAndKeepsDefaultFieldsOnValidPages() throws Exception {
+    void rejectsATemplateThatCannotContainAllRequiredPages() throws Exception {
         RentalManagementTemplatePdfService service = new RentalManagementTemplatePdfService(tempDir.toString());
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         Document document = new Document();
@@ -393,14 +468,10 @@ class RentalManagementTemplatePdfServiceTest {
         document.add(new Paragraph("Page 2"));
         document.close();
 
-        var version = service.replace(RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION,
-                new MockMultipartFile("file", "updated.pdf", "application/pdf", output.toByteArray()));
-        var layout = service.currentLayout(
-                RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION);
-
-        assertThat(version.pages()).isEqualTo(2);
-        assertThat(layout.pages()).isEqualTo(2);
-        assertThat(layout.fields()).allMatch(field -> field.page() >= 1 && field.page() <= 2);
-        assertThat(layout.fields()).anyMatch(field -> "owner-page-3".equals(field.id()) && field.page() == 2);
+        assertThatThrownBy(() -> service.replace(
+                RentalManagementTemplatePdfService.TemplateType.MANAGEMENT_AUTHORIZATION,
+                new MockMultipartFile("file", "updated.pdf", "application/pdf", output.toByteArray())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least 3 pages");
     }
 }

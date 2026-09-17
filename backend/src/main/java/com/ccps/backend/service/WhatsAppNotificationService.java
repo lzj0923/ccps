@@ -52,10 +52,10 @@ public class WhatsAppNotificationService {
         try {
             template = templates.templateFor(delivery.getStage());
         } catch (RuntimeException exception) {
-            failWithoutAttempt(delivery.getDeliveryId(), exception.getMessage());
+            failWithoutAttempt(delivery, exception.getMessage());
             return;
         }
-        if (mapper.claim(delivery.getDeliveryId()) != 1) return;
+        if (mapper.claim(delivery.getDeliveryId(), delivery.getDestination()) != 1) return;
 
         NewAttempt attempt = new NewAttempt();
         mapper.insertAttempt(delivery.getDeliveryId(), template.name(), template.language(), attempt);
@@ -96,9 +96,9 @@ public class WhatsAppNotificationService {
                 stageLabel(row.getStage()));
     }
 
-    private void failWithoutAttempt(Long deliveryId, String reason) {
-        if (mapper.claim(deliveryId) != 1) return;
-        mapper.markDeliveryFailed(deliveryId, "failed", safe(reason));
+    private void failWithoutAttempt(WhatsAppDeliveryRow delivery, String reason) {
+        if (mapper.claim(delivery.getDeliveryId(), delivery.getDestination()) != 1) return;
+        mapper.markDeliveryFailed(delivery.getDeliveryId(), "failed", safe(reason));
     }
 
     private String stageLabel(String stage) {

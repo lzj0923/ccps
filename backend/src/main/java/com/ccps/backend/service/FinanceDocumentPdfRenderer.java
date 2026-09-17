@@ -45,9 +45,9 @@ final class FinanceDocumentPdfRenderer {
         PdfWriter writer = PdfWriter.getInstance(document, output);
         document.open();
 
-        BaseFont latin = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
-        BaseFont latinBold = BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
-        BaseFont unicode = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+        BaseFont latin = PdfFontResources.regular();
+        BaseFont latinBold = PdfFontResources.bold();
+        BaseFont unicode = latin;
         Fonts fonts = new Fonts(
                 new Font(latinBold, 9f), new Font(latin, 6f), new Font(latinBold, 6.4f),
                 new Font(latin, 6.4f), new Font(unicode, 6.4f), new Font(latinBold, 5.8f),

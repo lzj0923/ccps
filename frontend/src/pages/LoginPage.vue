@@ -1,5 +1,5 @@
 <template>
-  <main class="login-page" :class="{ 'admin-login-page': isAdminPortal }">
+  <main class="login-page" :class="{ 'admin-login-page': isAdminPortal, 'owner-login-page': isOwnerPortal }">
     <section class="login-visual" :aria-label="$t('legacy.t_9a77c831d013')">
       <div class="login-visual-inner">
         <div class="login-brand"><img class="ccps-login-logo" src="/ccps-logo.png" :alt="$t('legacy.t_107b9d73136a')" /></div>
@@ -30,12 +30,12 @@
           <div v-if="isOwnerPortal" class="login-input phone-login-input" :class="{ focused: focusedField === 'username' }">
             <div class="phone-country-picker" @click.stop>
               <button type="button" class="phone-country-trigger" :aria-expanded="countryMenuOpen" aria-haspopup="listbox" @click="toggleCountryMenu">
-                <span>{{ selectedLoginCountry.label }}</span><b>{{ selectedLoginCountry.dialCode }}</b><i>⌄</i>
+                <span>{{ $regionName(selectedLoginCountry.code) }}</span><b>{{ selectedLoginCountry.dialCode }}</b><i>⌄</i>
               </button>
               <div v-if="countryMenuOpen" class="phone-country-menu" role="listbox" @click.stop>
                 <input ref="countrySearch" v-model.trim="countryQuery" type="search" :placeholder="countrySearchPlaceholder" autocomplete="off" @keydown.esc="countryMenuOpen = false" />
                 <button v-for="country in filteredLoginCountries" :key="country.code" type="button" class="phone-country-option" :class="{ selected: country.code === loginCountry }" role="option" :aria-selected="country.code === loginCountry" @click="selectLoginCountry(country)">
-                  <span>{{ country.label }}</span><b>{{ country.dialCode }}</b>
+                  <span>{{ $regionName(country.code) }}</span><b>{{ country.dialCode }}</b>
                 </button>
                 <span v-if="!filteredLoginCountries.length" class="phone-country-empty">{{ countryEmptyLabel }}</span>
               </div>
@@ -46,11 +46,10 @@
           <label for="login-password">{{ passwordLabel }}</label>
           <div class="login-input" :class="{ focused: focusedField === 'password' }"><span class="login-input-icon">●</span><input id="login-password" v-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" :placeholder="passwordPlaceholder" @focus="focusedField = 'password'" @blur="focusedField = ''" /><button type="button" class="password-toggle" @click="showPassword = !showPassword">{{ showPassword ? $t('login.hide') : $t('login.show') }}</button></div>
           <div class="login-options"><label class="remember-option"><input v-model="rememberMe" type="checkbox" /> <span>{{ rememberLabel }}</span></label><button type="button" class="forgot-link" @click="notice = forgotNotice">{{ forgotLabel }}</button></div>
-          <p v-if="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
+          <p v-if="errorMessage" class="login-error" role="alert">{{ $lt(errorMessage) }}</p>
           <button class="login-submit" type="submit" :disabled="submitting">{{ submitting ? submittingLabel : submitLabel }}<span>→</span></button>
         </form>
 
-        <p class="login-demo">{{ demoLabel }}：<strong>{{ demoUsername }}</strong><span> / </span><strong>{{ $t('legacy.t_7c4a8d09ca37') }}</strong></p>
         <p v-if="notice" class="login-notice">{{ notice }}</p>
         <p class="login-copyright">{{ $t('legacy.t_0734a82b1ce9') }} {{ workspaceLabel }}</p>
       </div>
@@ -62,6 +61,8 @@
 import '../admin-login.css';
 import { login } from '../services/propertyApi';
 import LanguageSwitcher from '../components/LanguageSwitcher.vue';
+import { resolveLoginErrorKey } from '../utils/loginErrors';
+import { loginWithIdentifierFallback, ownerLoginIdentifiers } from '../utils/ownerLoginIdentifiers';
 import { PHONE_COUNTRIES } from '../utils/tenantPhone';
 
 export default {
@@ -73,7 +74,7 @@ export default {
   },
   computed: {
     isAdminPortal() { return this.portal === 'admin'; }, isOwnerPortal() { return this.portal === 'owner'; },
-    filteredLoginCountries() { const query = this.countryQuery.toLowerCase(); return this.phoneCountries.filter(country => !query || `${country.label} ${country.code} ${country.dialCode}`.toLowerCase().includes(query)); },
+    filteredLoginCountries() { const query = this.countryQuery.toLowerCase(); return this.phoneCountries.filter(country => !query || `${this.$regionName(country.code)} ${country.label} ${country.code} ${country.dialCode}`.toLowerCase().includes(query)); },
     selectedLoginCountry() { return this.phoneCountries.find(country => country.code === this.loginCountry) || this.phoneCountries[0]; },
     portalTitle() { return this.isAdminPortal ? this.$t('login.adminSignIn') : this.portal === 'owner' ? this.$t('login.ownerSignIn') : this.$t('login.welcomeBack'); },
     portalSubtitle() { return this.isAdminPortal ? this.$t('login.signInToAdmin') : this.$t('login.ownerSubtitle'); },
@@ -81,30 +82,35 @@ export default {
     usernamePlaceholder() { return this.isOwnerPortal ? this.$t('login.ownerPhonePlaceholder') : this.$t('login.usernamePlaceholder'); }, passwordPlaceholder() { return this.$t('login.passwordPlaceholder'); },
     countrySearchPlaceholder() { return this.$t('login.searchCountry'); }, countryEmptyLabel() { return this.$t('login.noCountry'); },
     rememberLabel() { return this.$t('login.remember'); }, forgotLabel() { return this.$t('login.forgot'); }, forgotNotice() { return this.$t('login.forgotNotice'); },
-    submitLabel() { return this.$t('login.signIn'); }, submittingLabel() { return this.$t('login.signingIn'); },
-    demoLabel() { return this.$t('login.demo'); }, workspaceLabel() { return this.$t('login.secureWorkspace'); },
-    demoUsername() { return this.portal === 'owner' ? 'owner' : 'admin'; }
+    submitLabel() { return this.isAdminPortal ? this.$t('login.signIn') : this.$t('login.ownerSignIn'); }, submittingLabel() { return this.$t('login.signingIn'); },
+    workspaceLabel() { return this.$t('login.secureWorkspace'); }
   },
   methods: {
     toggleCountryMenu() { this.countryMenuOpen = !this.countryMenuOpen; if (this.countryMenuOpen) this.$nextTick(() => this.$refs.countrySearch?.focus()); },
     selectLoginCountry(country) { this.loginCountry = country.code; this.countryQuery = ''; this.countryMenuOpen = false; },
-    loginIdentifier() {
+    loginIdentifiers() {
       const raw = String(this.username || '').trim();
-      if (!this.isOwnerPortal || !raw || raw.includes('@')) return raw;
-      if (raw.startsWith('+')) return `+${raw.slice(1).replace(/\D/g, '')}`;
-      if (/^[\d\s().-]+$/.test(raw)) { const national = raw.replace(/\D/g, '').replace(/^0+/, ''); return national ? `${this.selectedLoginCountry.dialCode}${national}` : raw; }
-      return raw;
+      if (!this.isOwnerPortal) return [raw];
+      return ownerLoginIdentifiers(raw, this.selectedLoginCountry.dialCode);
+    },
+    loginIdentifier() {
+      return this.loginIdentifiers()[0] || '';
     },
     async submitLogin() {
       this.errorMessage = '';
       this.notice = '';
-      if (!this.username || !this.password) { this.errorMessage = this.$t('login.required'); return; }
+      if (!this.username) { this.errorMessage = this.$t('login.identifierRequired'); return; }
+      if (!this.password) { this.errorMessage = this.$t('login.passwordRequired'); return; }
       this.submitting = true;
       try {
-        const user = await login({ identifier: this.loginIdentifier(), password: this.password, rememberMe: this.rememberMe }, this.portal);
+        const user = await loginWithIdentifierFallback(login, {
+          identifiers: this.loginIdentifiers(),
+          password: this.password,
+          rememberMe: this.rememberMe
+        }, this.portal);
         this.$emit('login', user, this.portal);
       } catch (error) {
-        this.errorMessage = error.message || this.$t('login.failed');
+        this.errorMessage = this.$t(resolveLoginErrorKey(error));
       } finally { this.submitting = false; }
     }
   }

@@ -5,7 +5,7 @@
       <AppModal />
       <ToastMessage />
     </main>
-    <OwnerBottomNav />
+    <OwnerBottomNav v-if="nativeMode" />
   </div>
 </template>
 
@@ -15,9 +15,11 @@ import AppModal from '../../components/AppModal.vue';
 import ToastMessage from '../../components/ToastMessage.vue';
 import OwnerBottomNav from '../../components/OwnerBottomNav.vue';
 import { i18n } from '../../i18n';
+import { isNativeApp } from '../../nativeApp';
 
 export default {
   components: { OwnerPage, AppModal, ToastMessage, OwnerBottomNav },
+  data() { return { nativeMode: isNativeApp }; },
   computed: {
     localeRefreshKey() { return i18n.global.locale.value; }
   }

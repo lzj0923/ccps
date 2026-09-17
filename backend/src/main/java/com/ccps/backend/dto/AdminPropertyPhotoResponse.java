@@ -7,6 +7,7 @@ public record AdminPropertyPhotoResponse(
         Long ownerUnitId,
         Long leaseId,
         String rentalStage,
+        String versionMonth,
         Long documentId,
         String title,
         String category,

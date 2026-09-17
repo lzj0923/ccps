@@ -609,6 +609,28 @@ public interface AdminFinanceReviewMapper {
     @Update("UPDATE finance_records SET confirmation_status='confirmed',payment_status='paid',sync_status='pending',confirmed_by=#{reviewerId},confirmed_at=CURRENT_TIMESTAMP WHERE id=#{financeRecordId} AND record_type='reserve_refund' AND confirmation_status='pending'")
     int confirmReserveRefund(@Param("financeRecordId") Long financeRecordId,@Param("reviewerId") Long reviewerId);
 
+    @Update("UPDATE reserve_refund_transfers SET status=#{status} WHERE finance_record_id=#{financeRecordId}")
+    int updateReserveRefundTransferStatus(@Param("financeRecordId") Long financeRecordId,
+            @Param("status") String status);
+
+    @Update("""
+            UPDATE owner_remittance_batches b
+            JOIN owner_remittance_items touched ON touched.batch_id=b.id
+            JOIN owner_remittance_finance_links touched_link
+              ON touched_link.remittance_item_id=touched.id AND touched_link.finance_record_id=#{financeRecordId}
+            SET b.status=CASE
+              WHEN EXISTS (SELECT 1 FROM owner_remittance_items i
+                           JOIN owner_remittance_finance_links link ON link.remittance_item_id=i.id
+                           JOIN finance_records fr ON fr.id=link.finance_record_id
+                           WHERE i.batch_id=b.id AND fr.confirmation_status='rejected') THEN 'rejected'
+              WHEN NOT EXISTS (SELECT 1 FROM owner_remittance_items i
+                               LEFT JOIN owner_remittance_finance_links link ON link.remittance_item_id=i.id
+                               LEFT JOIN finance_records fr ON fr.id=link.finance_record_id
+                               WHERE i.batch_id=b.id AND (link.finance_record_id IS NULL OR fr.confirmation_status<>'confirmed')) THEN 'completed'
+              ELSE 'submitted' END
+            """)
+    int refreshOwnerRemittanceBatchStatus(@Param("financeRecordId") Long financeRecordId);
+
     @Update("UPDATE reserve_accounts SET current_balance=current_balance-#{amount} WHERE id=#{reserveAccountId}")
     int debitReserveBalance(@Param("reserveAccountId") Long reserveAccountId,@Param("amount") BigDecimal amount);
 
@@ -694,6 +716,53 @@ public interface AdminFinanceReviewMapper {
                     @Param("action") String action,
                     @Param("status") String status,
                     @Param("note") String note);
+
+    /** Append-only evidence for values which the existing reversal removes or replaces.
+     * Nested rows are serialized strings so the existing audit detail view can display them.
+     */
+    @Insert("""
+            INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data)
+            SELECT #{actorId}, 'finance_reopen_snapshot', 'finance_record', fr.id,
+              JSON_OBJECT(
+                'transactionNo',fr.transaction_no,'recordType',fr.record_type,
+                'unitId',fr.unit_id,'ownerId',fr.owner_id,'tenantId',fr.tenant_id,
+                'amount',fr.amount,'currency',fr.currency,
+                'transactionDate',fr.transaction_date,'receiptDate',fr.receipt_date,
+                'paymentMethod',fr.payment_method,'allocationNote',fr.allocation_note,
+                'confirmationStatus',fr.confirmation_status,'paymentStatus',fr.payment_status,
+                'confirmedBy',fr.confirmed_by,'confirmedAt',fr.confirmed_at,
+                'syncStatus',fr.sync_status,'syncBatchId',fr.sync_batch_id,
+                'createdBy',fr.created_by,'createdAt',fr.created_at,'updatedAt',fr.updated_at,
+                'reserveTransactions',CAST((
+                  SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(
+                    'id',rt.id,'reserveAccountId',rt.reserve_account_id,
+                    'financeRecordId',rt.finance_record_id,'maintenanceWorkOrderId',rt.maintenance_work_order_id,
+                    'transactionType',rt.transaction_type,'amount',rt.amount,
+                    'occurredAt',rt.occurred_at,'balanceAfter',rt.balance_after,
+                    'note',rt.note,'createdBy',rt.created_by,'createdAt',rt.created_at)),JSON_ARRAY())
+                  FROM reserve_transactions rt WHERE rt.finance_record_id=fr.id
+                ) AS CHAR),
+                'rentCredits',CAST((
+                  SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(
+                    'id',rc.id,'leaseId',rc.lease_id,'financeRecordId',rc.finance_record_id,
+                    'receivedAmount',rc.received_amount,'allocatedAmount',rc.allocated_amount,
+                    'remainingAmount',rc.remaining_amount,'status',rc.status,
+                    'createdBy',rc.created_by,'createdAt',rc.created_at,'updatedAt',rc.updated_at)),JSON_ARRAY())
+                  FROM lease_rent_credits rc WHERE rc.finance_record_id=fr.id
+                ) AS CHAR),
+                'rentCreditAllocations',CAST((
+                  SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(
+                    'id',a.id,'rentCreditId',a.rent_credit_id,'rentInvoiceId',a.rent_invoice_id,
+                    'amount',a.amount,'allocationType',a.allocation_type,
+                    'allocatedBy',a.allocated_by,'allocatedAt',a.allocated_at)),JSON_ARRAY())
+                  FROM lease_rent_credit_allocations a
+                  JOIN lease_rent_credits rc ON rc.id=a.rent_credit_id WHERE rc.finance_record_id=fr.id
+                ) AS CHAR)),
+              JSON_OBJECT('operation','reopen','note',#{note})
+            FROM finance_records fr WHERE fr.id=#{financeRecordId} AND fr.confirmation_status='confirmed'
+            """)
+    int insertFinanceReopenSnapshot(@Param("actorId") Long actorId,
+            @Param("financeRecordId") Long financeRecordId,@Param("note") String note);
 
     @Insert("INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,before_data,after_data) VALUES (#{actorId},'reopen_finance_record','finance_record',#{financeRecordId},JSON_OBJECT('confirmationStatus','confirmed'),JSON_OBJECT('confirmationStatus','pending','note',#{note}))")
     int insertReopenAudit(@Param("actorId") Long actorId,@Param("financeRecordId") Long financeRecordId,

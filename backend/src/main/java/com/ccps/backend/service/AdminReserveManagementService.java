@@ -138,6 +138,25 @@ public class AdminReserveManagementService {
                 + "-" + token();
         List<AdminRecordCreateResponse> responses = new ArrayList<>();
         for (AdminReserveBatchRefundRequest.Item item : request.items()) {
+            String paymentMethod = blank(item.paymentMethod()) ? request.paymentMethod() : item.paymentMethod().trim();
+            if (!PAYMENT_METHODS.contains(paymentMethod)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reserve refund payment method");
+            }
+            if (!"bank_transfer".equals(paymentMethod)) {
+                DirectTopupContext context = mapper.findDirectTopupContext(item.accountId());
+                if (context == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selected reserve account is unavailable");
+                }
+                String scheduleNote = scheduledRefundNote(request.note(), batchReference, 1, 1,
+                        request.paymentDate());
+                responses.add(createScheduledRefund(actorId, item.accountId(), context.getUnitId(),
+                        context.getOwnerId(), item.amount(), paymentMethod, scheduleNote, request.paymentDate()));
+                continue;
+            }
+            if (item.bankAccountId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Bank account is required for bank transfer refunds");
+            }
             RefundBankContext context = mapper.findRefundBankContext(item.accountId(), item.bankAccountId());
             if (context == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -155,8 +174,8 @@ public class AdminReserveManagementService {
                 LocalDate scheduledDate = request.paymentDate().plusDays(index - 1L);
                 String scheduleNote = scheduledRefundNote(request.note(), batchReference, index, installmentCount,
                         scheduledDate);
-                AdminRecordCreateResponse refund = createScheduledRefund(actorId, item.accountId(), context,
-                        principal, request.paymentMethod(), scheduleNote, scheduledDate);
+                AdminRecordCreateResponse refund = createScheduledRefund(actorId, item.accountId(), context.getUnitId(),
+                        context.getOwnerId(), principal, paymentMethod, scheduleNote, scheduledDate);
                 Long feeFinanceRecordId = createOverseasFee(actorId, context, batchReference, index,
                         installmentCount, scheduledDate);
                 BigDecimal fee = feeFinanceRecordId == null ? BigDecimal.ZERO : zero(context.getOverseasTransferFee());
@@ -180,7 +199,7 @@ public class AdminReserveManagementService {
     public List<AdminReserveReconciliationResponse> saveReconciliation(Long actorId,
             AdminReserveReconciliationRequest request) {
         LocalDate month = request.reconciliationMonth().withDayOfMonth(1);
-        BigDecimal systemBalance = zero(mapper.findPostedTotalBalance());
+        BigDecimal systemBalance = zero(mapper.findReceivedTotalBalance());
         BigDecimal difference = request.financeBalance().subtract(systemBalance);
         String status = request.confirmed() ? "confirmed" : "pending";
         String note = blank(request.note()) ? null : request.note().trim();
@@ -195,20 +214,20 @@ public class AdminReserveManagementService {
                 row.getNote(), row.getConfirmedByName(), row.getConfirmedAt());
     }
 
-    private AdminRecordCreateResponse createScheduledRefund(Long actorId, Long accountId, RefundBankContext context,
+    private AdminRecordCreateResponse createScheduledRefund(Long actorId, Long accountId, Long unitId, Long ownerId,
             BigDecimal amount, String paymentMethod, String note, LocalDate scheduledDate) {
         String transactionNo = "RRF-ADM-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + "-" + token();
         DirectTopupRecord refund = new DirectTopupRecord();
         refund.setTransactionNo(transactionNo);
-        refund.setUnitId(context.getUnitId());
-        refund.setOwnerId(context.getOwnerId());
+        refund.setUnitId(unitId);
+        refund.setOwnerId(ownerId);
         refund.setAmount(amount);
         refund.setPaymentDate(scheduledDate);
         refund.setPaymentMethod(paymentMethod);
         refund.setActorId(actorId);
         if (mapper.insertReserveRefundFinance(refund) != 1 || refund.getId() == null
-                || mapper.insertReserveRefundCashflow(refund.getId(), context.getUnitId(), context.getOwnerId(), note,
+                || mapper.insertReserveRefundCashflow(refund.getId(), unitId, ownerId, note,
                         scheduledDate) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve refund could not be created");
         }

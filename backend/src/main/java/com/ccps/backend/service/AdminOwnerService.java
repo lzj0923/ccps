@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.ccps.backend.dto.AdminOwnerResponse;
+import com.ccps.backend.dto.AdminOwnerStaffOption;
 import com.ccps.backend.dto.AdminOwnerCreateRequest;
 import com.ccps.backend.dto.AdminOwnerUpdateRequest;
 import com.ccps.backend.dto.AdminProjectOption;
@@ -33,6 +34,7 @@ import com.ccps.backend.dto.AdminPropertyContractRequest;
 import com.ccps.backend.dto.AdminPropertyContractResponse;
 import com.ccps.backend.mapper.AdminOwnerMapper;
 import com.ccps.backend.mapper.AdminOwnerMapper.OwnerPropertyRow;
+import com.ccps.backend.mapper.AdminOwnerMapper.OwnerStaffRow;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewOwner;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewProject;
 import com.ccps.backend.mapper.AdminOwnerMapper.NewOwnerUnit;
@@ -62,8 +64,10 @@ public class AdminOwnerService {
     @Transactional(readOnly = true)
     public List<AdminOwnerResponse> findOwners() {
         Map<Long, OwnerAccumulator> owners = new LinkedHashMap<>();
+        Map<Long, List<AdminOwnerStaffOption>> staffByOwner = staffByOwner(mapper.findOwnerStaffAssignments());
         for (OwnerPropertyRow row : mapper.findOwnersWithProperties()) {
-            OwnerAccumulator owner = owners.computeIfAbsent(row.getOwnerId(), ignored -> new OwnerAccumulator(row));
+            OwnerAccumulator owner = owners.computeIfAbsent(row.getOwnerId(), ignored ->
+                    new OwnerAccumulator(row, staffByOwner.getOrDefault(row.getOwnerId(), List.of())));
             if (row.getOwnerUnitId() != null) owner.properties.add(toProperty(row));
         }
         return owners.values().stream().map(OwnerAccumulator::response).toList();
@@ -75,7 +79,8 @@ public class AdminOwnerService {
         if (rows.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
         }
-        OwnerAccumulator owner = new OwnerAccumulator(rows.get(0));
+        OwnerAccumulator owner = new OwnerAccumulator(rows.get(0),
+                staffOptions(mapper.findOwnerStaffAssignmentsByOwnerId(ownerId)));
         rows.stream().filter(row -> row.getOwnerUnitId() != null).map(this::toProperty).forEach(owner.properties::add);
         return owner.response();
     }
@@ -83,6 +88,11 @@ public class AdminOwnerService {
     @Transactional(readOnly = true)
     public AdminOwnerSummaryResponse findSummary() {
         return mapper.findSummary();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminOwnerStaffOption> findStaffOptions() {
+        return mapper.findActiveAdminStaffOptions();
     }
 
     @Transactional(readOnly = true)
@@ -152,12 +162,14 @@ public class AdminOwnerService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to assign owner number");
         }
         owner.setOwnerNo(generatedOwnerNo);
+        synchronizeOwnerStaff(owner.getId(), request.responsibleUserIds());
 
         List<OwnerPropertyRow> rows = mapper.findOwnerById(owner.getId());
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Created owner could not be loaded");
         OwnerPropertyRow row = rows.get(0);
         return new AdminOwnerResponse(row.getOwnerId(), row.getOwnerNo(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
-                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getMailingAddress(), row.getOwnerStatus(), List.of());
+                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getMailingAddress(), row.getOwnerStatus(),
+                staffOptions(mapper.findOwnerStaffAssignmentsByOwnerId(owner.getId())), List.of());
     }
 
     @Transactional
@@ -174,11 +186,45 @@ public class AdminOwnerService {
         if (accountService != null) {
             accountService.synchronizeOwnerAccount(ownerId, mobile, request.fullName().trim(), request.status());
         }
+        synchronizeOwnerStaff(ownerId, request.responsibleUserIds());
         List<OwnerPropertyRow> rows = mapper.findOwnerById(ownerId);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Owner not found");
         OwnerPropertyRow row = rows.get(0);
         return new AdminOwnerResponse(row.getOwnerId(), row.getOwnerNo(), row.getFullName(), row.getIdentityNo(), row.getPhone(),
-                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getMailingAddress(), row.getOwnerStatus(), List.of());
+                row.getMobilePhone(), row.getHomePhone(), row.getOfficePhone(), row.getPassportNo(), row.getEmail(), row.getMailingAddress(), row.getOwnerStatus(),
+                staffOptions(mapper.findOwnerStaffAssignmentsByOwnerId(ownerId)), List.of());
+    }
+
+    private void synchronizeOwnerStaff(Long ownerId, List<Long> requestedIds) {
+        if (requestedIds == null) return;
+        List<Long> staffIds = requestedIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        Set<Long> activeAdminIds = mapper.findActiveAdminStaffOptions().stream()
+                .map(AdminOwnerStaffOption::id).collect(java.util.stream.Collectors.toSet());
+        if (!activeAdminIds.containsAll(staffIds)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Selected responsible staff account is unavailable");
+        }
+        mapper.deleteOwnerStaffAssignments(ownerId);
+        for (Long staffId : staffIds) {
+            if (mapper.insertOwnerStaffAssignment(ownerId, staffId) != 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Unable to assign responsible staff to owner");
+            }
+        }
+    }
+
+    private Map<Long, List<AdminOwnerStaffOption>> staffByOwner(List<OwnerStaffRow> rows) {
+        Map<Long, List<AdminOwnerStaffOption>> result = new LinkedHashMap<>();
+        for (OwnerStaffRow row : rows) {
+            result.computeIfAbsent(row.getOwnerId(), ignored -> new ArrayList<>())
+                    .add(new AdminOwnerStaffOption(row.getId(), row.getUsername(), row.getDisplayName()));
+        }
+        return result;
+    }
+
+    private List<AdminOwnerStaffOption> staffOptions(List<OwnerStaffRow> rows) {
+        return rows.stream().map(row -> new AdminOwnerStaffOption(
+                row.getId(), row.getUsername(), row.getDisplayName())).toList();
     }
 
     @Transactional(readOnly = true)
@@ -525,15 +571,18 @@ public class AdminOwnerService {
 
     private static final class OwnerAccumulator {
         private final OwnerPropertyRow owner;
+        private final List<AdminOwnerStaffOption> responsibleStaff;
         private final List<Property> properties = new ArrayList<>();
 
-        private OwnerAccumulator(OwnerPropertyRow owner) {
+        private OwnerAccumulator(OwnerPropertyRow owner, List<AdminOwnerStaffOption> responsibleStaff) {
             this.owner = owner;
+            this.responsibleStaff = responsibleStaff;
         }
 
         private AdminOwnerResponse response() {
             return new AdminOwnerResponse(owner.getOwnerId(), owner.getOwnerNo(), owner.getFullName(), owner.getIdentityNo(), owner.getPhone(),
-                    owner.getMobilePhone(), owner.getHomePhone(), owner.getOfficePhone(), owner.getPassportNo(), owner.getEmail(), owner.getMailingAddress(), owner.getOwnerStatus(), List.copyOf(properties));
+                    owner.getMobilePhone(), owner.getHomePhone(), owner.getOfficePhone(), owner.getPassportNo(), owner.getEmail(), owner.getMailingAddress(), owner.getOwnerStatus(),
+                    responsibleStaff, List.copyOf(properties));
         }
     }
 }

@@ -71,16 +71,31 @@ public class AdminContractTemplateController {
             List<TenancyAgreementPdfService.PropertyPhotoAsset> photos = List.of();
             List<TenancyAgreementPdfService.InventoryItem> inventory = List.of();
             String leaseId = request.fields().get("leaseId");
-            if (leaseId != null && !leaseId.isBlank()) {
-                try {
-                    Long id = Long.valueOf(leaseId);
-                    photos = propertyPhotoService.regularAssetsForLease(id).stream()
-                            .map(photo -> new TenancyAgreementPdfService.PropertyPhotoAsset(photo.path(), photo.mimeType(),
-                                    photo.sortOrder(), photo.coverFlag())).toList();
-                    inventory = handoverChecklistService.rowsForLease(id).stream()
-                            .map(row -> new TenancyAgreementPdfService.InventoryItem(row.getCategory(), row.getItemName(),
-                                    row.getDefaultQuantity())).toList();
-                } catch (NumberFormatException ignored) { }
+            try {
+                Long id = Long.valueOf(leaseId == null ? "" : leaseId.trim());
+                photos = propertyPhotoService.regularAssetsForLease(id, request.fields().get("photoIds")).stream()
+                        .map(photo -> new TenancyAgreementPdfService.PropertyPhotoAsset(photo.path(), photo.mimeType(),
+                                photo.sortOrder(), photo.coverFlag())).toList();
+                inventory = handoverChecklistService.rowsForLease(id, request.fields().get("handoverChecklistIds")).stream()
+                        .map(row -> new TenancyAgreementPdfService.InventoryItem(row.getCategory(), row.getItemName(),
+                                row.getDefaultQuantity())).toList();
+            } catch (NumberFormatException exception) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "租赁合同缺少有效的租约关联", exception);
+            }
+            try {
+                tenancyAgreementPdfService.validateRequiredFields(request.fields());
+            } catch (IllegalArgumentException exception) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+            }
+            if (inventory.isEmpty()) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "租赁合同请至少选择一项交接清单");
+            }
+            if (photos.isEmpty()) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "租赁合同请至少选择一张房产照片");
             }
             byte[] pdf = tenancyAgreementPdfService.generate(request.fields(), photos, inventory);
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
@@ -181,7 +196,7 @@ public class AdminContractTemplateController {
                 : fields.get("landlordName"));
         String project = safeFilePart(fields.get("projectName"));
         String unit = safeFilePart(fields.get("unitNo"));
-        String documentName = type == ContractTemplatePdfService.TemplateType.OTR ? "OTR出价函" : "租赁委任书";
+        String documentName = "租赁委托书";
         String reference = safeFilePart(fields.get("caseNo"));
         return java.util.stream.Stream.of(party, project, unit, documentName, reference)
                 .filter(part -> !part.isBlank()).reduce((left, right) -> left + "-" + right).orElse(documentName) + ".pdf";

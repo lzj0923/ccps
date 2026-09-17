@@ -22,11 +22,10 @@ class FinanceDocumentPdfRendererTest {
     void rendersInvoiceInEnglishReferenceFormatWithoutPageNumber() throws Exception {
         byte[] pdf = render(new FinanceDocumentPdfRenderer.Data(
                 true,
-                "HH CONSULTANTS (MM2H) SDN BHD",
-                "202301030304 (1542427-K)",
-                List.of("SO-32-05, MENARA 1, KL ECO CITY", "59200 KUALA LUMPUR"),
-                List.of("BIZCARE MANAGEMENT SDN BHD", "SO-32-05, MENARA 1, KL ECO CITY",
-                        "NO. 3, JALAN BANGSAR", "59200 KUALA LUMPUR", "TENANT NAME", "PROJECT / A-01"),
+                "CCPS PROPERTY MANAGEMENT SDN. BHD.",
+                "",
+                List.of(),
+                List.of("TENANT NAME", "PROJECT / A-01"),
                 "IV-TXN-20260825-001",
                 LocalDate.of(2026, 8, 25),
                 "RENTAL FOR 01/08/2026 TO 31/08/2026",
@@ -43,7 +42,7 @@ class FinanceDocumentPdfRendererTest {
                         "1. All cheques should be crossed and made payable to: CCPS PROPERTY MANAGEMENT SDN. BHD.",
                         "2. All payments shall be remitted to the following bank account:",
                         "Account Holder: CCPS PROPERTY MANAGEMENT SDN. BHD.",
-                        "Bank: ____________________    Account No.: ____________________")),
+                        "Bank: MAYBANK    Account No.: 1234567890")),
                 "invoice-reference.pdf");
 
         try (PdfReader reader = new PdfReader(new ByteArrayInputStream(pdf))) {

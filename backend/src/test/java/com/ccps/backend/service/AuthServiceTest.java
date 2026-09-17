@@ -7,15 +7,21 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.ccps.backend.dto.LoginRequest;
 import com.ccps.backend.dto.LoginResponse;
 import com.ccps.backend.mapper.UserMapper;
@@ -32,6 +38,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "auth-test"), User.class);
         service = new AuthService(userMapper);
     }
 
@@ -72,6 +79,24 @@ class AuthServiceTest {
     }
 
     @Test
+    void ownerCanLoginWithChinaInternationalPhoneNumber() {
+        User user = activeUser(12L, "18981712596", "OWNER");
+        ReflectionTestUtils.setField(user, "phone", "18981712596");
+        when(userMapper.selectOne(org.mockito.ArgumentMatchers.<Wrapper<User>>any())).thenReturn(user);
+        when(userMapper.findRoleCodes(12L)).thenReturn(List.of());
+
+        LoginResponse response = service.login(new LoginRequest("+8618981712596", "123456", false), "OWNER");
+
+        ArgumentCaptor<Wrapper<User>> wrapperCaptor = ArgumentCaptor.forClass(Wrapper.class);
+        verify(userMapper).selectOne(wrapperCaptor.capture());
+        LambdaQueryWrapper<User> wrapper = (LambdaQueryWrapper<User>) wrapperCaptor.getValue();
+        assertThat(wrapper.getSqlSegment()).contains("phone");
+        assertThat(wrapper.getParamNameValuePairs()).containsValue("+8618981712596");
+        assertThat(wrapper.getParamNameValuePairs()).containsValue("18981712596");
+        assertThat(response.username()).isEqualTo("18981712596");
+    }
+
+    @Test
     void roleRowsCannotOverrideTheAccountPortalType() {
         when(userMapper.selectOne(org.mockito.ArgumentMatchers.<Wrapper<User>>any()))
                 .thenReturn(activeUser(9L, "admin", "ADMIN"));
@@ -80,6 +105,33 @@ class AuthServiceTest {
         assertThatThrownBy(() -> service.login(new LoginRequest("admin", "123456", false), "OWNER"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403 FORBIDDEN");
+    }
+
+    @Test
+    void disabledAccountReportsThatTheAccountIsDisabled() {
+        User user = activeUser(10L, "disabled-owner", "OWNER");
+        ReflectionTestUtils.setField(user, "status", "inactive");
+        when(userMapper.selectOne(org.mockito.ArgumentMatchers.<Wrapper<User>>any())).thenReturn(user);
+
+        assertThatThrownBy(() -> service.login(new LoginRequest("disabled-owner", "123456", false), "OWNER"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+                    assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                    assertThat(failure.getReason()).isEqualTo("Account is disabled");
+                });
+    }
+
+    @Test
+    void wrongPortalReportsWhereTheAccountCanSignIn() {
+        when(userMapper.selectOne(org.mockito.ArgumentMatchers.<Wrapper<User>>any()))
+                .thenReturn(activeUser(11L, "admin", "ADMIN"));
+        when(userMapper.findRoleCodes(11L)).thenReturn(List.of("ADMIN"));
+
+        assertThatThrownBy(() -> service.login(new LoginRequest("admin", "123456", false), "OWNER"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+                    assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                    assertThat(failure.getReason())
+                            .isEqualTo("This account can only sign in through the administrator portal");
+                });
     }
 
     private User activeUser(Long id, String username, String accountType) {

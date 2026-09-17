@@ -1,19 +1,19 @@
 <template>
-  <header v-if="currentModule.shell === 'owner-shell'" class="owner-header">
+  <header v-if="currentModule.shell === 'owner-shell'" class="owner-header" :class="{ 'owner-mobile-entry-header': ['ownerProjects', 'myProperties', 'ownerRentalHub', 'ownerMore'].includes(currentId) }">
     <div class="owner-nav">
       <div class="owner-brand"><img class="ccps-header-logo" src="/ccps-logo.png" :alt="$t('legacy.t_107b9d73136a')" /></div>
       <nav>
         <template v-for="module in primaryOwnerModules" :key="module.id">
           <div v-if="module.id === 'ownerFinance'" ref="financeMenu" class="owner-finance-nav" :class="{ active: financeSectionActive, open: financeOpen }">
-            <button class="owner-finance-link" type="button" @click="openFinanceOverview">{{ ownerNavLabel(module) }}</button>
-            <button class="owner-finance-toggle" type="button" :aria-label="ownerNavLabel(module)" :aria-expanded="financeOpen" aria-haspopup="menu" @click.stop="toggleFinanceMenu"><ChevronDown :size="15" :stroke-width="2.2" aria-hidden="true" /></button>
+            <button class="owner-finance-link" type="button" @click="openFinanceOverview">{{ $lt(ownerNavLabel(module)) }}</button>
+            <button class="owner-finance-toggle" type="button" :aria-label="$t('ui.financeMenuToggle')" :aria-expanded="financeOpen" aria-haspopup="menu" @click.stop="toggleFinanceMenu"><ChevronDown :size="15" :stroke-width="2.2" aria-hidden="true" /></button>
             <div v-if="financeOpen" class="owner-finance-menu" role="menu">
               <button v-for="child in financeModules" :key="child.id" type="button" role="menuitem" :class="{ active: child.id === currentId }" @click.stop="selectFinanceModule(child.id)">
-                <span>{{ ownerNavLabel(child) }}</span>
+                <span>{{ $lt(ownerNavLabel(child)) }}</span>
               </button>
             </div>
           </div>
-          <button v-else :class="{ active: module.id === currentId, 'owner-notice-link': module.id === 'ownerNotice' }" @click="selectModule(module.id)">{{ ownerNavLabel(module) }}<b v-if="module.id === 'ownerNotice' && ownerNotificationUnreadCount > 0" class="owner-nav-badge">{{ ownerNotificationUnreadCount }}</b></button>
+          <button v-else :class="{ active: module.id === currentId, 'owner-notice-link': module.id === 'ownerNotice' }" @click="selectModule(module.id)">{{ $lt(ownerNavLabel(module)) }}<b v-if="module.id === 'ownerNotice' && ownerNotificationUnreadCount > 0" class="owner-nav-badge">{{ ownerNotificationUnreadCount }}</b></button>
         </template>
       </nav>
       <div class="owner-tools">
@@ -29,13 +29,13 @@
     </div>
     <section v-if="!(currentId === 'ownerPayment' && ownerPaymentSubview === 'upload')" class="owner-hero" :class="{ 'expense-owner-hero': currentId === 'ownerExpenses' }"><div><span v-if="currentId !== 'myProperties' && currentId !== 'ownerPayment' && currentId !== 'ownerFinance' && currentId !== 'rentIncome' && currentId !== 'ownerExpenses' && currentId !== 'ownerReserve' && currentId !== 'ownerNotice' && currentId !== 'ownerDocuments'">{{ currentModule.category }}</span><h1>{{ currentId === 'myProperties' ? $t('common.ownerProperties') : moduleText(currentModule, 'title') }}</h1><p v-if="currentId === 'myProperties'">— &nbsp;{{ $t('common.welcomeOwner') }}</p><p v-else-if="currentId === 'ownerPayment'" class="owner-breadcrumb">{{ $t('common.paymentBreadcrumb') }}</p><p v-else>{{ moduleText(currentModule, 'hint') }}</p></div></section>
   </header>
-  <header v-else class="topbar">
-    <div><h1>{{ moduleText(currentModule, 'title') }}</h1><p>{{ moduleText(currentModule, 'hint') }}</p></div>
+  <header v-else class="topbar" :class="{ 'dashboard-topbar': currentId === 'adminDashboard' }">
+    <div v-if="currentId !== 'adminDashboard'" class="topbar-copy"><span class="topbar-context">{{ adminSectionLabel }}</span><h1>{{ moduleText(currentModule, 'title') }}</h1><p>{{ moduleText(currentModule, 'hint') }}</p></div>
     <div class="top-actions">
       <label class="global-search"><Search class="top-action-icon" :size="16" :stroke-width="2" aria-hidden="true" /><input v-model="globalSearch" @input="showToast($t('common.searchApplied'))" :placeholder="$t('common.searchPlaceholder')"></label>
       <LanguageSwitcher />
-      <button class="date-btn" @click="openDatePanel"><CalendarDays :size="16" :stroke-width="1.9" aria-hidden="true" /><span>{{ dateRange }}</span></button>
-      <button class="icon-btn" :title="$t('common.notifications')" @click="openAlertPanel"><Bell :size="18" :stroke-width="2" aria-hidden="true" /><b>{{ alertItems.length }}</b></button>
+      <button class="date-btn" type="button" aria-haspopup="dialog" @click="openDatePanel"><CalendarDays :size="16" :stroke-width="1.9" aria-hidden="true" /><span>{{ dateRange }}</span></button>
+      <button class="icon-btn" type="button" :title="$t('common.notifications')" aria-haspopup="dialog" @click="openAlertPanel"><Bell :size="18" :stroke-width="2" aria-hidden="true" /><b v-if="adminAlertCount">{{ adminAlertCount > 99 ? '99+' : adminAlertCount }}</b></button>
       <div ref="accountMenu" class="admin-account">
         <button class="user-btn admin-account-trigger" type="button" :aria-expanded="accountOpen" aria-haspopup="menu" @click.stop="accountOpen = !accountOpen">
           <span>{{ adminInitial }}</span><strong>{{ adminDisplayName }}</strong><ChevronDown :size="14" :class="{ rotated: accountOpen }" aria-hidden="true" />
@@ -65,24 +65,31 @@ export default {
   },
   computed: {
     financeModules() { return FINANCE_MODULE_IDS.map(id => this.ownerModules.find(module => module.id === id)).filter(Boolean); },
-    primaryOwnerModules() { return this.ownerModules.filter(module => !FINANCE_MODULE_IDS.includes(module.id)); },
+    primaryOwnerModules() { return this.ownerModules.filter(module => !FINANCE_MODULE_IDS.includes(module.id) && !module.mobileOnly); },
     financeSectionActive() { return this.currentId === 'ownerFinance' || FINANCE_MODULE_IDS.includes(this.currentId); },
     ownerNotificationUnreadCount() { return Number(this.page.ownerNotificationUnreadCount || 0); },
-    adminDisplayName() { return this.page.currentUser?.displayName || this.page.currentUser?.username || '管理员'; },
+    adminAlertCount() { return Number(this.page.adminAlertCount || 0); },
+    adminSectionLabel() {
+      if (this.adminPrimaryModules.some(module => module.id === this.currentId)) return this.$t('navigation.overview');
+      const group = this.adminNavGroups.find(item => item.modules.some(module => module.id === this.currentId));
+      return group?.labelKey && this.$te(group.labelKey) ? this.$t(group.labelKey) : this.$t('navigation.overview');
+    },
+    adminDisplayName() { return this.page.currentUser?.displayName || this.page.currentUser?.username || this.$lt('管理员'); },
     adminInitial() { return String(this.adminDisplayName).trim().slice(0, 1).toUpperCase() || '管'; },
-    adminRoleLabel() { return ADMIN_STAFF_ROLES[adminStaffRole(this.page.currentUser)] || '后台管理员'; }
+    adminRoleLabel() { return this.$lt(ADMIN_STAFF_ROLES[adminStaffRole(this.page.currentUser)] || '后台管理员'); }
   },
   mounted() {
     document.addEventListener('click', this.closeAccountMenu);
     document.addEventListener('keydown', this.handleAccountKeydown);
     if (this.currentModule?.shell === 'owner-shell') this.loadOwnerNotificationCount();
+    else this.refreshAdminAlerts();
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeAccountMenu);
     document.removeEventListener('keydown', this.handleAccountKeydown);
   },
   methods: {
-    moduleText(module, field) { const key = `modules.${module.id}.${field}`; return this.$te(key) ? this.$t(key) : module[field]; },
+    moduleText(module, field) { const key = `modules.${module.id}.${field}`; const translated = this.$te(key) ? this.$t(key) : ''; return translated || this.$lt(module[field]); },
     ownerNavLabel(module) { return this.moduleText(module, 'name'); },
     closeAccountMenu(event) {
       if (!event || !this.$refs.accountMenu?.contains(event.target)) this.accountOpen = false;

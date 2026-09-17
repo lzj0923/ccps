@@ -11,7 +11,7 @@
     <div class="action-grid">
       <article class="action-card create-card">
         <div class="card-heading"><span class="card-icon"><Archive :size="23" /></span><div><h2>{{ $t('backup.createTitle') }}</h2><p>{{ $t('backup.createHint') }}</p></div></div>
-        <div class="scope-row"><Database :size="18" /><span>MySQL</span><FolderArchive :size="18" /><span>uploads/</span></div>
+        <div class="scope-row"><Database :size="18" /><span>{{ $t('legacy.t_deaa0c393a66') }}</span><FolderArchive :size="18" /><span>{{ $t('legacy.t_7d04ff9d7ba5') }}</span></div>
         <button class="primary-button" type="button" :disabled="creating || restoring" @click="createBackup"><LoaderCircle v-if="creating" class="spin" :size="19" /><Download v-else :size="19" />{{ creating ? $t('backup.creating') : $t('backup.create') }}</button>
       </article>
 

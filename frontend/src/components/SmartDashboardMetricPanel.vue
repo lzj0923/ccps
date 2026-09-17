@@ -20,7 +20,7 @@ export default {
     number: String,
     title: String,
     subtitle: String,
-    icon: Object,
+    icon: { type: [Object, Function], required: true },
     rows: { type: Array, default: () => [] },
     valueKey: String,
     unit: { type: String, default: '' },

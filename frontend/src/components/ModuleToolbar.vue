@@ -1,26 +1,32 @@
 <template>
   <section class="toolbar" :class="{ 'owner-toolbar': currentModule.shell === 'owner-shell' }">
-    <label class="search-box"><span class="search-mark">⌕</span><input v-model="moduleSearch" :placeholder="toolbarSearchHint"></label>
-    <select v-if="currentId === 'adminMaintenance'" v-model="page.adminMaintenanceDistrictFilter" class="maintenance-toolbar-district" aria-label="行政区筛选">
-      <option value="">全部行政区</option>
-      <option value="kuala_lumpur">吉隆坡</option>
-      <option value="johor">新山</option>
-      <option value="melaka">马六甲</option>
-      <option value="other">其他</option>
-    </select>
-    <select v-model="projectFilter">
-      <option value="全部建案">{{ $t('ui.allProjects') }}</option>
-      <option v-for="(project, index) in projectOptions" :key="projectOptionKey(project, index)" :value="project">{{ optionLabel(project) }}</option>
-    </select>
-    <select v-if="showStatusFilter" v-model="statusFilter"><option v-for="status in statusOptions" :key="status" :value="status">{{ optionLabel(status) }}</option></select>
-    <button v-if="canManageCurrentAdminModule" class="primary-btn" @click="triggerPrimaryAction">{{ toolbarPrimaryAction }}</button><button v-if="canManageCurrentAdminModule && showBuildingPropertyAction" class="primary-btn muted" @click="triggerBuildingPropertyAction">{{ $t('building.addPreHandoverProperty') }}</button><button v-if="canManageCurrentAdminModule && showSecondaryAction" class="primary-btn muted" @click="triggerSecondaryAction">{{ toolbarSecondaryAction }}</button><button v-if="canManageCurrentAdminModule && showReserveRefundAction" class="primary-btn muted" @click="triggerReserveRefundAction">{{ $t('ui.ownerReserveRefund') }}</button><button class="ghost-btn" @click="exportCsv">{{ $t('ui.export') }}</button>
+    <div class="toolbar-query">
+      <label class="search-box"><Search :size="16" :stroke-width="2" aria-hidden="true" /><input v-model="moduleSearch" :placeholder="toolbarSearchHint"></label>
+      <select v-if="currentId === 'adminMaintenance'" v-model="page.adminMaintenanceDistrictFilter" class="maintenance-toolbar-district" :aria-label="$t('ui.allDistricts')">
+        <option value="">{{ $t('ui.allDistricts') }}</option>
+        <option value="kuala_lumpur">{{ $t('ui.kualaLumpur') }}</option>
+        <option value="johor">{{ $t('ui.johorBahru') }}</option>
+        <option value="melaka">{{ $t('ui.melaka') }}</option>
+        <option value="other">{{ $t('ui.otherDistricts') }}</option>
+      </select>
+      <select v-model="projectFilter" :aria-label="$t('ui.allProjects')">
+        <option value="全部建案">{{ $t('ui.allProjects') }}</option>
+        <option v-for="(project, index) in projectOptions" :key="projectOptionKey(project, index)" :value="project">{{ $lt(optionLabel(project)) }}</option>
+      </select>
+      <select v-if="showStatusFilter" v-model="statusFilter" :aria-label="$t('ui.allStatus')"><option v-for="status in statusOptions" :key="status" :value="status">{{ $lt(optionLabel(status)) }}</option></select>
+    </div>
+    <div class="toolbar-actions">
+      <button v-if="showMonthlyCashflowAction" type="button" class="primary-btn muted" @click="triggerMonthlyCashflowAction">{{ $t('finance.monthlyCashflow') }}</button><button v-if="canManageCurrentAdminModule" type="button" class="primary-btn" @click="triggerPrimaryAction">{{ toolbarPrimaryAction }}</button><button v-if="canManageCurrentAdminModule && showBuildingPropertyAction" type="button" class="primary-btn muted" @click="triggerBuildingPropertyAction">{{ $t('building.addPreHandoverProperty') }}</button><button v-if="canManageCurrentAdminModule && showSecondaryAction" type="button" class="primary-btn muted" @click="triggerSecondaryAction">{{ toolbarSecondaryAction }}</button><button v-if="canManageCurrentAdminModule && showReserveRefundAction" type="button" class="primary-btn muted" @click="triggerReserveRefundAction">{{ $t('ui.ownerReserveRefund') }}</button><button type="button" class="ghost-btn" @click="exportCsv">{{ $t('ui.export') }}</button>
+    </div>
   </section>
 </template>
 
 <script>
 import pageBridge from '../pageBridge';
+import { Search } from '@lucide/vue';
 export default {
   mixins: [pageBridge],
+  components: { Search },
   computed: {
     embeddedAccounts() { return this.currentId === 'adminOwners' && this.page.adminOwnerWorkspaceTab === 'accounts'; },
     toolbarSearchHint() { if (this.embeddedAccounts) return this.$t('ui.searchAccounts'); if (this.currentId === 'adminOwners') return this.$t('ui.searchOwners'); if (this.currentId === 'adminProperties') return this.$t('properties.searchProperties'); if (this.currentId === 'adminAlerts') return this.$t('ui.searchReminders'); if (this.currentId === 'adminFinance') return this.$t('finance.search'); return this.currentModule.searchHint; },
@@ -29,6 +35,7 @@ export default {
     showSecondaryAction() { return Boolean(String(this.toolbarSecondaryAction || '').trim()) && !['adminOwners', 'adminProperties'].includes(this.currentId) && !(this.currentId === 'adminFinance' && this.page.adminFinanceViewMode === 'history'); },
     showBuildingPropertyAction() { return this.currentId === 'adminData'; },
     showReserveRefundAction() { return this.currentId === 'adminReserve'; },
+    showMonthlyCashflowAction() { return this.currentId === 'adminMaintenance'; },
     showStatusFilter() { return !(this.currentId === 'adminFinance' && this.page.adminFinanceViewMode !== 'history' && this.page.adminFinanceMode !== 'rent'); },
     projectOptions() {
       if (this.embeddedAccounts) return ['全部帳號'];
@@ -66,6 +73,7 @@ export default {
   },
   methods: {
     triggerBuildingPropertyAction() { this.page.adminBuildingPropertyCreateNonce += 1; },
+    triggerMonthlyCashflowAction() { this.page.adminMaintenanceMonthlyCashflowNonce += 1; },
     projectOptionKey(project, index) {
       if (!project || typeof project !== 'object') return project;
       return project.id ?? project.projectId ?? project.value ?? project.name ?? project.projectName ?? index;
@@ -96,7 +104,7 @@ export default {
         '出租中': 'properties.rented',
         '未啟用出租': 'properties.notForRent'
       }[value];
-      return key ? this.$t(key.includes('.') ? key : `ui.${key}`) : value;
+      return key ? this.$t(key.includes('.') ? key : `ui.${key}`) : this.$lt(value);
     }
   }
 };

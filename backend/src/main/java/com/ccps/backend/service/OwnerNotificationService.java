@@ -118,18 +118,11 @@ public class OwnerNotificationService {
         String unit = row.getUnitNo();
         String city = row.getCity();
         if (unit == null || project == null) {
-            for (UnitReference reference : units) {
-                String referenceUnit = Objects.toString(reference.getUnitNo(), "").toLowerCase(Locale.ROOT);
-                String shortUnit = referenceUnit.contains("-")
-                        ? referenceUnit.substring(referenceUnit.indexOf('-') + 1)
-                        : referenceUnit;
-                if ((!referenceUnit.isBlank() && text.contains(referenceUnit))
-                        || (!shortUnit.isBlank() && text.contains(shortUnit))) {
-                    project = firstNonBlank(project, reference.getProjectName());
-                    unit = firstNonBlank(unit, reference.getUnitNo());
-                    city = firstNonBlank(city, reference.getCity());
-                    break;
-                }
+            UnitReference reference = inferReference(text, units, project, unit);
+            if (reference != null) {
+                project = firstNonBlank(project, reference.getProjectName());
+                unit = firstNonBlank(unit, reference.getUnitNo());
+                city = firstNonBlank(city, reference.getCity());
             }
         }
         String body = Objects.toString(row.getBody(), "");
@@ -138,6 +131,30 @@ public class OwnerNotificationService {
                 row.getId(), category, row.getTitle(), body, priority(row.getPriority()),
                 row.getStatus(), row.getCreatedAt(), project, unit, city,
                 number(row), null, null, detail, body);
+    }
+
+    private UnitReference inferReference(String text, List<UnitReference> units, String project, String unit) {
+        List<UnitReference> candidates = units.stream()
+                .filter(ref -> project == null || project.equalsIgnoreCase(ref.getProjectName()))
+                .filter(ref -> unit == null || unit.equalsIgnoreCase(ref.getUnitNo()))
+                .filter(ref -> {
+                    String full = Objects.toString(ref.getUnitNo(), "").toLowerCase(Locale.ROOT);
+                    String shortened = full.contains("-") ? full.substring(full.indexOf('-') + 1) : full;
+                    return containsUnit(text, full) || containsUnit(text, shortened);
+                }).toList();
+        List<UnitReference> named = candidates.stream().filter(ref -> {
+            String name = Objects.toString(ref.getProjectName(), "").toLowerCase(Locale.ROOT);
+            return !name.isBlank() && text.contains(name);
+        }).toList();
+        if (named.size() == 1) return named.get(0);
+        // Legacy notices may omit project names; infer only when the unit is unambiguous.
+        return named.isEmpty() && candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    private boolean containsUnit(String text, String unit) {
+        return !unit.isBlank() && java.util.regex.Pattern.compile(
+                "(?<![a-z0-9.\\-])" + java.util.regex.Pattern.quote(unit) + "(?![a-z0-9.\\-])")
+                .matcher(text).find();
     }
 
     private String categoryOf(String relatedType, String text) {

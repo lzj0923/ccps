@@ -1,23 +1,24 @@
 <template>
   <aside v-if="currentModule.shell === 'admin-shell'" class="sidebar">
-    <div class="brand"><div class="crest" :aria-label="$t('ui.brandName')">{{ $t('ui.brandMark') }}</div><div class="brand-copy"><strong>{{ $t('legacy.t_c6a41f9e64a4') }}</strong><span>{{ $t('login.adminConsole') }}</span></div></div>
+    <!-- eslint-disable-next-line @intlify/vue-i18n/no-raw-text -- brand marks are locale-independent -->
+    <div class="brand"><div class="crest" :aria-label="$t('ui.brandName')">CC</div><div class="brand-copy"><strong>{{ $t('legacy.t_c6a41f9e64a4') }}</strong><span>{{ $t('login.adminConsole') }}</span></div></div>
     <nav class="nav" :aria-label="$t('login.adminConsole')">
       <div class="nav-primary-items">
-        <button v-for="module in adminPrimaryModules" :key="module.id" type="button" :title="moduleLabel(module)" :class="{ active: module.id === currentId }" @click="selectModule(module.id)">
-          <span class="ico" aria-hidden="true"><component :is="sidebarIcon(module.id)" :size="19" :stroke-width="1.9" /></span><span>{{ moduleLabel(module) }}</span>
+        <button v-for="module in adminPrimaryModules" :key="module.id" type="button" :title="moduleLabel(module)" :class="{ active: module.id === currentId }" :aria-current="module.id === currentId ? 'page' : undefined" @click="selectModule(module.id)">
+          <span class="ico" aria-hidden="true"><component :is="sidebarIcon(module.id)" :size="19" :stroke-width="1.9" /></span><span>{{ $lt(moduleLabel(module)) }}</span>
         </button>
       </div>
       <section v-for="group in adminNavGroups" :key="group.id" class="nav-group" :class="{ 'has-active': group.id === currentGroupId }" :aria-labelledby="`admin-nav-group-label-${group.id}`">
         <button :id="`admin-nav-group-label-${group.id}`" class="nav-group-heading" type="button" :aria-expanded="isGroupExpanded(group)" :aria-controls="`admin-nav-group-${group.id}`" @click="toggleGroup(group)">
           <span class="nav-group-title">
             <span class="nav-group-icon" aria-hidden="true"><component :is="groupIcon(group.id)" :size="14" :stroke-width="2" /></span>
-            <span>{{ groupLabel(group) }}</span>
+            <span>{{ $lt(groupLabel(group)) }}</span>
           </span>
           <span class="nav-group-meta"><span class="nav-group-count">{{ group.modules.length }}</span><ChevronDown class="nav-group-chevron" :class="{ expanded: isGroupExpanded(group) }" :size="15" :stroke-width="2" aria-hidden="true" /></span>
         </button>
         <div v-show="isGroupExpanded(group)" :id="`admin-nav-group-${group.id}`" class="nav-group-items">
-          <button v-for="module in group.modules" :key="module.id" type="button" :title="moduleLabel(module)" :class="{ active: module.id === currentId }" @click="selectModule(module.id)">
-            <span class="ico" aria-hidden="true"><component :is="sidebarIcon(module.id)" :size="19" :stroke-width="1.9" /></span><span>{{ moduleLabel(module) }}</span>
+          <button v-for="module in group.modules" :key="module.id" type="button" :title="moduleLabel(module)" :class="{ active: module.id === currentId }" :aria-current="module.id === currentId ? 'page' : undefined" @click="selectModule(module.id)">
+            <span class="ico" aria-hidden="true"><component :is="sidebarIcon(module.id)" :size="19" :stroke-width="1.9" /></span><span>{{ $lt(moduleLabel(module)) }}</span>
           </button>
         </div>
       </section>
@@ -61,6 +62,7 @@ const groupIcons = {
 };
 
 export default {
+  components: { ChevronDown },
   mixins: [pageBridge],
   data() { return { expandedGroupIds: [] }; },
   computed: {

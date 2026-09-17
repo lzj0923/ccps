@@ -3,11 +3,11 @@
     <div class="admin-finance-navigation">
       <nav class="admin-finance-type-tabs" :aria-label="$t('legacy.t_05f0d1143af2')">
         <button type="button" :class="{ active: financeType === 'rent' }" :aria-pressed="financeType === 'rent'" @click="switchFinanceType('rent')"><span>{{ $t('legacy.t_5d00753a306a') }}</span><b>{{ $t('legacy.t_5f3d34a1947f') }}</b><small>{{ $t('legacy.t_81a0964fde12') }}</small></button>
-        <button type="button" :class="{ active: financeType === 'tenant_deposit' }" :aria-pressed="financeType === 'tenant_deposit'" @click="switchFinanceType('tenant_deposit')"><span>押</span><b>{{ $t('finance.tenantDepositTab') }}</b><small>{{ $t('finance.tenantDepositTabHint') }}</small></button>
-        <button type="button" :class="{ active: financeType === 'expense' }" :aria-pressed="financeType === 'expense'" @click="switchFinanceType('expense')"><span>租</span><b>租客费用</b><small>租客应承担费用</small></button>
-        <button type="button" :class="{ active: financeType === 'cashflow_maintenance' }" :aria-pressed="financeType === 'cashflow_maintenance'" @click="switchFinanceType('cashflow_maintenance')"><span>维</span><b>收支与维修</b><small>收支记录及维修付款</small></button>
+        <button type="button" :class="{ active: financeType === 'tenant_deposit' }" :aria-pressed="financeType === 'tenant_deposit'" @click="switchFinanceType('tenant_deposit')"><span>{{ $t('legacy.t_a59b01a704e2') }}</span><b>{{ $t('finance.tenantDepositTab') }}</b><small>{{ $t('finance.tenantDepositTabHint') }}</small></button>
+        <button type="button" :class="{ active: financeType === 'expense' }" :aria-pressed="financeType === 'expense'" @click="switchFinanceType('expense')"><span>{{ $t('legacy.t_5d00753a306a') }}</span><b>{{ $t('legacy.t_e66d37c7aa36') }}</b><small>{{ $t('legacy.t_e328a16e9f53') }}</small></button>
+        <button type="button" :class="{ active: financeType === 'cashflow_maintenance' }" :aria-pressed="financeType === 'cashflow_maintenance'" @click="switchFinanceType('cashflow_maintenance')"><span>{{ $t('legacy.t_818c5462da65') }}</span><b>{{ $t('legacy.t_9a5646f24644') }}</b><small>{{ $t('legacy.t_1137b63de085') }}</small></button>
         <button type="button" :class="{ active: financeType === 'reserve' }" :aria-pressed="financeType === 'reserve'" @click="switchFinanceType('reserve')"><span>{{ $t('legacy.t_aab9b3921100') }}</span><b>{{ $t('legacy.t_34aa642a0856') }}</b><small>{{ $t('legacy.t_2ab4575a1aac') }}</small></button>
-        <button type="button" :class="{ active: financeType === 'reserve_refund' }" :aria-pressed="financeType === 'reserve_refund'" @click="switchFinanceType('reserve_refund')"><span>返</span><b>{{ $t('finance.reserveRefundTab') }}</b><small>{{ $t('finance.reserveRefundTabHint') }}</small></button>
+        <button type="button" :class="{ active: financeType === 'reserve_refund' }" :aria-pressed="financeType === 'reserve_refund'" @click="switchFinanceType('reserve_refund')"><span>{{ $t('legacy.t_9a0fe9c816a8') }}</span><b>{{ $t('finance.reserveRefundTab') }}</b><small>{{ $t('finance.reserveRefundTabHint') }}</small></button>
         <button type="button" :class="{ active: financeType === 'property' }" :aria-pressed="financeType === 'property'" @click="switchFinanceType('property')"><span>{{ $t('legacy.t_510cf918d2af') }}</span><b>{{ $t('legacy.t_6c1975ad4c66') }}</b><small>{{ $t('legacy.t_883bf403fa13') }}</small></button>
       </nav>
       <button v-if="viewMode === 'pending'" type="button" class="finance-history-button" @click="switchViewMode('history')">{{ $t('legacy.t_98556ff264a5') }}</button>
@@ -21,15 +21,15 @@
         <div class="finance-list-actions">
           <span v-if="selectedIds.length">{{ $t('legacy.t_06fb19973447') }} {{ selectedIds.length }} {{ $t('legacy.t_d0bb9b2b8ea7') }}</span><span v-if="loading">{{ $t('legacy.t_6ce3778a43cd') }}</span>
           <template v-if="viewMode === 'history'">
-            <button type="button" class="finance-list-batch-button" :disabled="!selectedIds.length || batchDocumentBusy" @click="batchDownloadDocuments('invoice')">批量下载发票</button>
-            <button type="button" class="finance-list-batch-button" :disabled="!selectedIds.length || batchDocumentBusy" @click="batchDownloadDocuments('receipt')">批量下载收据</button>
-            <button type="button" class="finance-list-batch-button danger" :disabled="!selectedReopenIds.length || actionSaving" @click="openBatchReopen">批量退回</button>
+            <button type="button" class="finance-list-batch-button" :disabled="!selectedIds.length || batchDocumentBusy" @click="batchDownloadDocuments('invoice')">{{ $t('legacy.t_5793ea8f30e0') }}</button>
+            <button type="button" class="finance-list-batch-button" :disabled="!selectedIds.length || batchDocumentBusy" @click="batchDownloadDocuments('receipt')">{{ $t('legacy.t_ec97150b081d') }}</button>
+            <button type="button" class="finance-list-batch-button danger" :disabled="!selectedReopenIds.length || actionSaving" @click="openBatchReopen">{{ $t('legacy.t_9d42644f9014') }}</button>
           </template>
         </div>
       </div>
 
       <div v-if="errorMessage" class="admin-owner-state error" role="alert">
-        <strong>{{ $t('legacy.t_9d56180a3aa0') }}</strong><span>{{ errorMessage }}</span><button type="button" @click="loadData">{{ $t('legacy.t_0c9157b5bfac') }}</button>
+        <strong>{{ $t('legacy.t_9d56180a3aa0') }}</strong><span>{{ $lt(errorMessage) }}</span><button type="button" @click="loadData">{{ $t('legacy.t_0c9157b5bfac') }}</button>
       </div>
       <div v-else class="table-wrap finance-review-table-wrap">
         <table>
@@ -43,9 +43,9 @@
               <td><b>{{ row.currency }} {{ money(row.amount) }}</b></td>
               <td>{{ displayDate(row.transactionDate) }}</td>
               <td><button type="button" class="finance-proof-link" :disabled="!row.proofDocumentId" @click.stop="selectAndOpenProof(row)">{{ row.proofDocumentId ? $t('legacy.t_16194d3fdaa8') : $t('legacy.t_08f9d55c4a07') }}</button></td>
-              <td><span class="tag" :class="confirmationClass(row.confirmationStatus)">{{ confirmationLabel(row.confirmationStatus) }}</span></td>
-              <td><span class="tag" :class="syncClass(row.syncStatus)">{{ syncLabel(row.syncStatus) }}</span></td>
-              <td><button type="button" class="finance-detail-button" @click.stop="openDetails(row)">查看详情</button></td>
+              <td><span class="tag" :class="confirmationClass(row.confirmationStatus)">{{ $lt(confirmationLabel(row.confirmationStatus)) }}</span></td>
+              <td><span class="tag" :class="syncClass(row.syncStatus)">{{ $lt(syncLabel(row.syncStatus)) }}</span></td>
+              <td><button type="button" class="finance-detail-button" @click.stop="openDetails(row)">{{ $t('legacy.t_faea8c1db9cc') }}</button></td>
             </tr>
             <tr v-if="!loading && !rows.length"><td colspan="10" class="admin-owner-empty">{{ $t('legacy.t_249035ec5788') }}</td></tr>
           </tbody>
@@ -56,7 +56,7 @@
 
     <dialog ref="detailDialog" class="modal finance-record-detail-dialog">
       <template v-if="selectedRow">
-        <div class="modal-head"><div><h3>房款确认详情</h3><small>{{ selectedRow.transactionNo }}</small></div><button type="button" class="icon-close" @click="closeDetails">×</button></div>
+        <div class="modal-head"><div><h3>{{ $t('legacy.t_60c5ad28307a') }}</h3><small>{{ selectedRow.transactionNo }}</small></div><button type="button" class="icon-close" @click="closeDetails">×</button></div>
         <div class="finance-record-detail-body detail-card">
         <div class="profile finance-review-profile">
           <div class="big-avatar">{{ $t('legacy.t_72d148251eae') }}</div>
@@ -64,20 +64,20 @@
             <h3 :title="selectedRow.transactionNo">{{ selectedRow.transactionNo }}</h3>
             <p>{{ selectedRow.projectName }}<span>·</span>{{ selectedRow.unitNo }}</p>
           </div>
-          <span class="tag finance-review-status" :class="confirmationClass(selectedRow.confirmationStatus)">{{ confirmationLabel(selectedRow.confirmationStatus) }}</span>
+          <span class="tag finance-review-status" :class="confirmationClass(selectedRow.confirmationStatus)">{{ $lt(confirmationLabel(selectedRow.confirmationStatus)) }}</span>
         </div>
         <div class="detail-actions finance-review-actions">
           <button :disabled="!selectedRow.proofDocumentId" @click="openProofFromDetails">{{ $t('legacy.t_96bd7ca72147') }}</button>
-          <a v-if="viewMode === 'history'" class="finance-document-button" :href="documentUrl(selectedRow, 'invoice')" download>Invoice / 发票</a>
-          <a v-if="viewMode === 'history'" class="finance-document-button" :href="documentUrl(selectedRow, 'receipt')" download>Official Receipt / 收据</a>
+          <a v-if="viewMode === 'history'" class="finance-document-button" :href="documentUrl(selectedRow, 'invoice')" download>{{ $t('legacy.t_ddb8200bcb9a') }}</a>
+          <a v-if="viewMode === 'history'" class="finance-document-button" :href="documentUrl(selectedRow, 'receipt')" download>{{ $t('legacy.t_952e7706f9b6') }}</a>
           <button v-if="viewMode === 'history' && selectedRow.confirmationStatus === 'confirmed'" class="reopen" @click="openReopenFromDetails">{{ $t('finance.reopen') }}</button>
           <button v-if="selectedRow.confirmationStatus === 'pending'" class="confirm" @click="openDecisionFromDetails('confirm')">{{ $t('legacy.t_a042dbbff199') }}</button>
           <button v-if="selectedRow.confirmationStatus === 'pending'" class="reject" @click="openDecisionFromDetails('reject')">{{ $t('legacy.t_579798368137') }}</button>
           <button @click="goToInstallmentFromDetails">{{ $t('legacy.t_367ff02e0e0d') }}</button>
         </div>
-        <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_356a192b7913') }}</span>{{ $t('legacy.t_a7110c6a0220') }}</h4><div class="kv"><span>{{ $t('legacy.t_d61f1eba334a') }}</span><b>{{ selectedRow.payerName || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_c6b9a8cfdb21') }}</span><b>{{ paymentMethodLabel(selectedRow.paymentMethod) }}</b></div><div class="kv"><span>{{ $t('legacy.t_bf8928021bb1') }}</span><b>{{ selectedRow.bankReference || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_293b17eefc95') }}</span><b>{{ selectedRow.currency }} {{ money(selectedRow.amount) }}</b></div><div class="kv"><span>{{ $t('legacy.t_058f511c98cf') }}</span><b>{{ displayDate(selectedRow.transactionDate) }}</b></div></div>
+        <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_356a192b7913') }}</span>{{ $t('legacy.t_a7110c6a0220') }}</h4><div class="kv"><span>{{ $t('legacy.t_d61f1eba334a') }}</span><b>{{ selectedRow.payerName || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_c6b9a8cfdb21') }}</span><b>{{ $lt(paymentMethodLabel(selectedRow.paymentMethod)) }}</b></div><div class="kv"><span>{{ $t('legacy.t_bf8928021bb1') }}</span><b>{{ selectedRow.bankReference || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_293b17eefc95') }}</span><b>{{ selectedRow.currency }} {{ money(selectedRow.amount) }}</b></div><div class="kv"><span>{{ $t('legacy.t_058f511c98cf') }}</span><b>{{ displayDate(selectedRow.transactionDate) }}</b></div></div>
         <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_da4b9237bacc') }}</span>{{ $t('legacy.t_e46046d63d0d') }}</h4><div class="kv"><span>{{ $t('legacy.t_845f73689cac') }}</span><b>{{ selectedRow.installmentNo }}. {{ selectedRow.milestone || $t('legacy.t_8fa4c4e6ba7b') }}</b></div><div class="kv"><span>{{ $t('legacy.t_fdeda5befee2') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.installmentAmount) }}</b></div><div class="kv"><span>{{ $t('legacy.t_25369a5ff28e') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.installmentPaid) }}</b></div><div class="kv"><span>{{ $t('legacy.t_894b94156d36') }}</span><b>{{ $t('legacy.t_5e7b60c626a4') }} {{ money(selectedRow.allocatedAmount) }}</b></div><div class="progress"><i :style="{ width: installmentProgress + '%' }"></i></div></div>
-        <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_77de68daecd8') }}</span>{{ $t('legacy.t_a89be4ee9d42') }}</h4><div class="kv"><span>{{ $t('legacy.t_4feb65fa9683') }}</span><b>{{ confirmationLabel(selectedRow.confirmationStatus) }}</b></div><div class="kv"><span>{{ $t('legacy.t_bffa37080afa') }}</span><b>{{ selectedRow.confirmedByName || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_2d36c3ab208f') }}</span><b>{{ formatDateTime(selectedRow.confirmedAt) }}</b></div><div class="kv"><span>{{ $t('legacy.t_098de965a383') }}</span><b>{{ selectedRow.reviewNote || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_94007fdd6e4e') }}</span><b>{{ syncLabel(selectedRow.syncStatus) }}</b></div></div>
+        <div class="detail-section"><h4><span class="num">{{ $t('legacy.t_77de68daecd8') }}</span>{{ $t('legacy.t_a89be4ee9d42') }}</h4><div class="kv"><span>{{ $t('legacy.t_4feb65fa9683') }}</span><b>{{ $lt(confirmationLabel(selectedRow.confirmationStatus)) }}</b></div><div class="kv"><span>{{ $t('legacy.t_bffa37080afa') }}</span><b>{{ selectedRow.confirmedByName || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_2d36c3ab208f') }}</span><b>{{ formatDateTime(selectedRow.confirmedAt) }}</b></div><div class="kv"><span>{{ $t('legacy.t_098de965a383') }}</span><b>{{ selectedRow.reviewNote || '—' }}</b></div><div class="kv"><span>{{ $t('legacy.t_94007fdd6e4e') }}</span><b>{{ $lt(syncLabel(selectedRow.syncStatus)) }}</b></div></div>
         <FinanceAllocationNoteEditor :record="selectedRow" @saved="loadData" />
         </div>
       </template>
@@ -89,10 +89,10 @@
         <div class="finance-decision-body">
           <div v-if="decisionMode === 'confirm'" class="finance-decision-warning success"><strong>{{ $t('legacy.t_269da3e1382b') }}</strong><span>{{ $t('legacy.t_0732a583bac6') }} {{ selectedRow?.installmentNo }} {{ $t('legacy.t_49ae7153d444') }}</span></div>
           <div v-else class="finance-decision-warning"><strong>{{ $t('legacy.t_88b8017997d0') }}</strong><span>{{ $t('legacy.t_803f1e0a838e') }}</span></div>
-          <label v-if="decisionMode === 'confirm'">实际收款日期<input v-model="decisionReceiptDate" type="date" :max="today" required></label>
-          <label v-if="decisionMode === 'confirm'">财务入账日期<input v-model="decisionDate" type="date" :max="today" required><small>入账日期用于 CCPS 余额、报表与关联流水。</small></label>
+          <label v-if="decisionMode === 'confirm'">{{ $t('legacy.t_4feabca3bf39') }}<input v-model="decisionReceiptDate" type="date" :max="today" required></label>
+          <label v-if="decisionMode === 'confirm'">{{ $t('legacy.t_8c3f70d58ba3') }}<input v-model="decisionDate" type="date" :max="today" required><small>{{ $t('legacy.t_a6b0751b346f') }}</small></label>
           <label>{{ $t('legacy.t_098de965a383') }}<textarea v-model.trim="decisionNote" maxlength="500" required :placeholder="decisionMode === 'confirm' ? $t('legacy.t_c333960469a4') : $t('legacy.t_b57961bc9a8a')"></textarea></label>
-          <p v-if="actionError" class="admin-property-error">{{ actionError }}</p>
+          <p v-if="actionError" class="admin-property-error">{{ $lt(actionError) }}</p>
         </div>
         <menu><button type="button" @click="closeDecision">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn" :class="{ reject: decisionMode === 'reject' }" :disabled="actionSaving">{{ actionSaving ? $t('legacy.t_1e038f9b55ec') : decisionMode === 'confirm' ? $t('legacy.t_c6f613106a48') : $t('legacy.t_559f15fd1a6a') }}</button></menu>
       </form>
@@ -101,23 +101,23 @@
     <dialog ref="reopenDialog" class="modal admin-finance-decision-dialog">
       <form method="dialog" @submit.prevent="submitReopen">
         <div class="modal-head"><div><h3>{{ $t('finance.reopenTitle') }}</h3><small>{{ selectedRow?.transactionNo }} · {{ selectedRow?.currency }} {{ money(selectedRow?.amount) }}</small></div><button type="button" class="icon-close" @click="closeReopen">×</button></div>
-        <div class="finance-decision-body"><div class="finance-decision-warning"><strong>{{ $t('finance.reopen') }}</strong><span>{{ $t('finance.reopenHint') }}</span></div><label>{{ $t('finance.reopenNote') }}<textarea v-model.trim="reopenNote" maxlength="500" required :placeholder="$t('finance.reopenNotePlaceholder')"></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div>
+        <div class="finance-decision-body"><div class="finance-decision-warning"><strong>{{ $t('finance.reopen') }}</strong><span>{{ $t('finance.reopenHint') }}</span></div><label>{{ $t('finance.reopenNote') }}<textarea v-model.trim="reopenNote" maxlength="500" required :placeholder="$t('finance.reopenNotePlaceholder')"></textarea></label><p v-if="actionError" class="admin-property-error">{{ $lt(actionError) }}</p></div>
         <menu><button type="button" @click="closeReopen">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn reject" :disabled="actionSaving">{{ actionSaving ? $t('legacy.t_1e038f9b55ec') : $t('finance.reopen') }}</button></menu>
       </form>
     </dialog>
 
     <dialog ref="batchReopenDialog" class="modal admin-finance-decision-dialog">
       <form method="dialog" @submit.prevent="submitBatchReopen">
-        <div class="modal-head"><div><h3>批量退回待确认</h3><small>本次将退回 {{ selectedReopenIds.length }} 笔已确认记录</small></div><button type="button" class="icon-close" @click="closeBatchReopen">×</button></div>
-        <div class="finance-decision-body"><div class="finance-decision-warning"><strong>批量退回后可重新核对</strong><span>若其中一笔无法退回，本次操作将整体取消，不会只处理一部分。</span></div><label>退回原因<textarea v-model.trim="batchReopenNote" maxlength="500" required placeholder="请填写本次批量退回原因"></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div>
-        <menu><button type="button" @click="closeBatchReopen">取消</button><button type="submit" class="primary-btn reject" :disabled="actionSaving">{{ actionSaving ? '处理中…' : `退回 ${selectedReopenIds.length} 笔` }}</button></menu>
+        <div class="modal-head"><div><h3>{{ $t('legacy.t_920e42140bdb') }}</h3><small>{{ $t('legacy.t_839ee29d9fec') }} {{ selectedReopenIds.length }} {{ $t('legacy.t_8fc91c4ff259') }}</small></div><button type="button" class="icon-close" @click="closeBatchReopen">×</button></div>
+        <div class="finance-decision-body"><div class="finance-decision-warning"><strong>{{ $t('legacy.t_f63f50437484') }}</strong><span>{{ $t('legacy.t_46a71e775403') }}</span></div><label>{{ $t('legacy.t_2fe161329598') }}<textarea v-model.trim="batchReopenNote" maxlength="500" required :placeholder="$t('legacy.t_e75387a2842c')"></textarea></label><p v-if="actionError" class="admin-property-error">{{ $lt(actionError) }}</p></div>
+        <menu><button type="button" @click="closeBatchReopen">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn reject" :disabled="actionSaving">{{ actionSaving ? $t('legacy.t_1cac8ac7f58f') : $t('ui.returnCount', { count: selectedReopenIds.length }) }}</button></menu>
       </form>
     </dialog>
 
     <dialog ref="batchDialog" class="modal admin-finance-decision-dialog">
       <form method="dialog" @submit.prevent="submitBatch">
         <div class="modal-head"><div><h3>{{ $t('legacy.t_fa73e61d9cbe') }}</h3><small>{{ $t('legacy.t_aeec0b67da9d') }} {{ selectedIds.length }} {{ $t('legacy.t_02819cf567a4') }}</small></div><button type="button" class="icon-close" @click="closeBatch">×</button></div>
-        <div class="finance-decision-body"><div class="finance-batch-overview"><span>确认记录<b>{{ batchRows.length }} 笔</b></span><span>合计金额<b>MYR {{ money(batchTotal) }}</b></span></div><div class="finance-decision-warning success"><strong>当前列表已自动带入</strong><span>无需逐笔勾选；如需只处理部分记录，可关闭后再勾选指定记录。</span></div><label>实际收款日期<input v-model="batchReceiptDate" type="date" :max="today" required></label><label>财务入账日期<input v-model="batchDate" type="date" :max="today" required><small>本批记录使用同一入账日期。</small></label><label>{{ $t('finance.batchReferenceNo') }}<input v-model.trim="batchReference" maxlength="120" :placeholder="$t('finance.batchReferencePlaceholder')"></label><label>{{ $t('legacy.t_c5dc4a6f6bc8') }}<textarea v-model.trim="batchNote" maxlength="500" required></textarea></label><p v-if="actionError" class="admin-property-error">{{ actionError }}</p></div>
+        <div class="finance-decision-body"><div class="finance-batch-overview"><span>{{ $t('legacy.t_78255fc5ff85') }}<b>{{ batchRows.length }} {{ $t('legacy.t_f4d0aeab9772') }}</b></span><span>{{ $t('legacy.t_9f5a58fc5586') }}<b>{{ $t('legacy.t_e98e2e0c8957') }} {{ money(batchTotal) }}</b></span></div><div class="finance-decision-warning success"><strong>{{ $t('legacy.t_78f6285d6f63') }}</strong><span>{{ $t('legacy.t_1e17b43b7f0d') }}</span></div><label>{{ $t('legacy.t_4feabca3bf39') }}<input v-model="batchReceiptDate" type="date" :max="today" required></label><label>{{ $t('legacy.t_8c3f70d58ba3') }}<input v-model="batchDate" type="date" :max="today" required><small>{{ $t('legacy.t_f892958aefa7') }}</small></label><label>{{ $t('finance.batchReferenceNo') }}<input v-model.trim="batchReference" maxlength="120" :placeholder="$t('finance.batchReferencePlaceholder')"></label><label>{{ $t('legacy.t_c5dc4a6f6bc8') }}<textarea v-model.trim="batchNote" maxlength="500" required></textarea></label><p v-if="actionError" class="admin-property-error">{{ $lt(actionError) }}</p></div>
         <menu><button type="button" @click="closeBatch">{{ $t('legacy.t_4d0b4688c787') }}</button><button type="submit" class="primary-btn" :disabled="actionSaving">{{ actionSaving ? $t('legacy.t_03fc655d6daf') : $t('finance.confirmSelected', { count: selectedIds.length }) }}</button></menu>
       </form>
     </dialog>
@@ -233,7 +233,7 @@ export default {
      async submitReopen() { if (!this.reopenNote) { this.actionError = this.$t('finance.reviewNoteRequired'); return; } this.actionSaving = true; this.actionError = ''; try { await reopenAdminFinanceReview(this.selectedRow.id, this.reopenNote); this.closeReopen(); await this.loadData(); this.page.showToast(this.$t('finance.reopenSuccess')); } catch (error) { this.actionError = error.message || this.$t('finance.reopenFailed'); } finally { this.actionSaving = false; } },
      openBatchReopen() { if (!this.selectedReopenIds.length) { this.page.showToast('请先勾选已确认记录'); return; } this.batchReopenNote = ''; this.actionError = ''; this.$refs.batchReopenDialog?.showModal(); },
      closeBatchReopen() { this.$refs.batchReopenDialog?.close(); },
-     async submitBatchReopen() { if (!this.batchReopenNote) { this.actionError = '请填写退回原因'; return; } const ids = [...this.selectedReopenIds]; this.actionSaving = true; this.actionError = ''; try { await batchReopenAdminFinanceReviews(ids, this.batchReopenNote); this.closeBatchReopen(); this.selectedIds = []; await this.loadData(); this.page.showToast(`已批量退回 ${ids.length} 笔记录`); } catch (error) { this.actionError = error.message || '批量退回失败'; } finally { this.actionSaving = false; } },
+     async submitBatchReopen() { if (!this.batchReopenNote) { this.actionError = '请填写退回原因'; return; } const ids = [...this.selectedReopenIds]; this.actionSaving = true; this.actionError = ''; try { await batchReopenAdminFinanceReviews(ids, this.batchReopenNote); this.closeBatchReopen(); this.selectedIds = []; await this.loadData(); this.page.showToast(this.$ltf`已批量退回 ${ids.length} 笔记录`); } catch (error) { this.actionError = error.message || '批量退回失败'; } finally { this.actionSaving = false; } },
      openBatch() { if (!this.selectedIds.length) this.selectedIds = this.pendingPageRows.map(row => row.id); if (!this.selectedIds.length) { this.page.showToast('当前列表没有可确认记录'); return; } this.batchDate = todayIsoDate(); this.batchReceiptDate = todayIsoDate(); this.batchNote = this.$t('finance.batchNoteDefault'); this.batchReference = ''; this.actionError = ''; this.$refs.batchDialog?.showModal(); },
     closeBatch() { this.$refs.batchDialog?.close(); },
      async submitBatch() { if (!this.batchNote || !this.batchDate || !this.batchReceiptDate) { this.actionError = this.$t('finance.batchNoteRequired'); return; } this.actionSaving = true; this.actionError = ''; const count = this.selectedIds.length; try { await batchConfirmAdminFinanceReviews(this.selectedIds, this.batchDate, this.batchNote, this.batchReference, this.batchReceiptDate); this.closeBatch(); this.selectedIds = []; await this.loadData(); this.page.showToast(this.$t('finance.batchConfirmed', { count })); } catch (error) { this.actionError = error.message || this.$t('finance.batchConfirmFailed'); } finally { this.actionSaving = false; } },
@@ -257,7 +257,7 @@ export default {
         const result = await downloadAdminFinanceDocuments(ids, type);
         const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = result.filename; link.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        this.page.showToast(`已生成 ${ids.length} 份${type === 'invoice' ? '发票' : '收据'}`);
+        this.page.showToast(this.$ltf`已生成 ${ids.length} 份${type === 'invoice' ? '发票' : '收据'}`);
       } catch (error) { this.page.showToast(error.message || '批量下载失败'); }
       finally { this.batchDocumentBusy = false; }
     },

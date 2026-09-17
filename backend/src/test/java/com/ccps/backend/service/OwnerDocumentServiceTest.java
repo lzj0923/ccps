@@ -85,7 +85,58 @@ class OwnerDocumentServiceTest {
 
         OwnerDocumentResponse result = service.getDocuments(42L);
         assertThat(result.documents().get(0).downloadable()).isTrue();
+        assertThat(result.documents().get(0).status()).isEqualTo("已確認");
         assertThat(service.download(42L, 93L).path()).isEqualTo(file);
+    }
+
+    @Test
+    void propertyPhotoStorageIsAvailableToOwnerPreview(@TempDir Path tempDir) throws Exception {
+        OwnerDocumentService service = new OwnerDocumentService(mapper, tempDir);
+        Path file = tempDir.resolve("property-photos/11/photo.jpg");
+        Files.createDirectories(file.getParent());
+        Files.write(file, new byte[] {1, 2, 3});
+        DocumentRow row = row(101L, "property_photo", "approved", null);
+        row.setStorageKey("11/photo.jpg");
+        when(mapper.findDocuments(42L)).thenReturn(List.of(row));
+        DocumentFile document = new DocumentFile();
+        document.setStorageKey(row.getStorageKey());
+        document.setMimeType("image/jpeg");
+        when(mapper.findDocumentFile(42L, 101L)).thenReturn(document);
+        assertThat(service.getDocuments(42L).documents().get(0).downloadable()).isTrue();
+        assertThat(service.download(42L, 101L).path()).isEqualTo(file);
+    }
+
+    @Test
+    void classifiesCashflowAndPhotosInsteadOfHidingThemUnderOther() {
+        OwnerDocumentService service = new OwnerDocumentService(mapper, Path.of("unused-test-root"));
+        when(mapper.findDocuments(42L)).thenReturn(List.of(
+                row(1L, "cashflow_attachment", "approved", null),
+                row(2L, "property_photo", "approved", null)));
+        assertThat(service.getDocuments(42L).documents()).extracting(OwnerDocumentResponse.DocumentItem::category)
+                .containsExactly("cashflow", "photo");
+    }
+
+    @Test
+    void independentContractUsesDedicatedSourceAndCannotEscapeStorage(@TempDir Path tempDir) throws Exception {
+        OwnerDocumentService service = new OwnerDocumentService(mapper, tempDir);
+        Path file = tempDir.resolve("property-contracts/11/signed.pdf");
+        Files.createDirectories(file.getParent()); Files.writeString(file, "contract");
+        DocumentRow contract = row(1L, "management", "signed", null);
+        contract.setSource("property_contract"); contract.setStorageKey("11/signed.pdf");
+        DocumentRow regular = row(1L, "receipt", "approved", null);
+        regular.setCreatedAt(LocalDateTime.now().minusDays(1));
+        when(mapper.findDocuments(42L)).thenReturn(List.of(regular));
+        when(mapper.findContractDocuments(42L)).thenReturn(List.of(contract));
+        var documents = service.getDocuments(42L).documents();
+        assertThat(documents).extracting(OwnerDocumentResponse.DocumentItem::source).containsExactly("property_contract", "document");
+        assertThat(documents.get(0).downloadable()).isTrue();
+        DocumentFile archived = new DocumentFile(); archived.setStorageKey("11/signed.pdf");
+        when(mapper.findContractFile(42L, 1L)).thenReturn(archived);
+        assertThat(service.download(42L, 1L, "property_contract").path()).isEqualTo(file);
+        assertThatThrownBy(() -> service.download(42L, 1L, "document")).isInstanceOf(ResponseStatusException.class);
+        archived.setStorageKey("../../outside.pdf");
+        assertThatThrownBy(() -> service.download(42L, 1L, "property_contract")).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> service.download(42L, 1L, "unknown")).isInstanceOf(ResponseStatusException.class);
     }
 
     private DocumentRow row(Long id, String type, String status, LocalDate expiresAt) {

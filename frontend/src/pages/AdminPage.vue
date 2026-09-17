@@ -1,5 +1,5 @@
 <template>
-  <div class="page-view admin-page">
+  <div class="page-view admin-page" :class="[`admin-module-${currentId}`, { 'admin-module-readonly': !canManageCurrentAdminModule }]" :data-admin-module="currentId" :data-admin-readonly="!canManageCurrentAdminModule">
     <PageHeader />
     <MetricsGrid v-if="currentId !== 'adminOffMarketProperties' && currentId !== 'adminSmartDashboard' && currentId !== 'adminDashboard' && currentId !== 'adminProjects' && currentId !== 'adminRentalMandates' && currentId !== 'adminAudit' && currentId !== 'adminSystemBackup' && currentId !== 'adminProcess' && currentId !== 'adminRentalSigning' && currentId !== 'adminDeposits' && currentId !== 'adminTenantDirectory' && !propertyDetailId" />
     <ModuleToolbar v-if="currentId !== 'adminOffMarketProperties' && currentId !== 'adminSmartDashboard' && currentId !== 'adminDashboard' && currentId !== 'adminProjects' && currentId !== 'adminRentalMandates' && currentId !== 'adminFinance' && currentId !== 'adminAudit' && currentId !== 'adminSystemBackup' && currentId !== 'adminProcess' && currentId !== 'adminRentalSigning' && currentId !== 'adminDeposits' && currentId !== 'adminTenantDirectory' && !propertyDetailId" />
@@ -9,7 +9,7 @@
     <AdminPropertyProcessWorkspace v-else-if="currentId === 'adminProcess'" />
     <AdminRentalSigningWorkspace v-else-if="currentId === 'adminRentalSigning'" />
     <AdminDepositWorkspace v-else-if="currentId === 'adminDeposits'" />
-    <AdminPropertyDetailWorkspace v-else-if="propertyDetailId" :property-id="propertyDetailId" :return-path="currentId === 'adminOffMarketProperties' ? '/admin/off-market-rentals' : '/admin/properties'" />
+    <AdminPropertyDetailWorkspace v-else-if="propertyDetailId" :property-id="propertyDetailId" :return-path="propertyDetailReturnPath" />
     <AdminOffMarketPropertiesWorkspace v-else-if="currentId === 'adminOffMarketProperties'" />
     <AdminOwnersWorkspace v-else-if="currentId === 'adminOwners'" />
     <AdminOwnersWorkspace v-else-if="currentId === 'adminProperties'" mode="properties" />
@@ -55,11 +55,14 @@ import AdminProjectManagementWorkspace from '../components/AdminProjectManagemen
 
 export default {
   mixins: [pageBridge],
-  data() { return { routePath: window.location.pathname }; },
+  data() { return { routePath: window.location.pathname, routeSearch: window.location.search }; },
   components: { PageHeader, MetricsGrid, ModuleToolbar, DataWorkspace, AdminSmartDashboardWorkspace, AdminDashboardWorkspace, AdminSystemBackupWorkspace, AdminProjectManagementWorkspace, AdminOwnersWorkspace, AdminPropertyDetailWorkspace, AdminOffMarketPropertiesWorkspace, AdminPropertyProcessWorkspace, AdminRentalSigningWorkspace, AdminDepositWorkspace, AdminFinanceWorkspace, AdminTenantDirectoryWorkspace, AdminTenancyWorkspace, AdminRentalMandateWorkspace, AdminMaintenanceWorkspace, AdminReserveWorkspace, AdminReminderWorkspace, AdminAccountsWorkspace, AdminAuditWorkspace },
-  computed: { propertyDetailId() { const match = this.routePath.match(/^\/admin\/(?:properties|off-market-rentals)\/([^/]+)$/); return match ? match[1] : ''; } },
+  computed: {
+    propertyDetailId() { const match = this.routePath.match(/^\/admin\/(?:properties|off-market-rentals)\/([^/]+)$/); return match ? match[1] : ''; },
+    propertyDetailReturnPath() { if (new URLSearchParams(this.routeSearch).get('from') === 'rental-process') return '/admin/process'; return this.currentId === 'adminOffMarketProperties' ? '/admin/off-market-rentals' : '/admin/properties'; },
+  },
   mounted() { window.addEventListener('app-route-change', this.syncPropertyPath); window.addEventListener('popstate', this.syncPropertyPath); },
   beforeUnmount() { window.removeEventListener('app-route-change', this.syncPropertyPath); window.removeEventListener('popstate', this.syncPropertyPath); },
-  methods: { syncPropertyPath() { this.routePath = window.location.pathname; } },
+  methods: { syncPropertyPath() { this.routePath = window.location.pathname; this.routeSearch = window.location.search; } },
 };
 </script>

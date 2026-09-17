@@ -28,9 +28,16 @@ class AdminRoutePermissionPolicyTest {
     }
 
     @Test
-    void serviceAndBusinessCanBothHandleOperationalWork() {
+    void onlyOperationsManagersCanHandleOperationalWork() {
         assertThat(AdminRoutePermissionPolicy.requiredAny("POST", "/api/admin/expenses/maintenance"))
-                .containsExactlyInAnyOrder(AdminPermissionCodes.OPERATIONS_MANAGE,
-                        AdminPermissionCodes.BUSINESS_MANAGE);
+                .containsExactly(AdminPermissionCodes.OPERATIONS_MANAGE);
+    }
+
+    @Test
+    void rentalWorkflowAndSigningUseBusinessPermission() {
+        assertThat(AdminRoutePermissionPolicy.requiredAny("POST", "/api/admin/owners/8/properties/9/operations/handover"))
+                .containsExactly(AdminPermissionCodes.BUSINESS_MANAGE);
+        assertThat(AdminRoutePermissionPolicy.requiredAny("POST", "/api/admin/e-signatures"))
+                .containsExactly(AdminPermissionCodes.BUSINESS_MANAGE);
     }
 }

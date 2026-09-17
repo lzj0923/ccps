@@ -102,6 +102,16 @@ public interface AdminRentalMandateMapper {
     @Select(SELECT + " WHERE rm.id = #{id}")
     MandateRow findById(@Param("id") Long id);
 
+    @Select("SELECT COUNT(*) FROM rental_mandates WHERE owner_unit_id = #{ownerUnitId} AND id <> #{id} AND status IN ('pending_review','active','suspended') AND (end_date IS NULL OR end_date >= #{startDate}) AND start_date <= COALESCE(#{endDate}, '9999-12-31')")
+    int countOtherOverlapping(@Param("id") Long id, @Param("ownerUnitId") Long ownerUnitId,
+            @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Select("SELECT COUNT(*) FROM leases WHERE rental_mandate_id=#{id} AND status IN ('draft','active') AND (start_date < #{startDate} OR (#{endDate} IS NOT NULL AND end_date > #{endDate}))")
+    int countLeasesOutsideTerm(@Param("id") Long id, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Update("UPDATE rental_mandates SET mandate_type=#{request.mandateType}, start_date=#{request.startDate}, end_date=#{request.endDate}, management_fee=#{request.managementFee}, commission_percent=#{request.commissionPercent}, responsible_user_id=#{request.responsibleUserId} WHERE id=#{id} AND status IN ('active','suspended')")
+    int updateDetails(@Param("id") Long id, @Param("request") com.ccps.backend.dto.AdminRentalMandateCreateRequest request);
+
     @Select("SELECT status FROM rental_mandates WHERE id = #{id} FOR UPDATE")
     String lockStatus(@Param("id") Long id);
 

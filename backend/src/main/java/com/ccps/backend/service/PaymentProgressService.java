@@ -85,7 +85,8 @@ public class PaymentProgressService {
                     row.getConfirmationStatus(),
                     row.getRejectionReason(),
                     row.getReceiptCount() == null ? 0 : row.getReceiptCount(),
-                    Boolean.TRUE.equals(row.getHasProof())));
+                    Boolean.TRUE.equals(row.getHasProof()),
+                    parseDocumentIds(row.getProofDocumentIds())));
         }
 
         Property property = new Property(
@@ -135,5 +136,12 @@ public class PaymentProgressService {
 
     private BigDecimal zero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private List<Long> parseDocumentIds(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        return java.util.Arrays.stream(value.split(",")).map(String::trim)
+                .filter(id -> id.matches("[0-9]+"))
+                .map(Long::valueOf).distinct().toList();
     }
 }

@@ -17,7 +17,7 @@
         <div class="payment-owner-grid">
           <div><UserRound /><span>{{ $t('legacy.t_9372e35aa0f9') }}<strong>{{ property.owner }}</strong></span></div>
           <div><Phone /><span>{{ $t('legacy.t_e02f6e5760fd') }}<strong>{{ property.phone }}</strong></span></div>
-          <div><CalendarDays /><span>{{ $t('legacy.t_1e13248dbf58') }}<strong>{{ property.signedDate }}</strong></span></div>
+<div><CalendarDays /><span>{{ $t('legacy.t_1e13248dbf58') }}<strong>{{ displayDate(property.signedDate) }}</strong></span></div>
           <div><BadgeCheck /><span>{{ $t('legacy.t_886c40d24b98') }}<strong :class="paymentStatusClass">{{ paymentStatusLabel }}</strong></span></div>
         </div>
       </div>
@@ -26,13 +26,13 @@
     <section class="payment-stat-grid">
       <article v-for="stat in stats" :key="stat.label">
         <component :is="stat.icon" />
-        <div><span>{{ stat.label }}</span><strong :class="stat.tone">{{ stat.value }}</strong><small v-if="stat.note" :class="stat.noteTone">{{ stat.note }}</small></div>
+        <div><span>{{ $lt(stat.label) }}</span><strong :class="stat.tone">{{ stat.value }}</strong><small v-if="stat.note" :class="stat.noteTone">{{ $lt(stat.note) }}</small></div>
       </article>
     </section>
 
     <section v-if="paymentLoading" class="payment-detail-state">{{ $t('legacy.t_a13de92a7917') }}</section>
     <section v-else-if="paymentError" class="payment-detail-state error" role="alert">
-      <strong>{{ $t('legacy.t_4f052bf0a9d7') }}</strong><span>{{ paymentError }}</span><button @click="loadPaymentDetails">{{ $t('legacy.t_0a12f2ebe04f') }}</button>
+      <strong>{{ $t('legacy.t_4f052bf0a9d7') }}</strong><span>{{ $lt(paymentError) }}</span><button @click="loadPaymentDetails">{{ $t('legacy.t_0a12f2ebe04f') }}</button>
     </section>
     <section v-else-if="!selectedPropertyKey" class="payment-detail-state">{{ $t('legacy.t_9a5a1ee361c2') }}</section>
 
@@ -44,8 +44,8 @@
             <div v-for="(stage, index) in stages" :key="stage.id" class="milestone" :class="stage.state">
               <div class="milestone-line" v-if="index < stages.length - 1"></div>
               <span class="milestone-dot"><Check v-if="stage.state === 'done'" /><Building2 v-else-if="stage.state === 'current'" /><LockKeyhole v-else /></span>
-              <strong>{{ stage.label }}</strong>
-              <small>{{ stage.note }}</small>
+              <strong>{{ $lt(stage.label) }}</strong>
+              <small>{{ $lt(stage.note) }}</small>
             </div>
           </div>
 
@@ -55,9 +55,9 @@
               <thead><tr><th>{{ $t('legacy.t_4ca39faad0bd') }}</th><th>{{ $t('legacy.t_a298bdb58afb') }}</th><th>{{ $t('legacy.t_57cc0b38b602') }}</th><th>{{ $t('legacy.t_b0a5b93d3722') }}</th><th>{{ $t('legacy.t_5eda4c259280') }}</th><th>{{ $t('legacy.t_058f511c98cf') }}</th><th>{{ $t('legacy.t_62e951a692ff') }}</th><th>{{ $t('legacy.t_cad9a7bf3c95') }}</th><th>{{ $t('legacy.t_a2a569f69fdb') }}</th></tr></thead>
               <tbody>
                 <tr v-for="row in installments" :key="row.id" :class="{ current: row.state === 'current' }">
-                  <td><i :class="row.state">{{ row.no }}</i>{{ row.name }}<small v-if="row.note">{{ row.note }}</small></td>
+                  <td><i :class="row.state">{{ row.no }}</i>{{ row.name }}<small v-if="row.note">{{ $lt(row.note) }}</small></td>
                   <td>{{ row.due }}</td><td>{{ row.amount }}</td><td :class="{ green: row.paidValue > 0 }">{{ row.paid }}</td><td :class="{ gold: row.unpaidValue > 0 }">{{ row.unpaid }}</td>
-                  <td>{{ displayDate(row.paymentDate) }}</td><td><span class="table-status" :class="row.state">{{ row.status }}</span></td><td><button v-if="row.receipt" @click="viewReceipt(row)">{{ $t('legacy.t_f7acefd2d4cd') }}</button><span v-else>—</span></td><td class="finance-confirmation-cell"><span v-if="row.confirmed" class="confirmed"><BadgeCheck />{{ $t('legacy.t_d9fea67ad2be') }}</span><span v-else>{{ row.confirmation }}</span><small v-if="row.rejectionReason" class="rejection-reason">{{ $t('legacy.t_0f93c2bb0a58') }}{{ row.rejectionReason }}</small></td>
+                  <td>{{ displayDate(row.paymentDate) }}</td><td><span class="table-status" :class="row.state">{{ $lt(row.status) }}</span></td><td><button v-if="row.receipt" @click="viewReceipt(row)">{{ $t('legacy.t_f7acefd2d4cd') }}</button><span v-else>—</span></td><td class="finance-confirmation-cell"><span v-if="row.confirmed" class="confirmed"><BadgeCheck />{{ $t('legacy.t_d9fea67ad2be') }}</span><span v-else>{{ row.confirmation }}</span><small v-if="row.rejectionReason" class="rejection-reason">{{ $t('legacy.t_0f93c2bb0a58') }}{{ row.rejectionReason }}</small></td>
                 </tr>
               </tbody>
               <tfoot><tr><td>{{ $t('legacy.t_92bcbf71cb7b') }}</td><td></td><td>{{ money(scheduledAmount) }}</td><td class="green">{{ money(paid) }}</td><td class="gold">{{ money(remaining) }}</td><td colspan="4">{{ paidInstallments }} / {{ totalInstallments }} {{ $t('legacy.t_fc73601f2012') }}</td></tr></tfoot>
@@ -111,7 +111,7 @@ export default {
   inject: ['page'],
   emits: ['upload'],
   props: { initialPropertyKey: { type: String, default: '' } },
-  components: { BadgeCheck, Building2, CalendarDays, Check, ChevronDown, LockKeyhole, Phone, ReceiptText, ShieldCheck, Upload, UserRound, WalletCards },
+  components: { BadgeCheck, Building2, CalendarDays, ChartPie, Check, ChevronDown, Coins, FileText, Home, Hourglass, LockKeyhole, Phone, ReceiptText, ShieldCheck, Upload, UserRound, WalletCards },
   data() {
     return {
       selectedPropertyKey: '',
@@ -268,7 +268,7 @@ export default {
       const days = this.daysUntil(dateText);
       return days < 0 ? `已逾期 ${Math.abs(days)} 天` : days === 0 ? '今天到期' : `剩余 ${days} 天`;
     },
-    viewReceipt(row) { this.page.showToast(`第 ${row.no} 期共有付款凭证，查看功能将在凭证阶段接入`); },
+    viewReceipt(row) { this.page.showToast(this.$ltf`第 ${row.no} 期共有付款凭证，查看功能将在凭证阶段接入`); },
     viewLatestReceipt() { if (this.latestReceiptAvailable) this.page.showToast('查看凭证功能将在凭证阶段接入'); },
     uploadProof() {
       const rawInstallments = this.paymentDetails?.installments || [];

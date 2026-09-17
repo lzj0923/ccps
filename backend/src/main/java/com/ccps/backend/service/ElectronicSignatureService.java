@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -31,7 +32,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -52,8 +52,11 @@ import com.ccps.backend.mapper.ElectronicSignatureMapper.NewRequest;
 import com.ccps.backend.mapper.ElectronicSignatureMapper.ParticipantRow;
 import com.ccps.backend.mapper.ElectronicSignatureMapper.RequesterRow;
 import com.ccps.backend.mapper.ElectronicSignatureMapper.RequestRow;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
 import com.lowagie.text.Image;
 import com.lowagie.text.pdf.BaseFont;
+import com.lowagie.text.pdf.PdfCopy;
 import com.lowagie.text.pdf.PdfContentByte;
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.PdfStamper;
@@ -61,7 +64,7 @@ import com.lowagie.text.pdf.PdfStamper;
 @Service
 public class ElectronicSignatureService {
     private static final int DEFAULT_EXPIRY_DAYS = 7;
-    private static final int VERIFICATION_MINUTES = 30;
+    private static final String VERIFICATION_NOT_REQUIRED = "not-required";
     private static final long MAX_SIGNATURE_BYTES = 1024L * 1024L;
 
     private final ElectronicSignatureMapper mapper;
@@ -76,7 +79,6 @@ public class ElectronicSignatureService {
     private final Clock clock;
     private final RentalManagementTemplatePdfService templateService;
     private final SecureRandom random = new SecureRandom();
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Autowired
     public ElectronicSignatureService(ElectronicSignatureMapper mapper, ObjectProvider<JavaMailSender> mailSenderProvider,
@@ -145,14 +147,101 @@ public class ElectronicSignatureService {
             ElectronicSignaturePackageRequest request) {
         DocumentRow document = mapper.findMandateDocument(mandateId, documentId);
         if (document == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract document not found");
+        document = upgradeLegacyOtr(actorId, mandateId, document);
         String kind = Objects.toString(document.getRelationType(), "").toLowerCase(Locale.ROOT);
         return startPackage(actorId, "rental_mandate", mandateId, document, kind, request);
     }
 
+    /**
+     * Historical OTR records stored only the offer page. Reissuing a signing link must
+     * upgrade that source file first; otherwise every new link still opens the same
+     * one-page legacy PDF even though the current template is already two pages.
+     */
+    private DocumentRow upgradeLegacyOtr(Long actorId, Long mandateId, DocumentRow document) {
+        if (!"otr".equalsIgnoreCase(document.getRelationType())
+                || !"application/pdf".equalsIgnoreCase(document.getMimeType())) return document;
+        Path otr = resolveSourceDocument("rental_mandate", document.getStorageKey(), false);
+        if (!Files.isRegularFile(otr)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract file is unavailable");
+        }
+        try (PdfReader reader = new PdfReader(Files.readAllBytes(otr))) {
+            if (reader.getNumberOfPages() >= 2) return document;
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "The historical OTR file is invalid and must be regenerated", exception);
+        }
+
+        DocumentRow appointment = mapper.findCurrentMandateDocumentByRelation(mandateId,
+                "rental_appointment_draft");
+        if (appointment == null || !"application/pdf".equalsIgnoreCase(appointment.getMimeType())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "The appointment page is missing; regenerate the OTR before creating signing links");
+        }
+        Path appointmentFile = resolveSourceDocument("rental_mandate", appointment.getStorageKey(), false);
+        if (!Files.isRegularFile(appointmentFile)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "The appointment page is unavailable; regenerate the OTR before creating signing links");
+        }
+
+        String token = java.util.UUID.randomUUID().toString().replace("-", "");
+        Path target = mandateRoot.resolve(String.valueOf(mandateId)).resolve(token + ".pdf").normalize();
+        if (!target.startsWith(mandateRoot)) throw bad("Invalid contract path");
+        try {
+            byte[] merged = mergeLegacyOtr(otr, appointmentFile);
+            Files.createDirectories(target.getParent());
+            Files.write(target, merged);
+            NewDocument replacement = new NewDocument();
+            replacement.setDocumentNo("RM-DOC-" + token.substring(0, 10).toUpperCase(Locale.ROOT));
+            replacement.setOriginalName(document.getOriginalName());
+            replacement.setStorageKey(mandateRoot.relativize(target).toString().replace('\\', '/'));
+            replacement.setFileSize((long) merged.length);
+            replacement.setChecksumSha256(sha256(merged));
+            replacement.setUploadedBy(actorId);
+            if (mapper.insertMandateSourceDocument(replacement, "otr") != 1 || replacement.getId() == null
+                    || mapper.insertMandateSourceDocumentLink(replacement.getId(), mandateId, "otr") != 1) {
+                throw conflict("Unable to upgrade the historical OTR document");
+            }
+            mapper.voidSignedDocumentsForRoot(document.getId());
+            mapper.supersedeRequestsForRoot(document.getId());
+            if (mapper.supersedeMandateSourceDocument(document.getId()) != 1) {
+                throw conflict("Unable to replace the historical OTR document");
+            }
+            DocumentRow upgraded = new DocumentRow();
+            upgraded.setId(replacement.getId());
+            upgraded.setOriginalName(replacement.getOriginalName());
+            upgraded.setStorageKey(replacement.getStorageKey());
+            upgraded.setMimeType("application/pdf");
+            upgraded.setFileSize(replacement.getFileSize());
+            upgraded.setChecksumSha256(replacement.getChecksumSha256());
+            upgraded.setRelationType("otr");
+            return upgraded;
+        } catch (IOException | DocumentException exception) {
+            try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unable to upgrade the historical OTR document", exception);
+        }
+    }
+
+    private byte[] mergeLegacyOtr(Path otr, Path appointment) throws IOException, DocumentException {
+        try (PdfReader offerReader = new PdfReader(Files.readAllBytes(otr));
+                PdfReader appointmentReader = new PdfReader(Files.readAllBytes(appointment));
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            if (offerReader.getNumberOfPages() != 1 || appointmentReader.getNumberOfPages() < 1) {
+                throw new DocumentException("Unexpected OTR packet page count");
+            }
+            Document packet = new Document();
+            PdfCopy copy = new PdfCopy(packet, output);
+            packet.open();
+            copy.addPage(copy.getImportedPage(offerReader, 1));
+            copy.addPage(copy.getImportedPage(appointmentReader, 1));
+            packet.close();
+            return output.toByteArray();
+        }
+    }
+
     private ElectronicSignatureStartResponse startPackage(Long actorId, String entityType, Long entityId,
             DocumentRow document, String kind, ElectronicSignaturePackageRequest request) {
-        requireMail();
-        List<String> roles = multiSignerRoles(kind);
+        List<String> roles = signingPackageRoles(kind, request);
         if (roles.isEmpty()) throw bad("This document does not use a multi-signer package");
         Map<String, ElectronicSignatureParticipantRequest> byRole = new LinkedHashMap<>();
         for (ElectronicSignatureParticipantRequest signer : request.signers()) {
@@ -176,14 +265,10 @@ public class ElectronicSignatureService {
             ParticipantRow participant = new ParticipantRow(); participant.setRootDocumentId(document.getId());
             participant.setDocumentKind(kind); participant.setSignerRole(role); participant.setSigningOrder(index + 1);
             participant.setSignerName(trim(signer.signerName(), "Signer name"));
-            participant.setSignerEmail(trim(signer.signerEmail(), "Signer email").toLowerCase(Locale.ROOT));
+            participant.setSignerEmail(optionalEmail(signer.signerEmail()));
             participant.setExpiresInDays(expiryDays); participant.setUpdatedBy(actorId);
             if (mapper.upsertParticipant(participant) <= 0) throw conflict("Unable to save signer details");
             invitations.add(createPackageInvitation(actorId, entityType, entityId, document, participant, now));
-        }
-        for (Invitation invitation : invitations) {
-            sendCode(invitation.row().getSignerEmail(), invitation.row().getSignerName(), invitation.url(),
-                    invitation.code(), invitation.row().getExpiresAt());
         }
         Invitation first = invitations.get(0);
         List<ElectronicSignatureLinkResponse> links = invitations.stream()
@@ -195,25 +280,24 @@ public class ElectronicSignatureService {
 
     private Invitation createPackageInvitation(Long actorId, String entityType, Long entityId, DocumentRow document,
             ParticipantRow participant, LocalDateTime now) {
-        String token = randomToken(); String code = verificationCode();
+        String token = randomToken();
         NewRequest row = new NewRequest(); row.setSourceDocumentId(document.getId()); row.setRootDocumentId(document.getId());
         row.setEntityType(entityType); row.setEntityId(entityId); row.setDocumentKind(participant.getDocumentKind());
         row.setSignerRole(participant.getSignerRole()); row.setSigningOrder(participant.getSigningOrder());
         row.setSignerName(participant.getSignerName()); row.setSignerEmail(participant.getSignerEmail());
-        row.setAccessTokenHash(sha256(token)); row.setVerificationCodeHash(encoder.encode(code));
-        row.setVerificationExpiresAt(now.plusMinutes(VERIFICATION_MINUTES));
-        row.setExpiresAt(now.plusDays(participant.getExpiresInDays())); row.setRequestedBy(actorId);
+        row.setAccessTokenHash(sha256(token)); row.setVerificationCodeHash(VERIFICATION_NOT_REQUIRED);
+        row.setExpiresAt(now.plusDays(participant.getExpiresInDays()));
+        row.setVerificationExpiresAt(row.getExpiresAt()); row.setRequestedBy(actorId);
         row.setSourceChecksumSha256(document.getChecksumSha256()); row.setStatus("pending");
         if (mapper.insertRequest(row) != 1 || row.getId() == null) throw conflict("Unable to create signing request");
         String url = frontendBase + "/sign/" + token;
         mapper.insertEvent(row.getId(), "requested", "Parallel signing link created", null, null);
         mapper.insertAudit(actorId, "start_electronic_signature", entityType, entityId, row.getId(), row.getSignerName());
-        return new Invitation(row, url, code);
+        return new Invitation(row, url);
     }
 
     private ElectronicSignatureStartResponse start(Long actorId, String entityType, Long entityId, DocumentRow document,
             ElectronicSignatureStartRequest request, SigningPlan plan) {
-        requireMail();
         if (document == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract document not found");
         Long rootDocumentId = document.getId();
         if (mapper.countSignedRole(rootDocumentId, plan.signerRole()) > 0) {
@@ -232,17 +316,16 @@ public class ElectronicSignatureService {
         if (!Files.isRegularFile(source)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract file is unavailable");
         LocalDateTime now = LocalDateTime.now(clock);
         int expiryDays = request.expiresInDays() == null ? DEFAULT_EXPIRY_DAYS : request.expiresInDays();
-        String token = randomToken(); String code = verificationCode();
+        String token = randomToken();
         NewRequest row = new NewRequest(); row.setSourceDocumentId(sourceDocument.getId()); row.setRootDocumentId(rootDocumentId);
         row.setEntityType(entityType); row.setEntityId(entityId); row.setDocumentKind(plan.documentKind());
         row.setSignerRole(plan.signerRole()); row.setSigningOrder(plan.signingOrder());
-        row.setSignerName(trim(request.signerName(), "Signer name")); row.setSignerEmail(trim(request.signerEmail(), "Signer email").toLowerCase(Locale.ROOT));
-        row.setAccessTokenHash(sha256(token)); row.setVerificationCodeHash(encoder.encode(code));
-        row.setVerificationExpiresAt(now.plusMinutes(VERIFICATION_MINUTES)); row.setExpiresAt(now.plusDays(expiryDays));
+        row.setSignerName(trim(request.signerName(), "Signer name")); row.setSignerEmail(optionalEmail(request.signerEmail()));
+        row.setAccessTokenHash(sha256(token)); row.setVerificationCodeHash(VERIFICATION_NOT_REQUIRED);
+        row.setExpiresAt(now.plusDays(expiryDays)); row.setVerificationExpiresAt(row.getExpiresAt());
         row.setRequestedBy(actorId); row.setSourceChecksumSha256(sourceDocument.getChecksumSha256()); row.setStatus("pending");
         if (mapper.insertRequest(row) != 1 || row.getId() == null) throw conflict("Unable to create signing request");
         String url = frontendBase + "/sign/" + token;
-        sendCode(row.getSignerEmail(), row.getSignerName(), url, code, row.getExpiresAt());
         mapper.insertEvent(row.getId(), "requested", "Signing link created", null, null);
         mapper.insertAudit(actorId, "start_electronic_signature", entityType, entityId, row.getId(), row.getSignerName());
         return new ElectronicSignatureStartResponse(row.getId(), url, row.getExpiresAt(),
@@ -257,26 +340,63 @@ public class ElectronicSignatureService {
     @Transactional(readOnly = true)
     public ElectronicSignaturePublicResponse publicView(String token) { return response(requireRequest(token)); }
 
+    // Internal authenticated entry points: OwnerSignatureService verifies assignment first.
+    public ElectronicSignaturePublicResponse viewById(Long id) { return response(requireRequestById(id)); }
+
     @Transactional
-    public void resendCode(String token, String remoteIp, String userAgent) {
-        requireMail(); RequestRow row = requirePendingRequest(token);
-        LocalDateTime now = LocalDateTime.now(clock);
-        String code = verificationCode();
-        if (mapper.updateVerificationCode(row.getId(), encoder.encode(code), now.plusMinutes(VERIFICATION_MINUTES)) != 1) throw conflict("Signing request has changed");
-        sendCode(row.getSignerEmail(), row.getSignerName(), frontendBase + "/sign/" + token, code, row.getExpiresAt());
-        mapper.insertEvent(row.getId(), "verification_resent", "Verification code re-sent", remoteIp, userAgent);
+    public ElectronicSignaturePublicResponse signById(Long id, ElectronicSignatureSignRequest request,
+            String remoteIp, String userAgent) {
+        RequestRow row = requireRequestById(id);
+        requirePending(row);
+        return signRequest(row, request, remoteIp, userAgent, () -> requireRequestById(id));
+    }
+
+    public Download downloadById(Long id, boolean signed) {
+        RequestRow row = requireRequestById(id);
+        if ("superseded".equals(row.getStatus()) || "cancelled".equals(row.getStatus()))
+            throw new ResponseStatusException(HttpStatus.GONE, "签署任务已失效");
+        return signed ? downloadSigned(row) : downloadOriginal(row);
+    }
+
+    private RequestRow requireRequestById(Long id) {
+        RequestRow row = mapper.findById(id);
+        if (row == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "签署任务不存在");
+        return row;
+    }
+
+    @Transactional
+    public void sendInvitationEmail(Long actorId, Long requestId, String token, String recipientEmail) {
+        requireMail();
+        RequestRow row = requirePendingRequest(token);
+        if (!Objects.equals(row.getId(), requestId)) throw bad("Signing link does not match the request");
+        String email = trim(recipientEmail, "Recipient email").toLowerCase(Locale.ROOT);
+        if (mapper.updateRequestSignerEmail(requestId, email) != 1) {
+            throw conflict("Unable to save the signing email address");
+        }
+        if (row.getRootDocumentId() != null && row.getSignerRole() != null && !row.getSignerRole().isBlank()) {
+            mapper.updateParticipantSignerEmail(row.getRootDocumentId(), row.getSignerRole(), email);
+        }
+        String url = frontendBase + "/sign/" + token;
+        sendInvitationEmail(email, row.getSignerName(), url, row.getExpiresAt());
+        mapper.insertEvent(row.getId(), "invitation_email_sent", "Signing invitation sent by email", null, null);
+        mapper.insertAudit(actorId, "send_electronic_signature_invitation", row.getEntityType(), row.getEntityId(),
+                row.getId(), email);
     }
 
     @Transactional
     public ElectronicSignaturePublicResponse sign(String token, ElectronicSignatureSignRequest request, String remoteIp,
             String userAgent) {
         RequestRow row = requirePendingRequest(token);
+        return signRequest(row, request, remoteIp, userAgent, () -> requireRequest(token));
+    }
+
+    private ElectronicSignaturePublicResponse signRequest(RequestRow row, ElectronicSignatureSignRequest request,
+            String remoteIp, String userAgent, java.util.function.Supplier<RequestRow> reload) {
+        // Serialize App and public-link submissions before touching the shared output file.
+        // A locking read also sees a concurrent commit under MySQL REPEATABLE READ.
+        if (!"pending".equals(mapper.lockRequestStatus(row.getId())))
+            throw conflict("This signing request is already closed");
         if (!Boolean.TRUE.equals(request.consent())) throw bad("Consent is required before signing");
-        if (row.getVerificationExpiresAt() == null || row.getVerificationExpiresAt().isBefore(LocalDateTime.now(clock))) throw bad("Verification code has expired");
-        if (!encoder.matches(request.verificationCode().trim(), row.getVerificationCodeHash())) {
-            mapper.insertEvent(row.getId(), "verification_failed", "Incorrect verification code", remoteIp, userAgent);
-            throw bad("Incorrect verification code");
-        }
         if (!normalizeName(request.signerName()).equals(normalizeName(row.getSignerName()))) throw bad("Signer name does not match the request");
         String identityNo = Objects.toString(request.identityNo(), "").trim();
         boolean pmaWitness = "property_management_agreement_draft".equalsIgnoreCase(row.getDocumentKind())
@@ -284,7 +404,9 @@ public class ElectronicSignatureService {
         boolean leaseWitness = "lease_contract".equalsIgnoreCase(row.getDocumentKind())
                 && List.of("owner_witness", "tenant_witness").contains(
                         Objects.toString(row.getSignerRole(), "").toLowerCase(Locale.ROOT));
-        if ((pmaWitness || leaseWitness) && identityNo.isBlank()) {
+        boolean appointmentWitness = "rental_appointment_draft".equalsIgnoreCase(row.getDocumentKind())
+                && "witness".equalsIgnoreCase(row.getSignerRole());
+        if ((pmaWitness || leaseWitness || appointmentWitness) && identityNo.isBlank()) {
             throw bad("Witness passport or identity number is required");
         }
         byte[] signature = decodeSignature(request.signatureDataUrl());
@@ -308,8 +430,10 @@ public class ElectronicSignatureService {
             signed.setFileSize(Files.size(generated)); signed.setChecksumSha256(sha256(generated)); signed.setUploadedBy(null);
             if (mapper.insertSignedDocument(signed) != 1 || signed.getId() == null)
                 throw conflict("Unable to save signed contract");
+            int participantCount = packageRoles.isEmpty() ? 0 : mapper.countParticipantsForRoot(rootId);
+            int expectedSigners = participantCount > 0 ? participantCount : packageRoles.size();
             boolean packageComplete = packageRoles.isEmpty()
-                    || mapper.countSignedRolesForRoot(rootId) + 1 >= packageRoles.size();
+                    || mapper.countSignedRolesForRoot(rootId) + 1 >= expectedSigners;
             int linkResult = "rental_mandate".equals(row.getEntityType())
                     ? mapper.insertSignedMandateDocumentLink(signed.getId(), row.getEntityId(), signedRelation(row, packageComplete))
                     : mapper.insertSignedDocumentLink(signed.getId(), row.getEntityType(), row.getEntityId());
@@ -320,7 +444,7 @@ public class ElectronicSignatureService {
             mapper.insertEvent(row.getId(), "signed", "Contract signed", remoteIp, userAgent);
             notifySignatureRequester(row, signedAt);
             mapper.insertAudit(null, "complete_electronic_signature", row.getEntityType(), row.getEntityId(), row.getId(), row.getSignerName());
-            return response(requireRequest(token));
+            return response(reload.get());
         } catch (IOException exception) {
             deleteQuietly(generated); throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate signed contract", exception);
         } catch (RuntimeException exception) { deleteQuietly(generated); throw exception; }
@@ -329,6 +453,9 @@ public class ElectronicSignatureService {
     @Transactional(readOnly = true)
     public Download downloadOriginal(String token) {
         RequestRow row = requireRequest(token);
+        return downloadOriginal(row);
+    }
+    private Download downloadOriginal(RequestRow row) {
         boolean signedSource = row.getRootDocumentId() != null
                 ? !Objects.equals(row.getSourceDocumentId(), row.getRootDocumentId())
                 : row.getSigningOrder() != null && row.getSigningOrder() > 1;
@@ -340,12 +467,23 @@ public class ElectronicSignatureService {
     @Transactional(readOnly = true)
     public Download downloadSigned(String token) {
         RequestRow row = requireRequest(token);
-        if (!"signed".equals(row.getStatus()) || row.getSignedStorageKey() == null
-                || "voided".equalsIgnoreCase(row.getSignedDocumentStatus())
-                || "superseded".equalsIgnoreCase(row.getSignedDocumentStatus())) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Signed contract is not available");
-        Path path = signatureRoot.resolve(row.getSignedStorageKey()).normalize();
+        return downloadSigned(row);
+    }
+    private Download downloadSigned(RequestRow row) {
+        if (!"signed".equals(row.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Signed contract is not available");
+        }
+        String storageKey = row.getSignedStorageKey();
+        String originalName = row.getSignedOriginalName();
+        if (storageKey == null || "voided".equalsIgnoreCase(row.getSignedDocumentStatus())
+                || "superseded".equalsIgnoreCase(row.getSignedDocumentStatus())) {
+            DocumentRow latest = mapper.findLatestActiveSignedDocument(rootDocumentId(row));
+            if (latest == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Signed contract is not available");
+            storageKey = latest.getStorageKey(); originalName = latest.getOriginalName();
+        }
+        Path path = signatureRoot.resolve(storageKey).normalize();
         if (!path.startsWith(signatureRoot) || !Files.isRegularFile(path)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Signed contract file is unavailable");
-        return new Download(path, safeName(row.getSignedOriginalName()));
+        return new Download(path, safeName(originalName));
     }
 
     private RequestRow requireRequest(String token) {
@@ -356,22 +494,58 @@ public class ElectronicSignatureService {
     }
     private RequestRow requirePendingRequest(String token) {
         RequestRow row = requireRequest(token);
+        requirePending(row);
+        return row;
+    }
+    private void requirePending(RequestRow row) {
         if (!"pending".equals(row.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT, "This signing request is already closed");
         if (row.getExpiresAt() == null || row.getExpiresAt().isBefore(LocalDateTime.now(clock))) throw new ResponseStatusException(HttpStatus.GONE, "This signing link has expired");
-        return row;
     }
     private ElectronicSignaturePublicResponse response(RequestRow row) {
         boolean canSign = "pending".equals(row.getStatus()) && row.getExpiresAt() != null && !row.getExpiresAt().isBefore(LocalDateTime.now(clock));
-        boolean signed = "signed".equals(row.getStatus())
-                && !"voided".equalsIgnoreCase(row.getSignedDocumentStatus())
-                && !"superseded".equalsIgnoreCase(row.getSignedDocumentStatus());
+        boolean signed = "signed".equals(row.getStatus());
         return new ElectronicSignaturePublicResponse(row.getId(), row.getOriginalName(), row.getSignerName(),
                 mask(row.getSignerEmail()), row.getStatus(), row.getExpiresAt(), row.getSignedAt(), canSign, signed,
-                row.getDocumentKind(), row.getSignerRole());
+                row.getDocumentKind(), row.getSignerRole(), primarySignaturePage(row));
     }
-    private void sendCode(String email, String name, String url, String code, LocalDateTime expiresAt) {
+
+    private int primarySignaturePage(RequestRow row) {
+        int fallback = defaultSignaturePage(row.getDocumentKind());
+        try {
+            boolean signedSource = row.getRootDocumentId() != null
+                    ? !Objects.equals(row.getSourceDocumentId(), row.getRootDocumentId())
+                    : row.getSigningOrder() != null && row.getSigningOrder() > 1;
+            Path source = resolveSourceDocument(row.getEntityType(), row.getStorageKey(), signedSource);
+            if (!Files.isRegularFile(source)) return fallback;
+            try (PdfReader reader = new PdfReader(Files.readAllBytes(source))) {
+                return signaturePlacements(row.getDocumentKind(), row.getSignerRole(), reader).stream()
+                        .filter(placement -> placement.page() >= 1 && placement.page() <= reader.getNumberOfPages())
+                        .sorted(Comparator
+                                .comparingDouble((SignaturePlacement placement) ->
+                                        placement.signatureWidth() * placement.signatureHeight())
+                                .reversed()
+                                .thenComparingInt(SignaturePlacement::page))
+                        .map(SignaturePlacement::page)
+                        .findFirst()
+                        .orElse(fallback);
+            }
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    static int defaultSignaturePage(String documentKind) {
+        return switch (Objects.toString(documentKind, "").toLowerCase(Locale.ROOT)) {
+            case "property_management_agreement_draft" -> 7;
+            case "management_authorization_draft", "authorization_draft", "authorization" -> 3;
+            case "termination_letter_draft" -> 2;
+            case "lease_contract" -> 12;
+            default -> 1;
+        };
+    }
+    private void sendInvitationEmail(String email, String name, String url, LocalDateTime expiresAt) {
         SimpleMailMessage message = new SimpleMailMessage(); message.setFrom(senderName + " <" + fromAddress + ">"); message.setTo(email);
-        message.setSubject("CCPS 合約簽署邀請"); message.setText("您好 " + name + "：\n\n請透過以下連結查看及簽署合約：\n" + url + "\n\n本次驗證碼：" + code + "（30 分鐘內有效）\n簽署連結有效至：" + expiresAt + "\n\n若非本人操作，請忽略此郵件。");
+        message.setSubject("CCPS 合約簽署邀請"); message.setText("您好 " + name + "：\n\n請透過以下連結查看及簽署合約：\n" + url + "\n\n開啟連結後即可直接查看並簽署。\n簽署連結有效至：" + expiresAt + "\n\n若非本人操作，請忽略此郵件。");
         try {
             mailSender.send(message);
         } catch (MailException exception) {
@@ -382,7 +556,7 @@ public class ElectronicSignatureService {
     private void requireMail() { if (mailSender == null || mailHost == null || mailHost.isBlank() || fromAddress == null || fromAddress.isBlank()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email service is not configured"); }
 
     private void notifySignatureRequester(RequestRow row, LocalDateTime signedAt) {
-        if (row.getRequestedBy() == null || !"owner".equalsIgnoreCase(Objects.toString(row.getSignerRole(), ""))) {
+        if (row.getRequestedBy() == null || !List.of("owner", "second_owner").contains(Objects.toString(row.getSignerRole(), "").toLowerCase(Locale.ROOT))) {
             return;
         }
         RequesterRow requester = mapper.findRequester(row.getRequestedBy());
@@ -450,13 +624,13 @@ public class ElectronicSignatureService {
                 }
                 image.setAbsolutePosition(signatureX, signatureY); canvas.addImage(image);
                 if (placement.dateX() > 0 && placement.dateY() > 0) {
-                    BaseFont font = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+                    BaseFont font = PdfFontResources.regular();
                     canvas.beginText(); canvas.setFontAndSize(font, placement.dateOnly() ? 9 : 7.5f);
                     if (placement.dateOnly()) {
-                        canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+                        canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
                     } else {
                         canvas.setTextMatrix(placement.signatureX(), placement.signatureY() - 10); canvas.showText("電子簽署：" + signerName);
-                        canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                        canvas.setTextMatrix(placement.dateX(), placement.dateY()); canvas.showText(signedAt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
                     }
                     canvas.endText();
                 }
@@ -472,7 +646,41 @@ public class ElectronicSignatureService {
             stamper.close();
         } catch (Exception exception) { if (exception instanceof IOException io) throw io; throw new IOException("Unable to stamp PDF", exception); }
     }
-    private byte[] decodeSignature(String dataUrl) { if (dataUrl == null || !dataUrl.startsWith("data:image/png;base64,")) throw bad("Invalid handwritten signature"); try { byte[] data = Base64.getDecoder().decode(dataUrl.substring("data:image/png;base64,".length())); if (data.length == 0 || data.length > MAX_SIGNATURE_BYTES) throw bad("Handwritten signature is invalid"); return data; } catch (IllegalArgumentException exception) { throw bad("Handwritten signature is invalid"); } }
+    private byte[] decodeSignature(String dataUrl) {
+        if (dataUrl == null || !dataUrl.startsWith("data:image/png;base64,")) {
+            throw bad("Invalid handwritten signature");
+        }
+        try {
+            byte[] data = Base64.getDecoder().decode(dataUrl.substring("data:image/png;base64,".length()));
+            if (data.length == 0 || data.length > MAX_SIGNATURE_BYTES || !hasMeaningfulSignatureInk(data)) {
+                throw bad("Please provide a complete handwritten signature");
+            }
+            return data;
+        } catch (IllegalArgumentException | IOException exception) {
+            throw bad("Handwritten signature is invalid");
+        }
+    }
+
+    static boolean hasMeaningfulSignatureInk(byte[] data) throws IOException {
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(data));
+        if (image == null || image.getWidth() < 20 || image.getHeight() < 20) return false;
+        int minX = image.getWidth(), minY = image.getHeight(), maxX = -1, maxY = -1, inkPixels = 0;
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int argb = image.getRGB(x, y);
+                int alpha = (argb >>> 24) & 0xff;
+                int red = (argb >>> 16) & 0xff;
+                int green = (argb >>> 8) & 0xff;
+                int blue = argb & 0xff;
+                if (alpha > 12 && Math.min(red, Math.min(green, blue)) < 245) {
+                    inkPixels++;
+                    minX = Math.min(minX, x); minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+                }
+            }
+        }
+        return inkPixels >= 40 && maxX - minX >= 12 && maxY - minY >= 8;
+    }
     private String randomToken() { byte[] bytes = new byte[32]; random.nextBytes(bytes); return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes); }
     static SignaturePlacement signaturePlacement(String originalName, float pageWidth, float pageHeight) {
         float signatureX = Math.max(36f, pageWidth * 0.14f);
@@ -491,12 +699,14 @@ public class ElectronicSignatureService {
         if ("lease_contract".equals(kind)
                 && List.of("owner", "owner_witness", "tenant", "tenant_witness").contains(role)) {
             List<SignaturePlacement> placements = new ArrayList<>();
-            // Only the tenant initials the numbered pages. The ink intentionally
-            // overlays the footer's page-number/version block, matching the source
-            // document's handwritten-signature treatment.
+            // Only the tenant initials the numbered pages. Keep the initials in the
+            // otherwise empty middle of the footer so they never cover the page
+            // number or template version. Pages 12 and 19 already contain the
+            // tenant's full execution/check-in signature and do not need initials.
             if ("tenant".equals(role)) {
                 for (int page = 2; page <= reader.getNumberOfPages(); page++) {
-                    placements.add(new SignaturePlacement(page, 420, 28, 110, 42, 0, 0, true));
+                    if (page == 12 || page == 19) continue;
+                    placements.add(new SignaturePlacement(page, 265, 20, 42, 18, 0, 0, true));
                 }
             }
             if ("owner".equals(role) && reader.getNumberOfPages() >= 12) {
@@ -527,17 +737,32 @@ public class ElectronicSignatureService {
                     new SignaturePlacement(7, 33, 190, 92, 27, 0, 0, false));
         }
         if ("rental_appointment_draft".equals(kind)) {
-            // The appointment letter has three fixed signature boxes. The current
-            // workflow is signed by the first landlord, so place the ink in the
-            // first box and deliberately omit all generated signer/date captions.
-            return List.of(new SignaturePlacement(1, 75, 260, 130, 38, 0, 0, true));
+            return switch (role) {
+                case "owner" -> List.of(new SignaturePlacement(1, 75, 260, 130, 38, 0, 0, true));
+                case "second_owner" -> List.of(new SignaturePlacement(1, 245, 260, 130, 38, 0, 0, true));
+                case "witness" -> List.of(new SignaturePlacement(1, 415, 260, 130, 38, 0, 0, true));
+                default -> throw bad("Unsupported signer role for rental appointment");
+            };
         }
         if ("otr".equals(kind) || "otr_document".equals(kind)) {
+            boolean includesAppointmentPage = reader.getNumberOfPages() >= 2;
             return switch (role) {
                 case "tenant" -> List.of(new SignaturePlacement(1, 115, 365, 150, 32, 0, 0, true));
                 case "tenant_witness" -> List.of(new SignaturePlacement(1, 115, 160, 150, 28, 0, 0, true));
-                case "owner" -> List.of(new SignaturePlacement(1, 340, 365, 150, 32, 0, 0, true));
-                case "owner_witness" -> List.of(new SignaturePlacement(1, 340, 160, 150, 28, 0, 0, true));
+                case "owner" -> includesAppointmentPage
+                        ? List.of(new SignaturePlacement(1, 340, 365, 150, 32, 0, 0, true),
+                                new SignaturePlacement(2, 75, 260, 130, 38, 0, 0, true))
+                        : List.of(new SignaturePlacement(1, 340, 365, 150, 32, 0, 0, true));
+                case "owner_witness" -> includesAppointmentPage
+                        ? List.of(new SignaturePlacement(1, 340, 160, 150, 28, 0, 0, true),
+                                new SignaturePlacement(2, 415, 260, 130, 38, 0, 0, true))
+                        : List.of(new SignaturePlacement(1, 340, 160, 150, 28, 0, 0, true));
+                case "second_owner" -> {
+                    if (!includesAppointmentPage) {
+                        throw bad("The OTR has no rental appointment page for the second owner");
+                    }
+                    yield List.of(new SignaturePlacement(2, 245, 260, 130, 38, 0, 0, true));
+                }
                 default -> throw bad("Unsupported signer role for OTR");
             };
         }
@@ -546,8 +771,11 @@ public class ElectronicSignatureService {
             return List.of(new SignaturePlacement(3, 72, 382, 112, 24, 0, 0, true));
         }
         if ("termination_letter_draft".equals(kind)) {
-            if (!"owner".equals(role)) throw bad("The termination letter must be signed by the owner");
-            return List.of(new SignaturePlacement(2, 54, 250, 165, 32, 0, 0, true));
+            return switch (role) {
+                case "owner" -> List.of(new SignaturePlacement(2, 54, 250, 165, 32, 0, 0, true));
+                case "company" -> List.of(new SignaturePlacement(2, 54, 139, 165, 32, 0, 0, true));
+                default -> throw bad("The termination letter must be signed by the owner and company representative");
+            };
         }
         if ("rental_remittance_draft".equals(kind)) {
             if (!"owner".equals(role)) throw bad("The rental remittance letter must be signed by the owner");
@@ -574,7 +802,12 @@ public class ElectronicSignatureService {
                 case "customer_service" -> List.of("signature.customer_service");
                 default -> List.of();
             };
-            case MANAGEMENT_AUTHORIZATION, TERMINATION_LETTER, RENTAL_REMITTANCE ->
+            case TERMINATION_LETTER -> switch (role) {
+                case "owner" -> List.of("signature.owner");
+                case "company" -> List.of("signature.company");
+                default -> List.of();
+            };
+            case MANAGEMENT_AUTHORIZATION, RENTAL_REMITTANCE ->
                     "owner".equals(role) ? List.of("signature.owner") : List.of();
         };
         if (keys.isEmpty()) return List.of();
@@ -604,19 +837,22 @@ public class ElectronicSignatureService {
     }
 
     private void stampPmaWitnessDetails(PdfContentByte canvas, String signerName, String identityNo) throws Exception {
-        BaseFont nameFont = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+        BaseFont latin = PdfFontResources.regular();
+        BaseFont cjk = latin;
+        String safeName = shorten(Objects.toString(signerName, "").trim(), 80);
+        BaseFont nameFont = safeName.chars().allMatch(ch -> ch < 128) ? latin : cjk;
         canvas.beginText();
         canvas.setFontAndSize(nameFont, 8.5f);
         for (float presenceY : List.of(572f, 249f)) {
             canvas.setTextMatrix(104f, presenceY);
-            canvas.showText(shorten(Objects.toString(signerName, "").trim(), 80));
+            canvas.showText(safeName);
         }
         for (float nameY : List.of(416f, 142f)) {
             canvas.setTextMatrix(61f, nameY);
-            canvas.showText(shorten(Objects.toString(signerName, "").trim(), 80));
+            canvas.showText(safeName);
         }
         canvas.endText();
-        BaseFont identityFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+        BaseFont identityFont = latin;
         canvas.beginText();
         canvas.setFontAndSize(identityFont, 8.5f);
         for (float identityY : List.of(384f, 110f)) {
@@ -629,8 +865,8 @@ public class ElectronicSignatureService {
     private void stampLeaseWitnessDetails(PdfStamper stamper, String signerRole, String signerName,
             String identityNo, LocalDateTime signedAt) throws Exception {
         boolean ownerWitness = "owner_witness".equalsIgnoreCase(Objects.toString(signerRole, ""));
-        BaseFont cjk = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
-        BaseFont latin = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+        BaseFont cjk = PdfFontResources.regular();
+        BaseFont latin = cjk;
         PdfContentByte signaturePage = stamper.getOverContent(12);
         signaturePage.beginText();
         signaturePage.setFontAndSize(cjk, 8.5f);
@@ -654,7 +890,7 @@ public class ElectronicSignatureService {
             checkInPage.setTextMatrix(444f, 515f);
             checkInPage.showText("Witness");
             checkInPage.setTextMatrix(399f, 492f);
-            checkInPage.showText(signedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+            checkInPage.showText(signedAt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
             checkInPage.endText();
         }
     }
@@ -710,8 +946,12 @@ public class ElectronicSignatureService {
             };
         }
         if ("termination_letter_draft".equals(kind)) {
-            if (!role.isBlank() && !"owner".equals(role)) throw bad("The termination letter must be signed by the owner");
-            return new SigningPlan(kind, "owner", 1, 1);
+            if (role.isBlank()) role = "owner";
+            return switch (role) {
+                case "owner" -> new SigningPlan(kind, role, 1, 2);
+                case "company" -> new SigningPlan(kind, role, 2, 2);
+                default -> throw bad("Unsupported signer role for termination letter");
+            };
         }
         if ("rental_remittance_draft".equals(kind)) {
             if (!role.isBlank() && !"owner".equals(role)) throw bad("The rental remittance letter must be signed by the owner");
@@ -732,7 +972,36 @@ public class ElectronicSignatureService {
         if ("lease_contract".equals(kind)) {
             return List.of("owner", "owner_witness", "tenant", "tenant_witness");
         }
+        if ("rental_appointment_draft".equals(kind)) {
+            return List.of("owner", "second_owner", "witness");
+        }
+        if ("termination_letter_draft".equals(kind)) {
+            return List.of("owner", "company");
+        }
         return List.of();
+    }
+
+    private List<String> signingPackageRoles(String documentKind, ElectronicSignaturePackageRequest request) {
+        String kind = Objects.toString(documentKind, "").toLowerCase(Locale.ROOT);
+        if ("otr".equals(kind) || "otr_document".equals(kind)) {
+            List<String> submitted = request.signers().stream()
+                    .map(signer -> Objects.toString(signer.signerRole(), "").trim().toLowerCase(Locale.ROOT)).toList();
+            List<String> required = List.of("tenant", "tenant_witness", "owner", "owner_witness");
+            if (!submitted.containsAll(required)) {
+                throw bad("The tenant, tenant witness, owner and shared owner witness are required for OTR");
+            }
+            return submitted.contains("second_owner")
+                    ? List.of("tenant", "tenant_witness", "owner", "owner_witness", "second_owner")
+                    : required;
+        }
+        if (!"rental_appointment_draft".equals(kind)) return multiSignerRoles(kind);
+        List<String> submitted = request.signers().stream()
+                .map(signer -> Objects.toString(signer.signerRole(), "").trim().toLowerCase(Locale.ROOT)).toList();
+        if (!submitted.contains("owner") || !submitted.contains("witness")) {
+            throw bad("The owner and witness are required for the rental appointment");
+        }
+        return submitted.contains("second_owner")
+                ? List.of("owner", "second_owner", "witness") : List.of("owner", "witness");
     }
 
     private String signedRelation(RequestRow row, boolean packageComplete) {
@@ -742,9 +1011,13 @@ public class ElectronicSignatureService {
                     ? "property_management_agreement_signed" : "property_management_agreement_partial";
         }
         if ("management_authorization_draft".equals(kind)) return "management_authorization_signed";
-        if ("termination_letter_draft".equals(kind)) return "termination_letter_signed";
+        if ("termination_letter_draft".equals(kind)) {
+            return packageComplete ? "termination_letter_signed" : "termination_letter_partial";
+        }
         if ("rental_remittance_draft".equals(kind)) return "rental_remittance_signed";
-        if ("rental_appointment_draft".equals(kind)) return "rental_appointment_signed";
+        if ("rental_appointment_draft".equals(kind)) {
+            return packageComplete ? "rental_appointment_signed" : "rental_appointment_partial";
+        }
         if ("otr".equals(kind) || "otr_document".equals(kind)) {
             return packageComplete ? "otr_signed" : "otr_partial";
         }
@@ -754,13 +1027,13 @@ public class ElectronicSignatureService {
     private Long rootDocumentId(RequestRow row) {
         return row.getRootDocumentId() == null ? row.getSourceDocumentId() : row.getRootDocumentId();
     }
-    private String verificationCode() { return String.valueOf(100000 + random.nextInt(900000)); }
     private String sha256(String value) { return sha256(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
     private String sha256(Path path) throws IOException { return sha256(Files.readAllBytes(path)); }
     private String sha256(byte[] value) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value)); } catch (NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); } }
     private String signedName(String name) { String safe = safeName(name); int dot = safe.lastIndexOf('.'); return (dot > 0 ? safe.substring(0, dot) : safe) + "-已签署.pdf"; }
     private String safeName(String name) { String value = name == null ? "contract.pdf" : name.replace('\\', '/'); value = value.substring(value.lastIndexOf('/') + 1).replaceAll("[\\r\\n]", "_"); return value.isBlank() ? "contract.pdf" : value; }
     private String trim(String value, String label) { if (value == null || value.isBlank()) throw bad(label + " is required"); return shorten(value.trim(), 190); }
+    private String optionalEmail(String value) { return value == null || value.isBlank() ? "" : shorten(value.trim().toLowerCase(Locale.ROOT), 190); }
     private String normalizeName(String value) { return Objects.toString(value, "").trim().replaceAll("\\s+", " "); }
     private String shorten(String value, int max) { if (value == null) return null; return value.length() <= max ? value : value.substring(0, max); }
     private String mask(String email) { if (email == null || email.isBlank()) return "—"; int at = email.indexOf('@'); if (at <= 1) return "*" + email.substring(Math.max(at, 0)); return email.substring(0, 1) + "***" + email.substring(at); }
@@ -769,7 +1042,7 @@ public class ElectronicSignatureService {
     private ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT, message); }
 
     public record Download(Path path, String originalName) { }
-    record Invitation(NewRequest row, String url, String code) { }
+    record Invitation(NewRequest row, String url) { }
     record SignaturePlacement(int page, float signatureX, float signatureY, float signatureWidth, float signatureHeight, float dateX,
             float dateY, boolean dateOnly) { }
     record SigningPlan(String documentKind, String signerRole, int signingOrder, int totalSteps) { }

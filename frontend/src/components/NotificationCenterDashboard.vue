@@ -1,17 +1,17 @@
 <template>
   <section class="notification-center-page">
-    <div v-if="errorMessage" class="notification-api-message">{{ errorMessage }}</div>
+    <div v-if="errorMessage" class="notification-api-message">{{ $lt(errorMessage) }}</div>
     <div class="notification-summary-grid">
       <article v-for="card in summaryCards" :key="card.label" class="notification-summary-card">
         <div class="notification-summary-icon" v-html="icons[card.icon]"></div>
-        <div><span>{{ card.label }}</span><strong>{{ card.value }}</strong><button @click="applySummary(card.action)">{{ card.note }} <b>›</b></button></div>
+        <div><span>{{ $lt(card.label) }}</span><strong>{{ card.value }}</strong><button @click="applySummary(card.action)">{{ $lt(card.note) }} <b>›</b></button></div>
       </article>
     </div>
 
     <div class="notification-workspace">
       <section class="notification-list-card">
         <div class="notification-category-tabs">
-          <button v-for="tab in categories" :key="tab.key" :class="{ active: category === tab.key }" @click="changeCategory(tab.key)">{{ tab.label }} <b>{{ tab.count }}</b></button>
+          <button v-for="tab in categories" :key="tab.key" :class="{ active: category === tab.key }" @click="changeCategory(tab.key)">{{ $lt(tab.label) }} <b>{{ tab.count }}</b></button>
         </div>
         <form class="notification-filters" @submit.prevent>
           <label class="notification-search"><span v-html="icons.search"></span><input v-model="keyword" :placeholder="$t('legacy.t_e0789515b66f')"></label>
@@ -25,10 +25,10 @@
           <article v-for="notice in pagedNotifications" v-else :key="notice.id" :class="{ selected: selectedId === notice.id, unread: !notice.read }" @click="selectNotice(notice)">
             <i class="notification-unread-dot"></i>
             <span class="notification-kind-icon" :class="notice.tone" v-html="icons[notice.icon]"></span>
-            <div class="notification-list-copy"><h3>{{ notice.title }} <b v-if="notice.badge">{{ notice.badge }}</b></h3><p>{{ notice.body }}</p></div>
+            <div class="notification-list-copy"><h3>{{ notice.title }} <b v-if="notice.badge">{{ $lt(notice.badge) }}</b></h3><p>{{ notice.body }}</p></div>
             <div class="notification-property"><strong>{{ notice.project || $t('legacy.t_c14b00eeef92') }}</strong><small>{{ notice.unit || '—' }}</small></div>
             <div class="notification-meta"><time>{{ formatTime(notice.createdAt) }}</time><small><span v-html="icons[notice.read ? 'clock' : 'unread']"></span>{{ notice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</small></div>
-            <span class="notification-priority" :class="priorityClass(notice.priority)">{{ priorityLabel(notice.priority) }}</span><button type="button" class="notification-view-detail" @click.stop="openNoticeDetail(notice)">查看详情</button>
+            <span class="notification-priority" :class="priorityClass(notice.priority)">{{ $lt(priorityLabel(notice.priority)) }}</span><button type="button" class="notification-view-detail" @click.stop="openNoticeDetail(notice)">{{ $t('legacy.t_faea8c1db9cc') }}</button>
           </article>
           <div v-if="!loading && !pagedNotifications.length" class="notification-empty">{{ $t('legacy.t_2c97fa76da9e') }}</div>
         </div>
@@ -36,20 +36,20 @@
       </section>
 
       <div v-if="selectedNotice && detailDialogOpen" class="property-detail-overlay notification-detail-overlay" @pointerdown.self="closeDetailDialog">
-        <section class="notification-detail-card notification-detail-dialog" role="dialog" aria-modal="true" aria-label="通知详情">
-        <header><div><h2>{{ selectedNotice.title }}</h2><span :class="priorityClass(selectedNotice.priority)">{{ selectedNotice.badge || `${priorityLabel(selectedNotice.priority)}優先級` }}</span></div><button type="button" class="notification-detail-close" @click="closeDetailDialog" aria-label="关闭详情">×</button></header>
+        <section class="notification-detail-card notification-detail-dialog" role="dialog" aria-modal="true" :aria-label="$t('legacy.t_779398d032ec')">
+        <header><div><h2>{{ selectedNotice.title }}</h2><span :class="priorityClass(selectedNotice.priority)">{{ selectedNotice.badge || $t('ui.priorityBadge', { priority: $lt(priorityLabel(selectedNotice.priority)) }) }}</span></div><button type="button" class="notification-detail-close" @click="closeDetailDialog" :aria-label="$t('legacy.t_6a3082724a14')">×</button></header>
         <div class="notification-detail-meta"><span v-html="icons.calendar"></span>{{ formatTime(selectedNotice.createdAt) }}<i></i>{{ $t('legacy.t_99f8602b6a1b') }}{{ selectedNotice.number }}<b :class="{ read: selectedNotice.read }">{{ selectedNotice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</b></div>
-        <div class="notification-message"><p>{{ selectedNotice.detail || selectedNotice.title }}</p><p>{{ selectedNotice.message || selectedNotice.body }}</p><p>{{ $t('legacy.t_7f7133c2f0e8') }}</p></div>
-        <section class="notification-property-section"><h3>{{ $t('legacy.t_e76558347e29') }}</h3><div class="notification-property-card"><div class="notification-property-photo"></div><div><strong>{{ selectedNotice.project || $t('legacy.t_c14b00eeef92') }}</strong><span>{{ selectedNotice.unit || '—' }}</span><small>{{ selectedNotice.city || '—' }}</small></div><dl><div><dt>{{ $t('legacy.t_ae3d135a8759') }}</dt><dd>{{ selectedNotice.amount ? `RM ${selectedNotice.amount}` : '—' }}</dd></div><div><dt>{{ $t('legacy.t_54b41f1f8169') }}</dt><dd>{{ selectedNotice.dueDate || '—' }}</dd></div></dl></div></section>
-        <section class="notification-quick-actions"><h3>{{ $t('legacy.t_f4a1217c3974') }}</h3><div><button v-for="action in quickActions" :key="action.key" type="button" @click="handleQuickAction(action)"><span v-html="icons[action.icon]"></span>{{ action.label }}</button></div></section>
-        <section class="notification-related-records"><h3>{{ $t('legacy.t_a02a518aa646') }}</h3><dl><div><dt>{{ $t('legacy.t_3784424059e3') }}</dt><dd>{{ selectedNotice.number }}</dd></div><div><dt>{{ $t('legacy.t_357e7a325e3e') }}</dt><dd>{{ categoryLabel(selectedNotice.category) }}</dd></div><div><dt>{{ $t('legacy.t_b04e5a22effc') }}</dt><dd>{{ selectedNotice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</dd></div></dl><button @click="markSelectedRead">{{ $t('legacy.t_0da6c307e848') }} <span>→</span></button></section>
+        <div class="notification-message"><p v-for="message in noticeMessageParts" :key="message">{{ message }}</p><p>{{ $t('legacy.t_7f7133c2f0e8') }}</p></div>
+<section class="notification-property-section"><h3>{{ $t('legacy.t_e76558347e29') }}</h3><div class="notification-property-card"><div class="notification-property-photo"></div><div><strong>{{ selectedNotice.project || $t('legacy.t_c14b00eeef92') }}</strong><span>{{ selectedNotice.unit || '—' }}</span><small>{{ selectedNotice.city || '—' }}</small></div><dl><div><dt>{{ $t('legacy.t_ae3d135a8759') }}</dt><dd>{{ selectedNotice.amount ? `RM ${selectedNotice.amount}` : '—' }}</dd></div><div><dt>{{ $t('legacy.t_54b41f1f8169') }}</dt><dd>{{ displayDate(selectedNotice.dueDate) }}</dd></div></dl></div></section>
+        <section class="notification-quick-actions"><h3>{{ $t('legacy.t_f4a1217c3974') }}</h3><div><button v-for="action in quickActions" :key="action.key" type="button" @click="handleQuickAction(action)"><span v-html="icons[action.icon]"></span>{{ $lt(action.label) }}</button></div></section>
+        <section class="notification-related-records"><h3>{{ $t('legacy.t_a02a518aa646') }}</h3><dl><div><dt>{{ $t('legacy.t_3784424059e3') }}</dt><dd>{{ selectedNotice.number }}</dd></div><div><dt>{{ $t('legacy.t_357e7a325e3e') }}</dt><dd>{{ $lt(categoryLabel(selectedNotice.category)) }}</dd></div><div><dt>{{ $t('legacy.t_b04e5a22effc') }}</dt><dd>{{ selectedNotice.read ? $t('legacy.t_dd9119508821') : $t('legacy.t_f61b989e4838') }}</dd></div></dl><button @click="markSelectedRead">{{ $t('legacy.t_0da6c307e848') }} <span>→</span></button></section>
         </section>
       </div>
 
       <aside class="notification-side-column">
-        <section class="notification-side-card notification-tasks"><header><h2>{{ $t('legacy.t_6f277e1de0bd') }}</h2><button @click="readFilter = $t('legacy.t_f61b989e4838')">{{ $t('legacy.t_0f5a2b9b8979') }}{{ tasks.length }})</button></header><article v-for="task in tasks" :key="task.type + task.title"><i :class="priorityClass(task.priority)" v-html="icons[taskIcon(task.type)]"></i><div><strong>{{ task.title }}</strong><small>{{ task.detail }}</small><span>{{ priorityLabel(task.priority) }}{{ $t('legacy.t_e3c782502b8b') }}</span></div><b>{{ task.count }}</b></article><p v-if="!tasks.length" class="notification-side-empty">{{ $t('legacy.t_a494b83fa4d5') }}</p></section>
+        <section class="notification-side-card notification-tasks"><header><h2>{{ $t('legacy.t_6f277e1de0bd') }}</h2><button @click="readFilter = $t('legacy.t_f61b989e4838')">{{ $t('legacy.t_0f5a2b9b8979') }}{{ tasks.length }})</button></header><article v-for="task in tasks" :key="task.type + task.title"><i :class="priorityClass(task.priority)" v-html="icons[taskIcon(task.type)]"></i><div><strong>{{ $lt(task.title) }}</strong><small>{{ $lt(task.detail) }}</small><span>{{ $lt(priorityLabel(task.priority)) }}{{ $t('legacy.t_e3c782502b8b') }}</span></div><b>{{ task.count }}</b></article><p v-if="!tasks.length" class="notification-side-empty">{{ $t('legacy.t_a494b83fa4d5') }}</p></section>
         <section class="notification-side-card notification-shortcuts"><header><h2>{{ $t('legacy.t_73f33421120f') }}</h2></header><button @click="changeCategory('all')"><span v-html="icons.message"></span><div><strong>{{ $t('legacy.t_a1ea74aac9b4') }}</strong><small>{{ $t('legacy.t_dfd4477b06be') }}</small></div><b>{{ summary.totalCount }}</b></button><button @click="markAllRead"><span v-html="icons.check"></span><div><strong>{{ $t('legacy.t_0da6c307e848') }}</strong><small>{{ $t('legacy.t_0f006218718d') }}</small></div></button><button @click="showToast($t('legacy.t_d2413e0cd81d'))"><span v-html="icons.settings"></span><div><strong>{{ $t('legacy.t_aee38e900c78') }}</strong><small>{{ $t('legacy.t_be49040c0e55') }}</small></div></button><button @click="showToast($t('legacy.t_4d78914bd0de'))"><span v-html="icons.help"></span><div><strong>{{ $t('legacy.t_82ad6d724fe0') }}</strong><small>{{ $t('legacy.t_b9dec3969d41') }}</small></div></button></section>
-        <section class="notification-side-card notification-subscriptions"><header><h2>{{ $t('legacy.t_b587ade89600') }}</h2></header><h3>{{ $t('legacy.t_a7530e593b96') }}</h3><div><button v-for="channel in channels" :key="channel.key" :class="{ active: channel.status === 'enabled', pending: channel.status === 'pending' }" @click="handleChannel(channel)"><span v-html="icons[channel.key === 'email' ? 'mail' : channel.key] || icons.bell"></span><strong>{{ channel.label }}</strong><i>{{ channel.status === 'enabled' ? '✓' : channel.status === 'pending' ? '…' : '+' }}</i></button><button type="button" class="notification-channel-disabled" disabled :aria-label="$t('legacy.t_5e3727a65977')"><span v-html="icons.whatsapp"></span><strong>{{ $t('legacy.t_b336fc558722') }}</strong><i>＋</i></button></div><button class="notification-preferences" @click="openEmailSubscription">{{ $t('legacy.t_f3c5ebe6822c') }} <span>→</span></button></section>
+        <section class="notification-side-card notification-subscriptions"><header><h2>{{ $t('legacy.t_b587ade89600') }}</h2></header><h3>{{ $t('legacy.t_a7530e593b96') }}</h3><div><button v-for="channel in channels" :key="channel.key" :class="{ active: channel.status === 'enabled', pending: channel.status === 'pending' }" @click="handleChannel(channel)"><span v-html="icons[channel.key === 'email' ? 'mail' : channel.key] || icons.bell"></span><strong>{{ $lt(channel.label) }}</strong><i>{{ channel.status === 'enabled' ? '✓' : channel.status === 'pending' ? '…' : '+' }}</i></button><button type="button" class="notification-channel-disabled" disabled :aria-label="$t('legacy.t_5e3727a65977')"><span v-html="icons.whatsapp"></span><strong>{{ $t('legacy.t_b336fc558722') }}</strong><i>＋</i></button></div><button class="notification-preferences" @click="openEmailSubscription">{{ $t('legacy.t_f3c5ebe6822c') }} <span>→</span></button></section>
       </aside>
     </div>
 
@@ -73,7 +73,7 @@
             <label class="email-subscription-toggle"><div><strong>{{ $t('legacy.t_44d3f385ec81') }}</strong><small>{{ $t('legacy.t_f95c21d3064d') }}</small></div><input v-model="emailEnabled" type="checkbox" :disabled="emailBusy" @change="toggleEmail"></label>
             <button class="email-link-action" :disabled="emailBusy" @click="emailStep = 'bind'">{{ $t('legacy.t_5104c5b8f895') }}</button>
           </template>
-          <p v-if="emailError" class="email-subscription-error">{{ emailError }}</p>
+          <p v-if="emailError" class="email-subscription-error">{{ $lt(emailError) }}</p>
         </div>
       </section>
     </div>
@@ -83,6 +83,7 @@
 <script>
 import pageBridge from '../pageBridge';
 import { fetchOwnerNotifications, markAllOwnerNotificationsRead, markOwnerNotificationRead, requestOwnerEmailVerification, toggleOwnerEmailSubscription, verifyOwnerEmail } from '../services/propertyApi';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
 
 export default {
   mixins: [pageBridge],
@@ -103,6 +104,14 @@ export default {
     pagedNotifications() { return this.filteredNotifications.slice((this.currentPage - 1) * this.pageSize, this.currentPage * this.pageSize); },
     visiblePageNumbers() { return Array.from({ length: Math.min(5, this.totalPages) }, (_, i) => i + 1); },
     selectedNotice() { return this.notifications.find(n => n.id === this.selectedId) || null; },
+    noticeMessageParts() {
+      if (!this.selectedNotice) return [];
+      const messages = [
+        this.selectedNotice.detail || this.selectedNotice.title,
+        this.selectedNotice.message || this.selectedNotice.body
+      ].map(value => String(value || '').trim()).filter(Boolean);
+      return [...new Set(messages)];
+    },
     validEmail() { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.emailAddress); },
     quickActions() {
       const actions = {
@@ -152,7 +161,8 @@ export default {
     priorityLabel(value) { return { high: '高', normal: '中', low: '低', 高: '高', 中: '中', 低: '低' }[value] || '低'; },
     categoryLabel(value) { return (this.categories.find(item => item.key === value) || {}).label || value; },
     taskIcon(type) { return { payment: 'payment', rent: 'home', reserve: 'shield', maintenance: 'wrench', document: 'file', system: 'announcement' }[type] || 'bell'; },
-    formatTime(value) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); },
+    displayDate(value) { return formatDate(value); },
+    formatTime(value) { return formatDateTime(value); },
     resetFilters() { this.keyword = ''; this.readFilter = '全部狀態'; this.priorityFilter = '全部優先級'; this.startDate = ''; this.endDate = ''; this.currentPage = 1; },
     handleQuickAction(action) { this.showToast(action.message); },
     applySummary(action) {

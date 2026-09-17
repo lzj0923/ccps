@@ -50,6 +50,19 @@ class AdminPropertyContractRecordMapperSqlTest {
     }
 
     @Test
+    void leaseIsOnlyCompleteAfterEverySavedPackageParticipantHasSigned() throws Exception {
+        Method listMethod = AdminPropertyContractRecordMapper.class.getDeclaredMethod(
+                "listLeaseContracts", Long.class);
+        Method optionMethod = AdminPropertyContractRecordMapper.class.getDeclaredMethod(
+                "leaseOptions", Long.class);
+        String listSql = String.join(" ", listMethod.getAnnotation(Select.class).value());
+        String optionSql = String.join(" ", optionMethod.getAnnotation(Select.class).value());
+
+        assertThat(listSql).contains("electronic_signature_participants", "GREATEST(2");
+        assertThat(optionSql).contains("electronic_signature_participants", "GREATEST(2");
+    }
+
+    @Test
     void leaseContractRowsOnlyExposeDownloadableDocuments() throws Exception {
         Method method = AdminPropertyContractRecordMapper.class.getDeclaredMethod(
                 "listLeaseContracts", Long.class);

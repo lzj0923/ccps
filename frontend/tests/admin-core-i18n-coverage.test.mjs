@@ -19,8 +19,8 @@ test('智慧大屏与管理总览的动态统计文字使用 i18n', () => {
   assert.match(smartDashboard, /ui\.regionalManagedUnitsHint/)
   assert.match(smartDashboard, /ui\.regionalAverageRentHint/)
   assert.match(smartDashboard, /ui\.unsetRegion/)
-  assert.match(managementDashboard, /ui\.managedUnits/)
-  assert.match(managementDashboard, /ui\.negativeBalanceAllowedHint/)
+  assert.match(managementDashboard, /ui\.managedProperties/)
+  assert.match(managementDashboard, /ui\.propertyLevelSummary/)
 })
 
 test('租房流程和租客租金的动态状态使用 i18n，同时保留稳定业务值', () => {

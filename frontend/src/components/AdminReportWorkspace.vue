@@ -24,7 +24,7 @@
       <ModuleToolbar />
       <div v-if="loading" class="report-state">{{ $t('reports.loading') }}</div>
       <div v-else-if="errorMessage" class="report-state error">
-        <strong>{{ $t('reports.loadFailed') }}</strong><span>{{ errorMessage }}</span
+        <strong>{{ $t('reports.loadFailed') }}</strong><span>{{ $lt(errorMessage) }}</span
         ><button @click="loadData">{{ $t('reports.retry') }}</button>
       </div>
       <div v-else class="table-wrap report-table">
@@ -48,16 +48,14 @@
                 <strong>{{ reportRunName(run) }}</strong
                 ><small>#{{ run.id }}</small>
               </td>
-              <td>{{ periodLabel(run) }}</td>
+              <td>{{ $lt(periodLabel(run)) }}</td>
               <td>{{ run.scopeName || run.projectName || $t('reports.allScope') }}</td>
               <td>
                 <span class="format-chip">{{ run.outputFormat }}</span>
               </td>
               <td>{{ run.recordCount ?? "—" }}</td>
               <td>
-                <span class="report-tag" :class="run.status">{{
-                  statusLabel(run.status)
-                }}</span>
+                <span class="report-tag" :class="run.status">{{ $lt(statusLabel(run.status)) }}</span>
               </td>
               <td>{{ run.requestedByName || $t('reports.system') }}</td>
               <td>{{ dateTime(run.completedAt) }}</td>
@@ -111,7 +109,7 @@
           <dl>
             <div>
               <dt>{{ $t('reports.reportType') }}</dt>
-              <dd>{{ typeLabel(selectedDefinition.reportType) }}</dd>
+              <dd>{{ $lt(typeLabel(selectedDefinition.reportType)) }}</dd>
             </div>
             <div>
               <dt>{{ $t('reports.defaultFormat') }}</dt>
@@ -139,14 +137,12 @@
             class="recent-run"
           >
             <div>
-              <strong>{{ periodLabel(run) }}</strong
+              <strong>{{ $lt(periodLabel(run)) }}</strong
               ><small
                 >{{ $t('ui.records', { count: run.recordCount ?? 0 }) }} · {{ run.outputFormat }}</small
               >
             </div>
-            <span class="report-tag" :class="run.status">{{
-              statusLabel(run.status)
-            }}</span>
+            <span class="report-tag" :class="run.status">{{ $lt(statusLabel(run.status)) }}</span>
           </article>
           <p v-if="!typeRuns.length">{{ $t('reports.noRecords') }}</p>
         </section>
@@ -228,17 +224,16 @@
                 </option>
               </select></label
             ><label v-if="form.scopeType !== 'all'" class="control-field" :class="{ 'scope-person-select': scopeTypes.length === 1 }"
-              >{{ $t('reports.select') }} {{ scopeTypeLabel(form.scopeType)
-              }}<select v-model.number="form.scopeId" required>
+              >{{ $t('reports.select') }} {{ $lt(scopeTypeLabel(form.scopeType)) }}<select v-model.number="form.scopeId" required>
                 <option :value="null" disabled>
-                  {{ $t('reports.select') }} {{ scopeTypeLabel(form.scopeType) }}
+                  {{ $t('reports.select') }} {{ $lt(scopeTypeLabel(form.scopeType)) }}
                 </option>
                 <option
                   v-for="option in scopeOptions"
                   :key="option.id"
                   :value="option.id"
                 >
-                  {{ option.label }}
+                  {{ $lt(option.label) }}
                 </option>
               </select></label
             >
@@ -263,7 +258,7 @@
               ><span class="format-check" aria-hidden="true"><Check :size="13" :stroke-width="3" /></span></label
             >
           </fieldset>
-          <p v-if="dialogError" class="dialog-error" role="alert">{{ dialogError }}</p>
+          <p v-if="dialogError" class="dialog-error" role="alert">{{ $lt(dialogError) }}</p>
         </div>
         <menu>
           <button type="button" :disabled="generating" @click="closeDialog">{{ $t('ui.cancel') }}</button
@@ -285,7 +280,7 @@ import {
 import { Check, Download, FileSpreadsheet, FileText, LoaderCircle, X } from "@lucide/vue";
 import AdminListPager from "./AdminListPager.vue";
 import ModuleToolbar from "./ModuleToolbar.vue";
-import { formatDateTime } from "../utils/dateFormat";
+import { formatDate, formatDateTime } from "../utils/dateFormat";
 const monthRange = () => {
   const d = new Date(),
     y = d.getFullYear(),
@@ -597,8 +592,8 @@ export default {
     },
     periodLabel(run) {
       if (run?.dateStart && run?.dateEnd) return `${run.dateStart} ~ ${run.dateEnd}`;
-      if (run?.dateStart) return this.$t('reports.periodAfter', { date: run.dateStart });
-      if (run?.dateEnd) return this.$t('reports.periodBefore', { date: run.dateEnd });
+      if (run?.dateStart) return this.$t('reports.periodAfter', { date: formatDate(run.dateStart) });
+      if (run?.dateEnd) return this.$t('reports.periodBefore', { date: formatDate(run.dateEnd) });
       return this.$t('reports.timeAll');
     },
     typeIcon(v) {
@@ -618,8 +613,9 @@ export default {
       );
     },
     typeLabel(v) {
+      if (!v) return '';
       const key = `reports.${v}`;
-      return this.$t(key) === key ? v : this.$t(key);
+      return this.$te(key) ? this.$t(key) : v;
     },
     reportName(definition) {
       return this.typeLabel(definition?.reportType) || definition?.name || '—';
@@ -628,8 +624,9 @@ export default {
       return this.typeLabel(run?.reportType) || run?.reportName || '—';
     },
     definitionHint(v) {
+      if (!v) return this.$t('reports.hint_default');
       const key = `reports.hint_${v}`;
-      return this.$t(key) === key ? this.$t('reports.hint_default') : this.$t(key);
+      return this.$te(key) ? this.$t(key) : this.$t('reports.hint_default');
     },
     statusLabel(v) {
       return (

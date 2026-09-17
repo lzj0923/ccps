@@ -15,7 +15,7 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface WhatsAppNotificationMapper {
     @Select("""
-            SELECT d.id AS delivery_id, d.notification_id, d.destination, d.attempt_count,
+            SELECT d.id AS delivery_id, d.notification_id, ws.destination, d.attempt_count,
                     COALESCE(rca.stage, 'first_reminder') AS stage,
                     t.full_name AS tenant_name, p.name AS project_name, u.unit_no,
                    ri.billing_month, ri.due_date,
@@ -29,6 +29,9 @@ public interface WhatsAppNotificationMapper {
                  CASE WHEN n.related_type = 'rent_invoice' THEN n.related_id END)
             JOIN leases l ON l.id = ri.lease_id
             JOIN tenants t ON t.id = l.tenant_id
+            JOIN tenant_whatsapp_subscriptions ws ON ws.tenant_id = t.id
+              AND ws.enabled = 1 AND ws.opted_in_at IS NOT NULL AND ws.opted_out_at IS NULL
+              AND ws.destination REGEXP '^[1-9][0-9]{7,14}$'
             JOIN units u ON u.id = l.unit_id
             JOIN projects p ON p.id = u.project_id
             WHERE d.channel = 'whatsapp' AND d.status = 'pending'
@@ -63,12 +66,25 @@ public interface WhatsAppNotificationMapper {
     List<WhatsAppDeliveryRow> findPendingLeaseExpiryDeliveries();
 
     @Update("""
-            UPDATE notification_deliveries
-            SET status = 'sending', attempt_count = attempt_count + 1,
-                failed_at = NULL, failure_reason = NULL
-            WHERE id = #{deliveryId} AND channel = 'whatsapp' AND status = 'pending'
+            UPDATE notification_deliveries d
+            JOIN notifications n ON n.id = d.notification_id
+            LEFT JOIN rent_collection_actions rca ON rca.notification_id = n.id
+            LEFT JOIN rent_invoices ri ON ri.id = COALESCE(rca.invoice_id,
+                CASE WHEN n.related_type = 'rent_invoice' THEN n.related_id END)
+            LEFT JOIN leases l ON l.id = ri.lease_id
+            LEFT JOIN tenants t ON t.id = l.tenant_id
+            LEFT JOIN tenant_whatsapp_subscriptions ws ON ws.tenant_id = t.id
+            SET d.status = 'sending', d.attempt_count = d.attempt_count + 1,
+                d.failed_at = NULL, d.failure_reason = NULL,
+                d.destination = CASE WHEN ri.id IS NOT NULL THEN ws.destination ELSE d.destination END
+            WHERE d.id = #{deliveryId} AND d.channel = 'whatsapp' AND d.status = 'pending'
+              AND ((n.related_type <> 'rent_invoice' AND rca.id IS NULL)
+                   OR (t.status = 'active' AND l.status = 'active'
+                       AND ws.enabled = 1 AND ws.opted_in_at IS NOT NULL AND ws.opted_out_at IS NULL
+                       AND ws.destination = #{destination}
+                       AND ws.destination REGEXP '^[1-9][0-9]{7,14}$'))
             """)
-    int claim(@Param("deliveryId") Long deliveryId);
+    int claim(@Param("deliveryId") Long deliveryId, @Param("destination") String destination);
 
     @Insert("""
             INSERT INTO whatsapp_delivery_attempts

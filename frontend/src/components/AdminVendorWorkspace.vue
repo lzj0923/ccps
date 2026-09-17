@@ -7,14 +7,14 @@
       </div>
       <div class="vendor-toolbar"><input v-model.trim="search" type="search" :placeholder="$t('legacy.t_717a62b642bd')"><select v-model="statusFilter"><option value="all">{{ $t('legacy.t_026ed0343be6') }}</option><option value="active">{{ $t('legacy.t_ce6c3dc32674') }}</option><option value="inactive">{{ $t('legacy.t_d989e55188c9') }}</option></select><span>{{ $t('legacy.t_3b6ef811b85a') }} {{ filteredVendors.length }} {{ $t('legacy.t_7de8177ce74b') }}</span></div>
       <div v-if="loading" class="vendor-state">{{ $t('legacy.t_e19553d29228') }}</div>
-      <div v-else-if="errorMessage" class="vendor-state error"><strong>{{ $t('legacy.t_d30360451be9') }}</strong><span>{{ errorMessage }}</span><button type="button" @click="loadVendors">{{ $t('legacy.t_0c9157b5bfac') }}</button></div>
+      <div v-else-if="errorMessage" class="vendor-state error"><strong>{{ $t('legacy.t_d30360451be9') }}</strong><span>{{ $lt(errorMessage) }}</span><button type="button" @click="loadVendors">{{ $t('legacy.t_0c9157b5bfac') }}</button></div>
       <div v-else class="table-wrap vendor-table-wrap">
         <table>
           <thead><tr><th>{{ $t('legacy.t_63b5592477dc') }}</th><th>{{ $t('legacy.t_3c71a1c2cfaf') }}</th><th>{{ $t('legacy.t_8dcb070de196') }}</th><th>{{ $t('legacy.t_7177787c6e84') }}</th><th>{{ $t('legacy.t_84add5b29527') }}</th><th>{{ $t('legacy.t_45293595eae3') }}</th><th>{{ $t('legacy.t_f3ea6d345e2a') }}</th></tr></thead>
           <tbody>
             <tr v-for="vendor in filteredVendors" :key="vendor.id">
               <td>{{ vendor.vendorCode }}</td><td><strong>{{ vendor.name }}</strong></td><td>{{ vendor.contactName || '—' }}</td><td>{{ vendor.phone || '—' }}</td><td>{{ vendor.email || '—' }}</td>
-              <td><span class="vendor-status" :class="vendor.status">{{ statusLabel(vendor.status) }}</span></td>
+              <td><span class="vendor-status" :class="vendor.status">{{ $lt(statusLabel(vendor.status)) }}</span></td>
               <td class="vendor-actions"><button type="button" @click="openEdit(vendor)">{{ $t('legacy.t_bad46aea44dc') }}</button><button v-if="vendor.status === 'active'" type="button" class="danger" @click="deactivate(vendor)">{{ $t('legacy.t_d989e55188c9') }}</button><button v-else type="button" @click="reactivate(vendor)">{{ $t('legacy.t_ce6c3dc32674') }}</button></td>
             </tr>
             <tr v-if="!filteredVendors.length"><td colspan="7" class="empty-cell">{{ $t('legacy.t_49c456bed84b') }}</td></tr>
@@ -33,7 +33,7 @@
           <label class="wide">{{ $t('legacy.t_84add5b29527') }}<input v-model.trim="form.email" type="email" maxlength="190" :placeholder="$t('legacy.t_89bfe788b0c3')"></label>
           <label v-if="editingId">{{ $t('legacy.t_45293595eae3') }}<select v-model="form.status"><option value="active">{{ $t('legacy.t_ce6c3dc32674') }}</option><option value="inactive">{{ $t('legacy.t_d989e55188c9') }}</option></select></label>
         </div>
-        <p v-if="formError" class="vendor-form-error">{{ formError }}</p>
+        <p v-if="formError" class="vendor-form-error">{{ $lt(formError) }}</p>
         <footer><button type="button" class="vendor-secondary" @click="closeDialog">{{ $t('legacy.t_4d0b4688c787') }}</button><button class="vendor-primary" type="submit" :disabled="saving">{{ saving ? $t('legacy.t_8488ea2522af') : $t('legacy.t_e7ffb1ee5ee7') }}</button></footer>
       </form>
     </div>
@@ -57,7 +57,7 @@ export default {
     openEdit(vendor) { this.editingId = vendor.id; this.form = { name: vendor.name || '', contactName: vendor.contactName || '', phone: vendor.phone || '', email: vendor.email || '', status: vendor.status || 'active' }; this.formError = ''; this.dialogOpen = true; },
     closeDialog() { if (!this.saving) { this.dialogOpen = false; this.formError = ''; } },
     async saveVendor() { if (!this.form.name.trim()) { this.formError = '請輸入服務商名稱'; return; } this.saving = true; this.formError = ''; try { const saved = this.editingId ? await updateAdminVendor(this.editingId, this.form) : await createAdminVendor(this.form); const index = this.vendors.findIndex(item => item.id === saved.id); if (index >= 0) this.vendors.splice(index, 1, saved); else this.vendors.unshift(saved); this.closeDialog(); } catch (error) { this.formError = error.message || '服務商保存失敗'; } finally { this.saving = false; } },
-    async deactivate(vendor) { if (!window.confirm(`確定停用「${vendor.name}」嗎？歷史維修記錄會保留。`)) return; try { await deactivateAdminVendor(vendor.id); vendor.status = 'inactive'; } catch (error) { this.errorMessage = error.message || '服務商停用失敗'; } },
+    async deactivate(vendor) { if (!window.confirm(this.$ltf`確定停用「${vendor.name}」嗎？歷史維修記錄會保留。`)) return; try { await deactivateAdminVendor(vendor.id); vendor.status = 'inactive'; } catch (error) { this.errorMessage = error.message || '服務商停用失敗'; } },
     async reactivate(vendor) { try { const saved = await updateAdminVendor(vendor.id, { name: vendor.name, contactName: vendor.contactName, phone: vendor.phone, email: vendor.email, status: 'active' }); const index = this.vendors.findIndex(item => item.id === vendor.id); if (index >= 0) this.vendors.splice(index, 1, saved); } catch (error) { this.errorMessage = error.message || '服務商啟用失敗'; } }
   }
 };

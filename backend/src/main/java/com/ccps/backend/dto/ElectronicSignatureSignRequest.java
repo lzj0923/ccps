@@ -6,7 +6,6 @@ import jakarta.validation.constraints.Size;
 
 public record ElectronicSignatureSignRequest(
         @NotBlank(message = "Signer name is required") String signerName,
-        @NotBlank(message = "Verification code is required") String verificationCode,
         @NotBlank(message = "Handwritten signature is required") String signatureDataUrl,
         @Size(max = 120, message = "Identity number is too long") String identityNo,
         @NotNull(message = "Consent is required") Boolean consent) { }

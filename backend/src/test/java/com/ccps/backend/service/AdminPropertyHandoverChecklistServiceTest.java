@@ -63,6 +63,21 @@ class AdminPropertyHandoverChecklistServiceTest {
         verify(mapper).insert(any(Row.class));
     }
 
+    @Test
+    void leaseInventoryUsesOnlyCheckedItemsInCheckboxOrder() {
+        AdminPropertyHandoverChecklistMapper.LeaseOwnerUnitRow ownerUnit = new AdminPropertyHandoverChecklistMapper.LeaseOwnerUnitRow();
+        ownerUnit.setOwnerUnitId(5L);
+        Row sofa = row(10L,5L,"客廳 Living Room","沙發 / Sofa","1",0,true);
+        Row table = row(11L,5L,"客廳 Living Room","咖啡桌 / Coffee Table","1",1,false);
+        when(mapper.findOwnerUnitForLease(42L)).thenReturn(ownerUnit);
+        when(mapper.list(5L)).thenReturn(List.of(sofa,table));
+        AdminPropertyHandoverChecklistService service = new AdminPropertyHandoverChecklistService(mapper);
+
+        var result = service.rowsForLease(42L,"11,10,999");
+
+        assertThat(result).extracting(Row::getId).containsExactly(11L,10L);
+    }
+
     private Row row(Long id, Long ownerUnitId, String category, String name, String quantity, int sortOrder, boolean enabled) {
         Row row = new Row(); row.setId(id); row.setOwnerUnitId(ownerUnitId); row.setCategory(category); row.setItemName(name); row.setDefaultQuantity(quantity); row.setSortOrder(sortOrder); row.setEnabled(enabled); return row;
     }

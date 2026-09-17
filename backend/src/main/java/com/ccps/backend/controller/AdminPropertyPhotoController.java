@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.AdminPropertyPhotoResponse;
+import com.ccps.backend.dto.AdminPropertyPhotoVersionResponse;
 import com.ccps.backend.service.AdminPropertyPhotoService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,31 +36,40 @@ public class AdminPropertyPhotoController {
 
     @GetMapping
     public List<AdminPropertyPhotoResponse> list(@PathVariable Long ownerId, @PathVariable Long ownerUnitId,
-            @RequestParam(required = false) Long leaseId) {
-        return service.list(ownerId, ownerUnitId, leaseId);
+            @RequestParam(required = false) Long leaseId,
+            @RequestParam(required = false) String versionMonth) {
+        return service.list(ownerId, ownerUnitId, leaseId, versionMonth);
+    }
+
+    @GetMapping("/versions")
+    public List<AdminPropertyPhotoVersionResponse> versions(@PathVariable Long ownerId,
+            @PathVariable Long ownerUnitId) {
+        return service.versions(ownerId, ownerUnitId);
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AdminPropertyPhotoResponse create(@PathVariable Long ownerId, @PathVariable Long ownerUnitId,
-            @RequestParam String title, @RequestParam String category,
+            @RequestParam(required = false) String title, @RequestParam String category,
             @RequestParam(required = false) String description,
             @RequestParam(defaultValue = "0") Integer sortOrder,
             @RequestParam(defaultValue = "false") boolean cover,
             @RequestParam(required=false) Long leaseId,@RequestParam(required=false) String rentalStage,
+            @RequestParam(required=false) String versionMonth,
             @RequestPart("file") MultipartFile file, HttpServletRequest request) {
         return service.create(AuthInterceptor.userId(request), ownerId, ownerUnitId, title, category,
-                description, sortOrder, cover,leaseId,rentalStage, file);
+                description, sortOrder, cover,leaseId,rentalStage,versionMonth, file);
     }
 
     @PutMapping(value = "/{photoId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AdminPropertyPhotoResponse update(@PathVariable Long ownerId, @PathVariable Long ownerUnitId,
-            @PathVariable Long photoId, @RequestParam String title, @RequestParam String category,
+            @PathVariable Long photoId, @RequestParam(required = false) String title, @RequestParam String category,
             @RequestParam(required = false) String description,
             @RequestParam(defaultValue = "0") Integer sortOrder,
             @RequestParam(defaultValue = "false") boolean cover,
             @RequestParam(required=false) Long leaseId,@RequestParam(required=false) String rentalStage,
+            @RequestParam(required=false) String versionMonth,
             @RequestPart(value = "file", required = false) MultipartFile file) {
-        return service.update(ownerId, ownerUnitId, photoId, title, category, description, sortOrder, cover,leaseId,rentalStage, file);
+        return service.update(ownerId, ownerUnitId, photoId, title, category, description, sortOrder, cover,leaseId,rentalStage,versionMonth, file);
     }
 
     @DeleteMapping("/{photoId}")

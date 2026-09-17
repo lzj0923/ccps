@@ -54,7 +54,7 @@ public class AdminAccountController {
             HttpServletRequest servletRequest) {
         Long actorId = AuthInterceptor.userId(servletRequest);
         requireSuperAdminWhenNeeded(actorId, request.staffRole(), null);
-        AdminAccountResponse response = service.create(request);
+        AdminAccountResponse response = service.create(actorId, request);
         return ResponseEntity.created(URI.create("/api/admin/accounts/" + response.id())).body(response);
     }
 
@@ -68,7 +68,7 @@ public class AdminAccountController {
                 || (request.staffRole() != null && !request.staffRole().equals(current.staffRole())))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot deactivate or change your own administrator role");
         }
-        return service.update(id, request);
+        return service.update(actorId, id, request);
     }
 
     @DeleteMapping("/{id}")

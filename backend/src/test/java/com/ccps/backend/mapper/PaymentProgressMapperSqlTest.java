@@ -8,6 +8,14 @@ import org.junit.jupiter.api.Test;
 class PaymentProgressMapperSqlTest {
 
     @Test
+    void handedOverOwnerAssetsCanStillReadHistoricalPayments() throws Exception {
+        String sql = String.join(" ", PaymentProgressMapper.class.getMethod("findHeader", Long.class, Long.class)
+                .getAnnotation(Select.class).value());
+        assertThat(sql).contains("o.user_id = #{userId}", "ou.id = #{ownerUnitId}", "ou.status = 'active'")
+                .doesNotContain("ou.asset_stage = 'PRE_HANDOVER'");
+    }
+
+    @Test
     void installmentConfirmationUsesLatestSubmissionInsteadOfAnyHistoricalRejection() throws Exception {
         Select select = PaymentProgressMapper.class
                 .getMethod("findInstallments", Long.class)

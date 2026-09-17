@@ -65,7 +65,7 @@ public interface AdminPropertyContractRecordMapper {
                        FROM electronic_signature_requests package_signer
                        WHERE COALESCE(package_signer.root_document_id,package_signer.source_document_id)=l.contract_document_id
                          AND package_signer.entity_type='lease' AND package_signer.entity_id=l.id
-                         AND package_signer.status='signed') >= 2
+                         AND package_signer.status='signed') >= GREATEST(2, (SELECT COUNT(*) FROM electronic_signature_participants expected_signer WHERE expected_signer.root_document_id=l.contract_document_id AND expected_signer.document_kind='lease_contract'))
                 ORDER BY completed.signed_at DESC,completed.id DESC
                 LIMIT 1
             )
@@ -97,7 +97,7 @@ public interface AdminPropertyContractRecordMapper {
                    l.rental_space_id AS rentalSpaceId, rs.space_name AS rentalSpaceName, rs.space_type AS rentalSpaceType,
                    CASE WHEN l.contract_document_id IS NULL THEN FALSE ELSE TRUE END AS linked,
                    CASE WHEN l.contract_document_id IS NULL THEN 'not_generated'
-                        WHEN (SELECT COUNT(DISTINCT sr.signer_role) FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND COALESCE(sr.root_document_id,sr.source_document_id)=l.contract_document_id AND sr.status='signed') >= 2 THEN 'signed'
+                        WHEN (SELECT COUNT(DISTINCT sr.signer_role) FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND COALESCE(sr.root_document_id,sr.source_document_id)=l.contract_document_id AND sr.status='signed') >= GREATEST(2, (SELECT COUNT(*) FROM electronic_signature_participants expected_signer WHERE expected_signer.root_document_id=l.contract_document_id AND expected_signer.document_kind='lease_contract')) THEN 'signed'
                         WHEN EXISTS(SELECT 1 FROM electronic_signature_requests sr WHERE sr.entity_type='lease' AND sr.entity_id=l.id AND sr.source_document_id=l.contract_document_id AND sr.status IN ('pending','sent','viewed')) THEN 'pending'
                         ELSE 'ready_to_sign' END AS signatureStatus
             FROM owner_units ou
@@ -134,6 +134,15 @@ public interface AdminPropertyContractRecordMapper {
 
     @Delete("DELETE FROM property_contract_records WHERE id=#{id} AND owner_unit_id=#{ownerUnitId}")
     int delete(@Param("ownerUnitId") Long ownerUnitId, @Param("id") Long id);
+
+    @Insert("""
+            INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,before_data,after_data)
+            VALUES (#{actorId},'change_property_contract_status','property_contract_record',#{id},
+                    JSON_OBJECT('status',#{beforeStatus}),JSON_OBJECT('status',#{afterStatus},'reason',#{reason}))
+            """)
+    int insertStatusAudit(@Param("actorId") Long actorId, @Param("id") Long id,
+            @Param("beforeStatus") String beforeStatus, @Param("afterStatus") String afterStatus,
+            @Param("reason") String reason);
 
     class Row {
         private Long id;

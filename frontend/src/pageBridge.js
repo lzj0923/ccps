@@ -4,13 +4,13 @@ const computedKeys = [
   'selectedRow', 'currentMetrics', 'ownerMetrics', 'ownerSummaryCards', 'detailName', 'detailSubline',
   'detailStatus', 'detailTotal', 'detailPaid', 'detailPending', 'detailProgress', 'kanbanColumns',
   'selectedIndex', 'activeStep', 'viewMode', 'ownerPage', 'ownerPageSize', 'modalMode', 'dateStart',
-  'dateEnd', 'datePreset', 'dateScope', 'dateNote', 'moduleSearch', 'globalSearch', 'projectFilter',
-  'statusFilter', 'modalTitle', 'toastText', 'toastVisible', 'form', 'alertItems', 'canManageCurrentAdminModule'
+  'dateEnd', 'dateDraftStart', 'dateDraftEnd', 'dateFilterError', 'datePreset', 'dateScope', 'dateNote', 'moduleSearch', 'globalSearch', 'projectFilter',
+  'statusFilter', 'modalTitle', 'toastText', 'toastVisible', 'form', 'alertItems', 'alertLoading', 'alertError', 'adminAlertCount', 'canManageCurrentAdminModule'
 ];
 
 const methodKeys = [
   'selectModule', 'initials', 'toNumber', 'isMoney', 'isStatus', 'tagClass', 'moneyClass', 'ownerMetricIcon', 'openModal',
-  'openDatePanel', 'openAlertPanel', 'triggerPrimaryAction', 'triggerSecondaryAction', 'triggerReserveRefundAction', 'applyDatePreset', 'confirmModal', 'selectAlert', 'metricIcon',
+  'openDatePanel', 'openAlertPanel', 'refreshAdminAlerts', 'triggerPrimaryAction', 'triggerSecondaryAction', 'triggerReserveRefundAction', 'applyDatePreset', 'confirmModal', 'selectAlert', 'metricIcon',
   'setupReportTabs', 'renderReportTab', 'openUploadModal', 'saveForm', 'exportCsv', 'showToast', 'handleLogout'
 ];
 
@@ -19,9 +19,9 @@ const methodKeys = [
 // writes so a filter change is applied on the same input/change event.
 const writableKeys = new Set([
   'currentId', 'selectedIndex', 'activeStep', 'viewMode', 'ownerPage', 'ownerPageSize',
-  'modalMode', 'dateStart', 'dateEnd', 'datePreset', 'dateScope', 'dateNote',
+  'modalMode', 'dateStart', 'dateEnd', 'dateDraftStart', 'dateDraftEnd', 'dateFilterError', 'datePreset', 'dateScope', 'dateNote',
   'moduleSearch', 'globalSearch', 'projectFilter', 'statusFilter', 'modalTitle',
-  'toastText', 'toastVisible', 'form', 'alertItems'
+  'toastText', 'toastVisible', 'form', 'alertItems', 'alertLoading', 'alertError', 'adminAlertCount'
 ]);
 
 export default {

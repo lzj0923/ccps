@@ -17,6 +17,16 @@ export function formatDateTime(value, fallback = '—') {
   return time ? `${date} ${time[1]}` : date;
 }
 
+/** Display-only month format for API values such as yyyy-MM or yyyy-MM-dd. */
+export function formatMonth(value, fallback = '—') {
+  if (!value) return fallback;
+  const match = String(value).match(/^(\d{4})-(\d{2})(?:-\d{2})?/);
+  if (match) return `${match[2]}/${match[1]}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
 export function todayIsoDate() {
   const now = new Date();
   const year = now.getFullYear();

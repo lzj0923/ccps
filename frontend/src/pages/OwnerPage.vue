@@ -1,7 +1,9 @@
 <template>
   <div class="page-view owner-page">
-    <PageHeader :owner-payment-subview="paymentSubview" />
-    <MyPropertiesDashboard v-if="currentId === 'myProperties'" />
+    <PageHeader v-if="!nativeMode" :owner-payment-subview="paymentSubview" />
+    <OwnerMobileApp v-if="nativeMode" />
+    <MyPropertiesDashboard v-else-if="currentId === 'myProperties'" />
+    <OwnerMobilePortal v-else-if="['ownerProjects', 'ownerRentalHub', 'ownerMore'].includes(currentId)" />
     <template v-else-if="currentId === 'ownerPayment'">
       <PaymentProofUpload v-if="paymentSubview === 'upload'" :context="paymentUploadContext" @back="closePaymentUpload" />
       <PaymentProgressDetails v-else :initial-property-key="lastPaymentPropertyKey" @upload="openPaymentUpload" />
@@ -37,12 +39,14 @@ import ExpenseMaintenanceDashboard from '../components/ExpenseMaintenanceDashboa
 import ReserveDashboard from '../components/ReserveDashboard.vue';
 import NotificationCenterDashboard from '../components/NotificationCenterDashboard.vue';
 import DocumentCenterDashboard from '../components/DocumentCenterDashboard.vue';
+import OwnerMobilePortal from '../components/OwnerMobilePortal.vue';
+import OwnerMobileApp from '../components/owner-mobile/OwnerMobileApp.vue';
 
 export default {
   mixins: [pageBridge],
-  components: { PageHeader, MetricsGrid, ModuleToolbar, ModuleCards, DataWorkspace, MyPropertiesDashboard, PaymentProgressDetails, PaymentProofUpload, OwnerFinanceDashboard, RentIncomeDashboard, ExpenseMaintenanceDashboard, ReserveDashboard, NotificationCenterDashboard, DocumentCenterDashboard },
+  components: { PageHeader, MetricsGrid, ModuleToolbar, ModuleCards, DataWorkspace, MyPropertiesDashboard, OwnerMobilePortal, OwnerMobileApp, PaymentProgressDetails, PaymentProofUpload, OwnerFinanceDashboard, RentIncomeDashboard, ExpenseMaintenanceDashboard, ReserveDashboard, NotificationCenterDashboard, DocumentCenterDashboard },
   data() {
-    return { paymentSubview: 'details', paymentUploadContext: null, lastPaymentPropertyKey: '' };
+    return { nativeMode: document.documentElement.classList.contains('capacitor-native'), paymentSubview: 'details', paymentUploadContext: null, lastPaymentPropertyKey: '' };
   },
   watch: {
     currentId(value) {

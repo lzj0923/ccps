@@ -24,15 +24,16 @@ class AdminReserveManagementMapperSqlTest {
     }
 
     @Test
-    void reconciliationSystemBalanceUsesPostingDate() throws Exception {
-        Method method = AdminReserveManagementMapper.class.getMethod("findPostedTotalBalance");
+    void reconciliationSystemBalanceUsesReceiptDateWithoutDuplicatingSplitRent() throws Exception {
+        Method method = AdminReserveManagementMapper.class.getMethod("findReceivedTotalBalance");
         String sql = String.join(" ", method.getAnnotation(Select.class).value())
                 .replaceAll("\\s+", " ");
 
         assertThat(sql)
-                .contains("SUM(rp.allocated_amount)")
-                .contains("fr.transaction_date<=CURRENT_DATE")
-                .doesNotContain("receipt_date")
-                .doesNotContain("SUM(fr.amount)");
+                .contains("SUM(fr.amount)")
+                .contains("COALESCE(fr.receipt_date,fr.transaction_date)<=CURRENT_DATE")
+                .contains("EXISTS")
+                .doesNotContain("SUM(rp.allocated_amount)")
+                .doesNotContain("JOIN rent_payments");
     }
 }

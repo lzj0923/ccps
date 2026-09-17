@@ -43,7 +43,7 @@ test('keeps authorization files outside the system rental workflow', () => {
   });
 
   assert.deepEqual(workbench.stages.map(stage => stage.key), [
-    'propertySetup', 'mandateAuthorization', 'leasingSigning', 'moveInCollection', 'rentalOperations', 'leaseClosure',
+    'propertySetup', 'mandateAuthorization', 'leasingSigning', 'rentalOperations', 'leaseClosure',
   ]);
   assert.equal(workbench.stages[1].status, 'completed');
   assert.equal(workbench.stages[1].blockingReasonKey, null);
@@ -87,7 +87,7 @@ test('does not add a mandate review requirement', () => {
   assert.equal(workbench.stages[1].blockingReasonKey, null);
 });
 
-test('does not treat a generated report file as system handover completion', () => {
+test('enters rental operations without a separate move-in handover gate', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active', createdAt: '2026-07-29T09:00:00' }],
@@ -101,10 +101,11 @@ test('does not treat a generated report file as system handover completion', () 
   });
 
   assert.equal(workbench.stages[3].status, 'in_progress');
-  assert.deepEqual(workbench.stages[3].missingItems, ['handover']);
+  assert.deepEqual(workbench.stages[3].missingItems, []);
+  assert.equal(workbench.stages[3].primaryAction.key, 'open_operations_center');
 });
 
-test('enters rental operations after the system move-in handover', () => {
+test('enters rental operations immediately after the lease is ready', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active' }],
@@ -126,10 +127,10 @@ test('enters rental operations after the system move-in handover', () => {
     },
   });
 
-  assert.ok(workbench.stages.slice(0, 4).every(stage => stage.status === 'completed'));
-  assert.equal(workbench.stages[4].status, 'in_progress');
-  assert.equal(workbench.stages[4].primaryAction.key, 'open_operations_center');
-  assert.equal(workbench.stages[5].status, 'pending');
+  assert.ok(workbench.stages.slice(0, 3).every(stage => stage.status === 'completed'));
+  assert.equal(workbench.stages[3].status, 'in_progress');
+  assert.equal(workbench.stages[3].primaryAction.key, 'open_operations_center');
+  assert.equal(workbench.stages[4].status, 'pending');
   assert.equal(workbench.currentTask.key, 'rentalOperations');
   assert.equal(workbench.includesDailyOperations, true);
 });
@@ -158,7 +159,7 @@ test('does not let an unpaid first invoice block a completed rental workflow', (
     payments: [],
   });
 
-  assert.equal(workbench.stages[3].status, 'completed');
+  assert.equal(workbench.stages[3].status, 'in_progress');
   assert.deepEqual(workbench.stages[3].missingItems, []);
   assert.equal(workbench.currentTask.key, 'rentalOperations');
   assert.equal(workbench.firstInvoice.invoiceId, 91);
@@ -235,7 +236,7 @@ test('keeps the latest closed lease available after its mandate expires', () => 
   assert.equal(workbench.leaseClosure.handoverReportReady, false);
 });
 
-test('completes move-in collection from the lease-scoped invoice API without requiring a proof file', () => {
+test('keeps rent collection outside the system workflow without a move-in gate', () => {
   const workbench = buildRentalWorkbench({
     property,
     mandates: [{ ...currentMandate, status: 'active' }],
@@ -260,7 +261,7 @@ test('completes move-in collection from the lease-scoped invoice API without req
   });
 
   assert.equal(workbench.firstInvoice.invoiceId, 91);
-  assert.equal(workbench.stages[3].status, 'completed');
+  assert.equal(workbench.stages[3].status, 'in_progress');
   assert.deepEqual(workbench.stages[3].missingItems, []);
 });
 
@@ -278,7 +279,7 @@ test('does not let OTR or lease contract files block the system rental workflow'
   assert.equal(workbench.stages[2].status, 'completed');
   assert.deepEqual(workbench.stages[2].missingItems, []);
   assert.equal(workbench.stages[3].status, 'in_progress');
-  assert.deepEqual(workbench.stages[3].missingItems, ['handover']);
+  assert.deepEqual(workbench.stages[3].missingItems, []);
 });
 
 test('starts the system workflow by creating a rental mandate', () => {

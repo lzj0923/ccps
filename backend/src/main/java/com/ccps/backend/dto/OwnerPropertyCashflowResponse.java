@@ -20,6 +20,7 @@ public record OwnerPropertyCashflowResponse(
             BigDecimal amount,
             LocalDate occurredOn,
             String status,
-            BigDecimal balanceAfter) {
+            BigDecimal balanceAfter,
+            List<Long> documentIds) {
     }
 }

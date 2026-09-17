@@ -1,3 +1,4 @@
+import { matchLocalizedSource } from './helpers/localizedSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -8,8 +9,8 @@ const main = readComponent('AdminFinanceWorkspace.vue');
 test('history mode stays active while switching all four finance types', () => {
   const switchMethod = main.match(/switchFinanceType\(type\) \{[\s\S]*?\},\n\s*switchViewMode/)?.[0] || '';
   assert.doesNotMatch(switchMethod, /adminFinanceViewMode\s*=\s*'pending'/);
-  assert.match(switchMethod, /this\.viewMode === 'history' \? '全部歷史'/);
-  assert.match(main, /switchViewMode\('pending'\)/);
+  matchLocalizedSource(switchMethod, /this\.viewMode === 'history' \? '全部歷史'/);
+  matchLocalizedSource(main, /switchViewMode\('pending'\)/);
 });
 
 for (const name of [
@@ -20,10 +21,10 @@ for (const name of [
 ]) {
   test(`${name} history supports selected batch documents and reopen`, () => {
     const source = readComponent(name);
-    assert.match(source, /v-model="selectedIds"/);
-    assert.match(source, /批量下载发票/);
-    assert.match(source, /批量下载收据/);
-    assert.match(source, /批量退回/);
-    assert.match(source, /batchReopenAdminFinanceReviews\(ids,/);
+    matchLocalizedSource(source, /v-model="selectedIds"/);
+    matchLocalizedSource(source, /批量下载发票/);
+    matchLocalizedSource(source, /批量下载收据/);
+    matchLocalizedSource(source, /批量退回/);
+    matchLocalizedSource(source, /batchReopenAdminFinanceReviews\(ids,/);
   });
 }

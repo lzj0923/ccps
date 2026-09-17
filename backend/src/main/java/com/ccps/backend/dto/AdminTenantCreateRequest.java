@@ -12,4 +12,9 @@ public record AdminTenantCreateRequest(
         @Pattern(regexp = "^$|^\\+[1-9][0-9]{7,14}$", message = "Tenant phone number must use E.164 format")
         String phone,
         @Email @Size(max = 190) String email,
-        @NotBlank @Pattern(regexp = "active|inactive") String status) { }
+        @NotBlank @Pattern(regexp = "active|inactive") String status,
+        Boolean whatsappEnabled) {
+    public AdminTenantCreateRequest(String fullName, String identityNo, String phone, String email, String status) {
+        this(fullName, identityNo, phone, email, status, null);
+    }
+}

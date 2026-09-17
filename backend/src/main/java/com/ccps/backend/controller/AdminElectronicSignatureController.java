@@ -11,12 +11,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
 import com.ccps.backend.config.AuthInterceptor;
 import com.ccps.backend.dto.ElectronicSignatureStartRequest;
 import com.ccps.backend.dto.ElectronicSignatureStartResponse;
 import com.ccps.backend.dto.ElectronicSignaturePackageRequest;
 import com.ccps.backend.dto.ElectronicSignatureParticipantResponse;
+import com.ccps.backend.dto.ElectronicSignatureInvitationRequest;
 import com.ccps.backend.service.ElectronicSignatureService;
 
 @RestController
@@ -53,5 +55,13 @@ public class AdminElectronicSignatureController {
             @PathVariable Long documentId, @Valid @RequestBody ElectronicSignaturePackageRequest request,
             HttpServletRequest servletRequest) {
         return service.startMandatePackage(AuthInterceptor.userId(servletRequest), mandateId, documentId, request);
+    }
+
+    @PostMapping("/requests/{requestId}/email")
+    public ResponseEntity<Void> sendInvitationEmail(@PathVariable Long requestId,
+            @Valid @RequestBody ElectronicSignatureInvitationRequest request, HttpServletRequest servletRequest) {
+        service.sendInvitationEmail(AuthInterceptor.userId(servletRequest), requestId, request.token(),
+                request.recipientEmail());
+        return ResponseEntity.noContent().build();
     }
 }
