@@ -67,6 +67,7 @@
 <script>
 import { ChevronLeft, ChevronRight, PauseCircle, Pencil, PlayCircle, Plus, Search, Trash2, UserRound, X } from '@lucide/vue';
 import { formatDate } from '../utils/dateFormat';
+import { fetchAllPages } from '../utils/fetchAllPages';
 import { navigate } from '../router';
 import { createAdminTenant, deleteAdminTenant, fetchAdminTenantDetail, fetchAdminTenantDirectory, updateAdminTenant, updateAdminTenantStatus } from '../services/propertyApi';
 import { splitTenantPhone, TENANT_PHONE_COUNTRIES, tenantPhoneCountry, validateTenantPhone } from '../utils/tenantPhone';
@@ -79,7 +80,7 @@ export default {
   mounted() { this.applyProcessRoute(); },
   methods: {
     displayDate(value) { return formatDate(value); },
-    async applyProcessRoute() { const params = new URLSearchParams(window.location.search); const workflow = params.get('workflow'); const tenantId = params.get('tenantId'); if (workflow === 'edit' && params.get('keyword')) this.keyword = params.get('keyword'); await this.load(1); if (workflow !== 'edit' || !tenantId) return; let tenant = this.rows.find(row => String(row.tenantId) === String(tenantId)); if (!tenant) { const data = await fetchAdminTenantDirectory({ page: 1, pageSize: 200, keyword: this.keyword, status: this.status }); tenant = (data.rows || []).find(row => String(row.tenantId) === String(tenantId)); } if (tenant) this.openEdit(tenant); },
+    async applyProcessRoute() { const params = new URLSearchParams(window.location.search); const workflow = params.get('workflow'); const tenantId = params.get('tenantId'); if (workflow === 'edit' && params.get('keyword')) this.keyword = params.get('keyword'); await this.load(1); if (workflow !== 'edit' || !tenantId) return; let tenant = this.rows.find(row => String(row.tenantId) === String(tenantId)); if (!tenant) { const rows = await fetchAllPages(fetchAdminTenantDirectory, { keyword: this.keyword, status: this.status }); tenant = rows.find(row => String(row.tenantId) === String(tenantId)); } if (tenant) this.openEdit(tenant); },
     async load(page = this.pager.page) { this.loading = true; this.error = ''; try { const data = await fetchAdminTenantDirectory({ page, pageSize: this.pager.pageSize, keyword: this.keyword, status: this.status }); this.rows = data.rows || []; this.summary = data.summary || this.summary; this.pager = data.page || this.pager; this.selected = this.rows.find((item) => item.tenantId === this.selected?.tenantId) || this.rows[0] || null; } catch (error) { this.error = error?.message || this.$t('tenantDirectory.loadFailed'); } finally { this.loading = false; } },
     search() { this.load(1); }, go(page) { this.load(page); },
     async openDetails(row) { this.detailOpen = true; this.detailRow = row; this.leaseHistory = []; this.detailOverview = { unpaidRent: 0, pendingMaintenanceCount: 0, pendingSignatureCount: 0, depositBalance: 0 }; this.detailLoading = true; try { const data = await fetchAdminTenantDetail(row.tenantId); this.leaseHistory = data.leases || []; this.detailOverview = data.overview || this.detailOverview; } catch (error) { this.page?.showToast?.(error?.message || this.$t('tenantDirectory.loadFailed'), 'error'); } finally { this.detailLoading = false; } },

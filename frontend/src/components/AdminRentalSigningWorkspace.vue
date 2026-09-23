@@ -736,6 +736,7 @@
 
 <script>
 import { markRaw } from 'vue';
+import { fetchAllPages } from '../utils/fetchAllPages';
 import { PHONE_COUNTRIES, validatePhone } from '../utils/tenantPhone';
 import AdminOwnerSignatureDispatch from './AdminOwnerSignatureDispatch.vue';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
@@ -1027,10 +1028,10 @@ export default {
     async loadProperties() {
       this.loading = true; this.loadError = '';
       try {
-        const [propertyResponse, mandateResponse] = await Promise.all([fetchAdminProperties({ page: 1, pageSize: 500 }), fetchAdminRentalMandates({ page: 1, pageSize: 500 })]);
-        this.mandates = mandateResponse?.rows || [];
+        const [propertyRows, mandateRows] = await Promise.all([fetchAllPages(fetchAdminProperties), fetchAllPages(fetchAdminRentalMandates)]);
+        this.mandates = mandateRows;
         const rentalUnitIds = new Set(this.mandates.map(item => String(item.ownerUnitId)));
-        this.properties = (propertyResponse?.rows || []).map(item => ({ ...item.property, ownerId: item.ownerId, ownerName: item.ownerName, rowKey: `${item.ownerId}-${item.property.ownerUnitId}` })).filter(property => rentalUnitIds.has(String(property.ownerUnitId)));
+        this.properties = propertyRows.map(item => ({ ...item.property, ownerId: item.ownerId, ownerName: item.ownerName, rowKey: `${item.ownerId}-${item.property.ownerUnitId}` })).filter(property => rentalUnitIds.has(String(property.ownerUnitId)));
         if (!this.projectOptions.includes(this.selectedProjectName)) this.selectedProjectName = '';
         const requestedUnitId = new URLSearchParams(window.location.search).get('ownerUnitId');
         const selected = this.properties.find(property => String(property.ownerUnitId) === String(requestedUnitId)) || this.properties.find(property => property.rowKey === this.selectedPropertyKey) || this.properties[0];
