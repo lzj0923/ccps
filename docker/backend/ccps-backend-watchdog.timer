@@ -1,0 +1,11 @@
+[Unit]
+Description=Check CCPS backend health every 30 seconds
+
+[Timer]
+OnBootSec=180
+OnUnitInactiveSec=30
+AccuracySec=5
+Unit=ccps-backend-watchdog.service
+
+[Install]
+WantedBy=timers.target
